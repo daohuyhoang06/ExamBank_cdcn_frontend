@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Sans:wght@500;600;700&family=Merriweather:wght@700;900&display=swap');
+
+:root {
+  /* Tonal architecture */
+  --primary: #003fb1;
+  --on-primary: #f7f9ff;
+  --primary-container: #3268cf;
+
+  --secondary: #9d4300;
+  --on-secondary: #fff7f1;
+
+  --tertiary: #005438;
+  --on-tertiary: #ecfff7;
+  --tertiary-fixed: #0f7d57;
+
+  --surface: #f8f9ff;
+  --surface-dim: #e1e7f3;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #eef4ff;
+  --surface-container: #e5eeff;
+  --surface-container-high: #dde7fa;
+  --surface-container-highest: #d4dfef;
+
+  --on-surface: #101526;
+  --on-surface-variant: #4f5a78;
+  --outline-variant: #5f6782;
+
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+
+  /* Type families */
+  --font-display: 'Merriweather', Georgia, serif;
+  --font-body: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+  --font-label: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+
+  /* Type scale */
+  --display-lg: 3.5rem;
+  --display-sm: 2.125rem;
+  --title-lg: 1.125rem;
+  --body-md: 0.875rem;
+  --label-md: 0.75rem;
+  --label-sm: 0.6875rem;
+
+  /* Spacing scale */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.875rem;
+
+  --ambient-shadow: 0 8px 32px rgba(16, 21, 38, 0.04);
+  --glass-surface: rgba(255, 255, 255, 0.8);
+  --hero-gradient: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
+
+  /* Compatibility aliases for existing components */
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-success: var(--tertiary);
+  --color-danger: var(--error);
+  --color-background: var(--surface);
+  --color-surface: var(--surface-container-lowest);
+  --color-border: rgba(95, 103, 130, 0.2);
+  --color-text: var(--on-surface);
+  --color-muted: var(--on-surface-variant);
+
+  --font-family-base: var(--font-body);
+  --font-size-base: 1rem;
+  --font-size-sm: 0.875rem;
+  --font-size-lg: 1.125rem;
+  --font-weight-normal: 400;
+  --font-weight-bold: 600;
+
+  --spacing-xs: var(--spacing-1);
+  --spacing-sm: var(--spacing-2);
+  --spacing-md: var(--spacing-4);
+  --spacing-lg: var(--spacing-6);
+  --spacing-xl: var(--spacing-8);
+  --border-radius: var(--radius-md);
+  --box-shadow: var(--ambient-shadow);
+}
