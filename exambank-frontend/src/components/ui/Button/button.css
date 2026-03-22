@@ -1,0 +1,112 @@
+.ui-btn {
+  font-family: var(--font-label);
+  font-size: var(--label-md);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.62rem 1.04rem;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  background: var(--primary);
+  color: var(--on-primary);
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  line-height: 1.1;
+}
+
+.ui-btn:active {
+  transform: translateY(1px);
+}
+
+.ui-btn--primary {
+  background: var(--hero-gradient);
+  color: var(--on-primary);
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.ui-btn--secondary {
+  background: transparent;
+  color: var(--on-surface);
+  box-shadow: inset 0 0 0 1px rgba(95, 103, 130, 0.2);
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+  background: var(--surface-container-low);
+}
+
+.ui-btn--inverted {
+  background: #1f2937;
+  color: #f4f7fb;
+}
+
+.ui-btn--inverted:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.06);
+}
+
+.ui-btn--outlined {
+  background: transparent;
+  color: #2a3344;
+  box-shadow: inset 0 0 0 1px rgba(75, 85, 99, 0.25);
+}
+
+.ui-btn--outlined:hover:not(:disabled) {
+  background: rgba(238, 242, 248, 0.9);
+}
+
+.ui-btn--tertiary {
+  background: transparent;
+  color: var(--primary);
+  box-shadow: none;
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+}
+
+.ui-btn--tertiary:hover:not(:disabled) {
+  color: var(--primary-container);
+}
+
+.ui-btn--danger {
+  background: #c81e1e;
+  color: #fff;
+}
+
+.ui-btn--success {
+  background: #0f7a4f;
+  color: #f5fff9;
+}
+
+.ui-btn--sm {
+  font-size: var(--label-sm);
+  padding: 0.46rem 0.7rem;
+}
+
+.ui-btn--md {
+  font-size: var(--label-md);
+  padding: 0.62rem 1.04rem;
+}
+
+.ui-btn--lg {
+  font-size: 0.88rem;
+  padding: 0.72rem 1.2rem;
+}
+
+.ui-btn:disabled {
+  background: var(--surface-dim);
+  color: rgba(16, 21, 38, 0.52);
+  cursor: not-allowed;
+  opacity: 1;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ui-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 63, 177, 0.16);
+}
