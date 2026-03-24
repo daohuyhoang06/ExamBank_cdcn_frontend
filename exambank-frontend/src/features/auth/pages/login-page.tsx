@@ -88,10 +88,10 @@ export default function LoginPage() {
     marginTop: '2.5rem',
     maxWidth: '60rem',
     borderRadius: '1.875rem',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    background: 'linear-gradient(135deg, rgba(8, 28, 58, 0.72), rgba(7, 24, 49, 0.42))',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'linear-gradient(135deg, rgba(12, 36, 72, 0.68), rgba(8, 26, 52, 0.46))',
     padding: '2rem 1.75rem',
-    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.32)',
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 20px 60px rgba(0, 0, 0, 0.32)',
     backdropFilter: 'blur(14px)',
   } as const;
 
@@ -228,7 +228,7 @@ export default function LoginPage() {
             </div>
 
             <div className="mt-auto grid gap-3 pt-4 sm:pt-5 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/15 bg-[rgba(8,20,42,0.56)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
+              <div className="rounded-2xl border border-white/25 bg-[rgba(8,20,42,0.52)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
                 <p className="font-[var(--font-label)] text-xs font-bold tracking-[0.18em] text-[rgba(255,255,255,0.76)]">
                   TỈ LỆ HOÀN THÀNH
                 </p>
@@ -238,7 +238,7 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-white/15 bg-[rgba(8,20,42,0.56)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
+              <div className="rounded-2xl border border-white/25 bg-[rgba(8,20,42,0.52)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
                 <div className="inline-flex items-center gap-2 text-white">
                   <ShieldIcon />
                   <p className="font-[var(--font-label)] text-xs font-bold tracking-[0.18em]">
