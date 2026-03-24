@@ -1,7 +1,7 @@
-import './login-page.css';
+import { Link } from 'react-router-dom';
 
 const MailIcon = () => (
-  <svg viewBox="0 0 24 24" className="auth-input-icon" aria-hidden="true">
+  <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[var(--ink-500)]" aria-hidden="true">
     <path
       d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm0 2v.2l8 5.2 8-5.2V8l-8 5-8-5Z"
       fill="currentColor"
@@ -10,7 +10,7 @@ const MailIcon = () => (
 );
 
 const LockIcon = () => (
-  <svg viewBox="0 0 24 24" className="auth-input-icon" aria-hidden="true">
+  <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[var(--ink-500)]" aria-hidden="true">
     <path
       d="M17 10h-1V8a4 4 0 1 0-8 0v2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-7-2a2 2 0 1 1 4 0v2h-4V8Zm2 8.75a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5Z"
       fill="currentColor"
@@ -19,7 +19,7 @@ const LockIcon = () => (
 );
 
 const BookIcon = () => (
-  <svg viewBox="0 0 24 24" className="brand-icon" aria-hidden="true">
+  <svg viewBox="0 0 24 24" className="h-7 w-7 text-white" aria-hidden="true">
     <path
       d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16.5a2.5 2.5 0 0 0-2.5-2.5H5V4.5Zm0 13h12.5A4.5 4.5 0 0 1 20 18.2V20H7.5A2.5 2.5 0 0 1 5 17.5Zm2-11v7h10V4H7Zm-2 0v9.3c.4-.2.9-.3 1.5-.3H6V4.3c-.6 0-1.1.1-1.5.3Z"
       fill="currentColor"
@@ -28,7 +28,7 @@ const BookIcon = () => (
 );
 
 const ShieldIcon = () => (
-  <svg viewBox="0 0 24 24" className="security-icon" aria-hidden="true">
+  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-white/85" aria-hidden="true">
     <path
       d="M12 2 4.5 5v6c0 5.3 3.4 10.2 7.5 11 4.1-.8 7.5-5.7 7.5-11V5L12 2Zm0 2.2 5.5 2.2v4.6c0 4.3-2.7 8.4-5.5 9.1-2.8-.7-5.5-4.8-5.5-9.1V6.4L12 4.2Z"
       fill="currentColor"
@@ -37,7 +37,7 @@ const ShieldIcon = () => (
 );
 
 const GoogleIcon = () => (
-  <span className="social-badge social-badge--google" aria-hidden="true">
+  <span className="inline-flex items-center justify-center" aria-hidden="true">
     <svg viewBox="0 0 48 48" width="24" height="24">
       <path
         fill="#FFC107"
@@ -60,7 +60,7 @@ const GoogleIcon = () => (
 );
 
 const FacebookIcon = () => (
-  <span className="social-badge social-badge--facebook" aria-hidden="true">
+  <span className="inline-flex items-center justify-center" aria-hidden="true">
     <svg viewBox="0 0 48 48" width="24" height="24">
       <path
         fill="#039BE5"
@@ -75,103 +75,184 @@ const FacebookIcon = () => (
 );
 
 export default function LoginPage() {
+  const inputShellClass =
+    'flex h-[58px] items-center gap-3 rounded-[var(--radius-field)] border border-[var(--line-soft)] bg-[var(--bg-soft)] px-4 transition duration-200 focus-within:border-[var(--brand-500)] focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(31,99,180,0.14)] motion-reduce:transition-none';
+
+  const socialButtonClass =
+    'inline-flex h-[54px] cursor-pointer items-center justify-center gap-3 rounded-[var(--radius-field)] border border-[var(--line-soft)] bg-[var(--bg-panel)] text-base font-semibold text-[var(--ink-900)] transition duration-200 enabled:hover:bg-[var(--bg-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none';
+
+  const submitClass =
+    'inline-flex h-[60px] items-center justify-center rounded-2xl bg-[linear-gradient(180deg,var(--brand-600)_0%,var(--brand-700)_100%)] text-[1.2rem] font-bold text-white shadow-[var(--shadow-brand)] transition duration-200 ease-out enabled:hover:-translate-y-px enabled:hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:transform-none';
+
+  const heroCardStyle = {
+    marginTop: '2.5rem',
+    maxWidth: '60rem',
+    borderRadius: '1.875rem',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'linear-gradient(135deg, rgba(8, 28, 58, 0.72), rgba(7, 24, 49, 0.42))',
+    padding: '2rem 1.75rem',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.32)',
+    backdropFilter: 'blur(14px)',
+  } as const;
+
+  const heroTitleStyle = {
+    maxWidth: '48.75rem',
+    margin: 0,
+    fontFamily: 'var(--font-body)',
+    fontSize: 'clamp(1.85rem, 4.8vw, 4.2rem)',
+    fontWeight: 900,
+    lineHeight: 1.08,
+    letterSpacing: '-0.035em',
+    color: '#ffffff',
+    textShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
+  } as const;
+
+  const heroDescStyle = {
+    maxWidth: '38.75rem',
+    marginTop: '1.5rem',
+    color: 'rgba(255, 255, 255, 0.84)',
+    fontSize: '1rem',
+    lineHeight: 1.8,
+  } as const;
+
   return (
-    <div className="login-page">
-      <div className="login-page__panel login-page__panel--hero">
-        <div className="login-page__hero-overlay" />
+    <main className="relative min-h-screen overflow-hidden bg-[var(--bg-page)] px-4 py-5 sm:px-6 sm:py-8">
+      <div className="pointer-events-none absolute -left-24 top-[-120px] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(31,99,180,0.28),transparent_70%)]" />
+      <div className="pointer-events-none absolute -right-28 bottom-[-160px] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(15,138,92,0.2),transparent_68%)]" />
 
-        <div className="login-page__hero-content">
-          <div className="login-page__brand">
-            <div className="login-page__brand-mark">
-              <BookIcon />
-            </div>
-            <span>Scholarly Sanctuary</span>
+      <div className="relative mx-auto grid w-full max-w-[1320px] gap-6 lg:grid-cols-12">
+        <section className="order-2 rounded-[28px] border border-[var(--line-soft)] bg-[var(--bg-panel)] p-5 shadow-[var(--shadow-soft)] sm:p-8 lg:order-1 lg:col-span-5" aria-label="Biểu mẫu đăng nhập">
+          <div className="mb-8 space-y-5 sm:mb-10">
+            <h1 className="text-[2rem] font-extrabold leading-[1.1] text-[var(--ink-900)] sm:text-[2.4rem]">Chào mừng trở lại</h1>
+            <p className="text-[1.02rem] leading-[1.6] text-[var(--ink-600)]">Tiếp tục lộ trình học tập cùng cộng đồng.</p>
           </div>
 
-          <div className="login-page__hero-copy">
-            <h1>
-              Mở khóa tiềm năng,
-              <br />
-              chinh phục đỉnh cao
-              <br />
-              tri thức
-            </h1>
-            <p>
-              Gia nhập cộng đồng học giả hàng đầu thế giới để tiếp cận những
-              nguồn tài liệu độc quyền và phương pháp học tập hiện đại.
-            </p>
-          </div>
-
-          <div className="login-page__security">
-            <ShieldIcon />
-            <span>Bảo mật &amp; Tin cậy</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="login-page__panel login-page__panel--form">
-        <div className="login-page__form-wrap">
-          <div className="login-page__heading">
-            <h2>Chào mừng bạn trở lại</h2>
-            <p>Tiếp tục hành trình học tập cùng cộng đồng.</p>
-          </div>
-
-          <form className="login-form">
-            <div className="form-group">
-              <label htmlFor="email">EMAIL</label>
-              <div className="input-shell">
+          <form className="flex flex-col gap-[18px]" noValidate>
+            <div className="flex flex-col gap-2.5">
+              <label className="font-[var(--font-label)] text-[0.82rem] font-extrabold tracking-[0.16em] text-[var(--ink-600)]" htmlFor="email">EMAIL</label>
+              <div className={inputShellClass}>
                 <MailIcon />
-                <input id="email" type="email" placeholder="example@gmail.com" />
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder="name@gmail.com"
+                  className="w-full border-none bg-transparent text-base text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-500)]"
+                />
               </div>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="password">MẬT KHẨU</label>
-              <div className="input-shell">
+            <div className="flex flex-col gap-2.5">
+              <label className="font-[var(--font-label)] text-[0.82rem] font-extrabold tracking-[0.16em] text-[var(--ink-600)]" htmlFor="password">MẬT KHẨU</label>
+              <div className={inputShellClass}>
                 <LockIcon />
-                <input id="password" type="password" placeholder="••••••••" />
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  placeholder="••••••••"
+                  className="w-full border-none bg-transparent text-base text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-500)]"
+                />
               </div>
             </div>
 
-            <div className="login-form__meta">
-              <label className="remember-me">
-                <input type="checkbox" />
-                <span>Ghi nhớ mật khẩu</span>
+            <div className="mt-1 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <label className="inline-flex cursor-pointer items-center gap-2.5 text-[0.95rem] text-[var(--ink-700)]">
+                <input className="h-[17px] w-[17px] accent-[var(--brand-600)]" type="checkbox" />
+                <span>Giữ đăng nhập</span>
               </label>
 
-              <button type="button" className="text-link">
+              <button type="button" className="cursor-pointer rounded-sm border-none bg-transparent p-0 text-[0.95rem] font-semibold text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2">
                 Quên mật khẩu?
               </button>
             </div>
 
-            <button type="submit" className="login-submit">
+            <button type="submit" className={submitClass}>
               Đăng nhập
             </button>
 
-            <div className="social-divider">
-              <span />
-              <p>HOẶC ĐĂNG NHẬP VỚI</p>
-              <span />
+            <div className="mt-1 flex items-center gap-4">
+              <span className="h-px flex-1 bg-[var(--line-soft)]" />
+              <p className="font-[var(--font-label)] whitespace-nowrap text-[0.78rem] font-bold tracking-[0.18em] text-[var(--ink-500)]">ĐĂNG NHẬP BẰNG</p>
+              <span className="h-px flex-1 bg-[var(--line-soft)]" />
             </div>
 
-            <div className="social-actions">
-              <button type="button" className="social-button">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button type="button" className={socialButtonClass}>
                 <GoogleIcon />
                 <span>Google</span>
               </button>
 
-              <button type="button" className="social-button">
+              <button type="button" className={socialButtonClass}>
                 <FacebookIcon />
                 <span>Facebook</span>
               </button>
             </div>
 
-            <p className="signup-text">
-              Chưa có tài khoản? <button type="button">Đăng ký ngay</button>
+            <p className="mt-2 text-center text-[0.98rem] text-[var(--ink-600)]">
+              Chưa có tài khoản?{' '}
+              <Link className="rounded-sm font-bold text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2" to="/register">Đăng ký ngay</Link>
             </p>
           </form>
-        </div>
+        </section>
+
+        <section className="order-1 relative min-h-[480px] overflow-hidden rounded-[32px] border border-white/20 bg-[linear-gradient(rgba(6,24,52,0.58),rgba(4,18,40,0.8)),url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1800&q=80')] bg-cover bg-center p-6 text-white shadow-[0_24px_44px_rgba(6,22,47,0.3)] sm:p-8 lg:order-2 lg:col-span-7 lg:min-h-[760px]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(146,204,255,0.18),transparent_42%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(4,22,48,0.08)_0%,rgba(4,22,48,0.4)_100%)]" />
+
+          <div className="relative z-10 flex h-full flex-col">
+            <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/20 bg-[rgba(255,255,255,0.12)] px-3 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.16)] backdrop-blur-md">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white">
+                <BookIcon />
+              </span>
+              <p className="font-[var(--font-label)] text-sm font-bold tracking-[0.14em] text-white">
+                Scholarly Sanctuary
+              </p>
+            </div>
+
+            <div style={heroCardStyle} className="sm:px-9 sm:py-10 lg:mt-12 lg:px-10 lg:py-12">
+              <h2 style={heroTitleStyle}>
+                Mở khóa tiềm năng,
+                <br />
+                chinh phục đỉnh cao
+                <br />
+                tri thức
+              </h2>
+
+              <p style={heroDescStyle} className="sm:text-[1.06rem]">
+                Gia nhập cộng đồng học giả hàng đầu để tiếp cận tài liệu chất lượng,
+                lộ trình cá nhân hóa và phương pháp học tập hiện đại.
+              </p>
+            </div>
+
+            <div className="mt-auto grid gap-3 pt-4 sm:pt-5 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/15 bg-[rgba(8,20,42,0.56)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                <p className="font-[var(--font-label)] text-xs font-bold tracking-[0.18em] text-[rgba(255,255,255,0.76)]">
+                  TỈ LỆ HOÀN THÀNH
+                </p>
+                <p className="mt-2 text-3xl font-extrabold text-white">92%</p>
+                <p className="mt-1 text-sm text-[rgba(255,255,255,0.84)]">
+                  Bài luyện đã được theo dõi tự động
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/15 bg-[rgba(8,20,42,0.56)] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                <div className="inline-flex items-center gap-2 text-white">
+                  <ShieldIcon />
+                  <p className="font-[var(--font-label)] text-xs font-bold tracking-[0.18em]">
+                    BẢO MẬT
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[rgba(255,255,255,0.84)]">
+                  Dữ liệu cá nhân và lịch sử học tập được mã hóa và đồng bộ an toàn trên mọi thiết bị.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
