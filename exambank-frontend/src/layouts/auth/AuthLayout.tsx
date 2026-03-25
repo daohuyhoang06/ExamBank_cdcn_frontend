@@ -12,7 +12,7 @@ export function AuthLayout({ children }: Props) {
           <div className="hidden bg-slate-900 p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">
-                ExamBank
+                Scholarly Sanctuary
               </p>
               <h1 className="mt-4 text-3xl font-bold leading-tight">
                 Nền tảng luyện đề và theo dõi tiến độ học tập
