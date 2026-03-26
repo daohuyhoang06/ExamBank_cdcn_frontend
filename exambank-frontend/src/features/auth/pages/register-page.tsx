@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/Button/button';
+import { Input } from '@/components/ui/Input/input';
 
 const SparklesIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -53,12 +55,6 @@ const CapIcon = () => (
 );
 
 export default function RegisterPage() {
-  const inputClass =
-    'h-14 rounded-[var(--radius-field)] border border-transparent bg-[var(--bg-soft)] px-3.5 text-base text-[var(--ink-900)] outline-none transition duration-200 placeholder:text-[var(--ink-500)] focus:border-[var(--brand-500)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)] motion-reduce:transition-none';
-
-  const submitClass =
-    'mt-1 inline-flex h-[58px] items-center justify-center rounded-lg bg-[linear-gradient(180deg,var(--brand-600)_0%,var(--brand-700)_100%)] text-[1.18rem] font-bold text-white shadow-[var(--shadow-brand)] transition duration-200 enabled:hover:-translate-y-px enabled:hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:transform-none';
-
   return (
     <main className="relative min-h-screen overflow-hidden bg-[linear-gradient(160deg,#eef4ff_0%,#f6fbff_45%,#f2f9f4_100%)] px-4 py-5 sm:px-6 sm:py-8">
       <div className="pointer-events-none absolute -right-16 top-[-100px] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(31,99,180,0.22),transparent_72%)]" />
@@ -120,38 +116,58 @@ export default function RegisterPage() {
 
             <form className="flex flex-col gap-5" noValidate>
               <div className="grid gap-5 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[0.96rem] font-semibold text-[var(--ink-900)]" htmlFor="fullName">Họ và Tên</label>
-                  <input className={inputClass} id="fullName" type="text" autoComplete="name" required placeholder="Nguyễn Văn A" />
-                </div>
+                <Input
+                  id="fullName"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  label="Họ và Tên"
+                  placeholder="Nguyễn Văn A"
+                  labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                />
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-[0.96rem] font-semibold text-[var(--ink-900)]" htmlFor="registerEmail">Email</label>
-                  <input className={inputClass} id="registerEmail" type="email" autoComplete="email" required placeholder="name@example.com" />
-                </div>
+                <Input
+                  id="registerEmail"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  label="Email"
+                  placeholder="name@example.com"
+                  labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                />
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[0.96rem] font-semibold text-[var(--ink-900)]" htmlFor="registerPassword">Mật khẩu</label>
-                  <input className={inputClass} id="registerPassword" type="password" autoComplete="new-password" required placeholder="••••••••" />
-                </div>
+                <Input
+                  id="registerPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  label="Mật khẩu"
+                  placeholder="••••••••"
+                  labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                />
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-[0.96rem] font-semibold text-[var(--ink-900)]" htmlFor="confirmPassword">Xác nhận mật khẩu</label>
-                  <input className={inputClass} id="confirmPassword" type="password" autoComplete="new-password" required placeholder="••••••••" />
-                </div>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  label="Xác nhận mật khẩu"
+                  placeholder="••••••••"
+                  labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                />
               </div>
 
               <label className="mt-0.5 inline-flex items-start gap-2.5 text-[0.94rem] leading-[1.5] text-[var(--ink-600)]" htmlFor="termsAgree">
                 <input className="mt-0.5 h-[14px] w-[14px] accent-[var(--brand-600)]" id="termsAgree" type="checkbox" required />
                 <span>
-                  Tôi đồng ý với <button className="cursor-pointer rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2" type="button">Điều khoản</button> và{' '}
-                  <button className="cursor-pointer rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2" type="button">Chính sách bảo mật</button>
+                  Tôi đồng ý với <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Điều khoản</Button> và{' '}
+                  <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Chính sách bảo mật</Button>
                 </span>
               </label>
 
-              <button className={submitClass} type="submit">Đăng ký tài khoản</button>
+              <Button className="mt-1 h-[58px] text-[1.18rem]" type="submit" size="xl" variant="primary" fullWidth>Đăng ký tài khoản</Button>
 
               <div className="mt-1 flex items-center gap-4">
                 <span className="h-px flex-1 bg-[var(--line-soft)]" />
@@ -160,21 +176,25 @@ export default function RegisterPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
+                <Button
                   type="button"
-                  className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[var(--line-soft)] bg-[var(--bg-soft)] text-base text-[var(--ink-900)] transition duration-200 enabled:hover:bg-[var(--brand-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none"
+                  variant="soft"
+                  size="lg"
+                  className="h-12 gap-2 rounded-[10px] border-[var(--line-soft)] text-base text-[var(--ink-900)] hover:bg-[var(--brand-100)]"
                 >
                   <GoogleIcon />
                   <span>Google</span>
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
-                  className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[var(--line-soft)] bg-[var(--bg-soft)] text-base text-[var(--ink-900)] transition duration-200 enabled:hover:bg-[var(--brand-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none"
+                  variant="soft"
+                  size="lg"
+                  className="h-12 gap-2 rounded-[10px] border-[var(--line-soft)] text-base text-[var(--ink-900)] hover:bg-[var(--brand-100)]"
                 >
                   <FacebookIcon />
                   <span>Facebook</span>
-                </button>
+                </Button>
               </div>
 
               <p className="mt-2 text-center text-[0.98rem] text-[var(--ink-600)]">

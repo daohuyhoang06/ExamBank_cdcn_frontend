@@ -11,9 +11,13 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/Button/button";
+import { Card } from "@/components/ui/Card/card";
+import { StatCard } from "@/components/ui/StatCard/stat-card";
 
-type MetricCard = {
+type DashboardStat = {
   title: string;
   value: string;
   metaOne: string;
@@ -21,7 +25,7 @@ type MetricCard = {
   to: string;
   icon: LucideIcon;
   accent: "blue" | "orange" | "green" | "dark";
-  badge?: string;
+  badge?: ReactNode;
 };
 
 type QuickAction = {
@@ -31,7 +35,7 @@ type QuickAction = {
   icon: LucideIcon;
 };
 
-const metricCards: MetricCard[] = [
+const dashboardStats: DashboardStat[] = [
   {
     title: "Người dùng",
     value: "25,000",
@@ -70,6 +74,7 @@ const metricCards: MetricCard[] = [
     to: "/admin/financial",
     icon: BadgeDollarSign,
     accent: "dark",
+    badge: <BadgeDollarSign size={12} />,
   },
 ];
 
@@ -104,7 +109,7 @@ const urgentActions: QuickAction[] = [
   },
 ];
 
-function metricClasses(accent: MetricCard["accent"]) {
+function metricClasses(accent: DashboardStat["accent"]) {
   if (accent === "orange") {
     return {
       card: "border-orange-100 bg-white",
@@ -125,7 +130,7 @@ function metricClasses(accent: MetricCard["accent"]) {
 
   if (accent === "dark") {
     return {
-      card: "border-transparent bg-slate-900 text-white",
+      card: "border-emerald-400/40 bg-slate-900 text-white",
       icon: "bg-white/10 text-white",
       badge: "bg-white/10 text-white",
       meta: "text-emerald-300",
@@ -153,58 +158,68 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex gap-3">
-          <button
+          <Button
             type="button"
-            className="rounded-lg border border-[var(--line-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--brand-700)] transition hover:bg-[var(--bg-page)]"
+            variant="secondary"
+            size="md"
+            className="rounded-lg text-sm font-semibold text-[var(--brand-700)] hover:bg-[var(--bg-page)]"
           >
             Xuất báo cáo
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="rounded-lg bg-[linear-gradient(135deg,var(--brand-700)_0%,var(--brand-600)_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105"
+            variant="primary"
+            size="md"
+            className="rounded-lg text-sm font-semibold"
           >
             Tạo kỳ thi mới
-          </button>
+          </Button>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        {metricCards.map((card) => {
+        {dashboardStats.map((card) => {
           const Icon = card.icon;
           const classes = metricClasses(card.accent);
+          const badgeClassName =
+            card.accent === "dark"
+              ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-white"
+              : `${classes.badge} text-xs font-bold`;
+          const metaOneLabel = card.metaOne.split(" ").slice(0, -1).join(" ");
+          const metaOneValue = card.metaOne.split(" ").slice(-1);
+          const metaTwoLabel = card.metaTwo.split(" ").slice(0, -1).join(" ");
+          const metaTwoValue = card.metaTwo.split(" ").slice(-1);
 
           return (
             <Link
               key={card.title}
               to={card.to}
-              className={`group rounded-2xl border p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md ${classes.card}`}
+              className="group block"
             >
-              <div className="mb-4 flex items-start justify-between">
-                <div className={`rounded-xl p-3 transition group-hover:scale-105 ${classes.icon}`}>
-                  <Icon size={20} />
-                </div>
-                {card.badge ? (
-                  <span className={`rounded-full px-2 py-1 text-xs font-bold ${classes.badge}`}>
-                    {card.badge}
-                  </span>
-                ) : null}
-              </div>
-
-              <p className="text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-500)]">
-                {card.title}
-              </p>
-              <p className="mt-1 text-2xl font-extrabold text-[var(--brand-700)]">{card.value}</p>
-
-              <div className="mt-4 space-y-2 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--ink-500)]">{card.metaOne.split(" ").slice(0, -1).join(" ")}</span>
-                  <span className="font-bold">{card.metaOne.split(" ").slice(-1)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--ink-500)]">{card.metaTwo.split(" ").slice(0, -1).join(" ")}</span>
-                  <span className={`font-bold ${classes.meta}`}>{card.metaTwo.split(" ").slice(-1)}</span>
-                </div>
-              </div>
+              <StatCard
+                title={card.title}
+                value={card.value}
+                icon={<Icon size={20} />}
+                badge={card.badge}
+                cardClassName={`border p-6 shadow-sm transition duration-300 group-hover:-translate-y-1 group-hover:shadow-md ${classes.card}`}
+                iconWrapClassName={`${classes.icon} transition group-hover:scale-105`}
+                badgeClassName={badgeClassName}
+                titleClassName="text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-500)]"
+                valueClassName="text-2xl text-[var(--brand-700)]"
+                subtitle={
+                  <div className="mt-4 space-y-2 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--ink-500)]">{metaOneLabel}</span>
+                      <span className="font-bold">{metaOneValue}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--ink-500)]">{metaTwoLabel}</span>
+                      <span className={`font-bold ${classes.meta}`}>{metaTwoValue}</span>
+                    </div>
+                  </div>
+                }
+                subtitleClassName="mt-0 text-[inherit]"
+              />
             </Link>
           );
         })}
@@ -212,7 +227,7 @@ export default function AdminDashboardPage() {
 
       <section className="grid grid-cols-12 gap-8">
         <div className="col-span-12 space-y-8 lg:col-span-8">
-          <article className="rounded-3xl border border-[var(--line-soft)] bg-white p-8 shadow-sm">
+          <Card variant="default" padding="lg" className="rounded-3xl shadow-sm">
             <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold text-[var(--ink-900)]">Biểu đồ Tín dụng</h2>
@@ -253,7 +268,7 @@ export default function AdminDashboardPage() {
                 </div>
               ))}
             </div>
-          </article>
+          </Card>
 
           <section className="grid grid-cols-3 gap-6">
             <article className="col-span-3 rounded-2xl border border-[var(--line-soft)] bg-white p-6 shadow-sm md:col-span-1">

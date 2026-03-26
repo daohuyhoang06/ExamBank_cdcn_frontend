@@ -1,8 +1,6 @@
 import {
   BarChart3,
   CalendarClock,
-  ChevronLeft,
-  ChevronRight,
   CopyPlus,
   Download,
   Edit3,
@@ -18,6 +16,10 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button/button";
+import { Input } from "@/components/ui/Input/input";
+import { Pagination } from "@/components/ui/Pagination/pagination";
+import { StatCard } from "@/components/ui/StatCard/stat-card";
 
 type StatCard = {
   title: string;
@@ -107,7 +109,7 @@ function statToneClass(tone: StatCard["tone"]) {
       iconWrap: "bg-emerald-100 text-emerald-700",
       value: "text-emerald-700",
       hint: "bg-emerald-100 text-emerald-700",
-      border: "hover:border-emerald-200",
+      border: "border-emerald-200",
     };
   }
 
@@ -116,7 +118,7 @@ function statToneClass(tone: StatCard["tone"]) {
       iconWrap: "bg-amber-100 text-amber-800",
       value: "text-amber-800",
       hint: "bg-amber-100 text-amber-800",
-      border: "hover:border-amber-200",
+      border: "border-amber-200",
     };
   }
 
@@ -125,7 +127,7 @@ function statToneClass(tone: StatCard["tone"]) {
       iconWrap: "bg-blue-100 text-blue-700",
       value: "text-blue-700",
       hint: "bg-blue-100 text-blue-700",
-      border: "hover:border-blue-200",
+      border: "border-blue-200",
     };
   }
 
@@ -133,7 +135,7 @@ function statToneClass(tone: StatCard["tone"]) {
     iconWrap: "bg-[var(--brand-100)] text-[var(--brand-700)]",
     value: "text-[var(--brand-700)]",
     hint: "bg-[var(--accent-100)] text-[var(--accent-500)]",
-    border: "hover:border-[var(--brand-200)]",
+    border: "border-[var(--brand-200)]",
   };
 }
 
@@ -204,13 +206,15 @@ export default function AdminExamsPage() {
           </p>
         </div>
 
-        <button
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600)_0%,var(--brand-700)_100%)] px-6 py-3 text-sm font-bold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105"
+          variant="primary"
+          size="lg"
+          leftIcon={<PlusCircle size={18} />}
+          className="rounded-xl px-6 font-bold"
         >
-          <PlusCircle size={18} />
           Tạo kỳ thi mới
-        </button>
+        </Button>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -218,25 +222,17 @@ export default function AdminExamsPage() {
           const tone = statToneClass(item.tone);
 
           return (
-            <article
+            <StatCard
               key={item.title}
-              className={`rounded-2xl border border-[var(--line-soft)] bg-white p-5 shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-0.5 ${tone.border}`}
-            >
-              <div className="mb-4 flex items-start justify-between gap-2">
-                <span className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${tone.iconWrap}`}>
-                  {statIcon(item.title, item.tone)}
-                </span>
-                {item.hint ? (
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${tone.hint}`}>
-                    {item.hint}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-sm text-[var(--ink-600)]">{item.title}</p>
-              <p className={`mt-1 text-3xl font-extrabold leading-none ${tone.value}`}>
-                {item.value}
-              </p>
-            </article>
+              title={item.title}
+              value={item.value}
+              icon={statIcon(item.title, item.tone)}
+              badge={item.hint}
+              cardClassName={`border border-[var(--line-soft)] ${tone.border}`}
+              iconWrapClassName={`h-11 w-11 ${tone.iconWrap}`}
+              badgeClassName={tone.hint}
+              valueClassName={tone.value}
+            />
           );
         })}
       </section>
@@ -244,17 +240,14 @@ export default function AdminExamsPage() {
       <section className="overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-white shadow-[var(--shadow-soft)]">
         <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-3">
-            <label className="relative min-w-[250px] flex-1 xl:max-w-sm">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-500)]"
-              />
-              <input
-                type="text"
-                placeholder="Tìm theo tên kỳ thi..."
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-white py-2.5 pl-9 pr-4 text-sm text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-300)] focus:ring-2 focus:ring-[var(--brand-100)]"
-              />
-            </label>
+            <Input
+              type="text"
+              placeholder="Tìm theo tên kỳ thi..."
+              startAdornment={<Search size={16} className="text-[var(--ink-500)]" />}
+              containerClassName="min-w-[250px] flex-1 xl:max-w-sm"
+              inputWrapperClassName="h-11"
+              inputClassName="h-11 text-sm"
+            />
 
             <select className="rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 text-sm text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-300)] focus:ring-2 focus:ring-[var(--brand-100)]">
               <option>Tất cả danh mục</option>
@@ -273,20 +266,24 @@ export default function AdminExamsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-page)]"
+              variant="icon"
+              size="icon"
+              className="h-10 w-10 rounded-lg"
               title="Xuất dữ liệu"
             >
               <Download size={16} />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-page)]"
+              variant="icon"
+              size="icon"
+              className="h-10 w-10 rounded-lg"
               title="In"
             >
               <FileSpreadsheet size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -338,27 +335,33 @@ export default function AdminExamsPage() {
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex justify-end gap-1.5">
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-700 transition hover:bg-blue-100"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-blue-700 hover:bg-blue-100"
                           title="Chỉnh sửa"
                         >
                           <Edit3 size={15} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)]"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-[var(--ink-600)] hover:bg-[var(--bg-soft)]"
                           title="Thống kê"
                         >
                           <BarChart3 size={15} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-100"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-red-600 hover:bg-red-100"
                           title="Xóa"
                         >
                           <Trash2 size={15} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -374,46 +377,7 @@ export default function AdminExamsPage() {
             {" "}trong số <span className="font-bold text-[var(--brand-700)]">1,240</span>{" "}
             kỳ thi
           </p>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-soft)] text-[var(--ink-400)] opacity-60"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand-700)] text-xs font-bold text-white"
-            >
-              1
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-xs font-semibold text-[var(--ink-700)] transition hover:border-[var(--line-soft)] hover:bg-white"
-            >
-              2
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-xs font-semibold text-[var(--ink-700)] transition hover:border-[var(--line-soft)] hover:bg-white"
-            >
-              3
-            </button>
-            <span className="px-1 text-sm text-[var(--ink-500)]">...</span>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-xs font-semibold text-[var(--ink-700)] transition hover:border-[var(--line-soft)] hover:bg-white"
-            >
-              124
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-soft)] text-[var(--ink-600)] transition hover:bg-white"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
+          <Pagination currentPage={1} totalPages={124} />
         </div>
       </section>
 
@@ -470,20 +434,26 @@ export default function AdminExamsPage() {
           </p>
 
           <div className="mt-5 space-y-2">
-            <button
+            <Button
               type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--bg-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-700)] transition hover:bg-[var(--brand-100)]"
+              variant="soft"
+              size="md"
+              fullWidth
+              leftIcon={<CopyPlus size={16} />}
+              className="rounded-xl text-sm font-semibold text-[var(--brand-700)] hover:bg-[var(--brand-100)]"
             >
-              <CopyPlus size={16} />
               Tạo từ mẫu đề
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--line-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
+              variant="secondary"
+              size="md"
+              fullWidth
+              leftIcon={<Eye size={16} />}
+              className="rounded-xl text-sm font-semibold text-[var(--ink-700)] hover:bg-[var(--bg-page)]"
             >
-              <Eye size={16} />
               Xem phân tích đăng ký
-            </button>
+            </Button>
           </div>
 
           <p className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-700)]">
@@ -505,20 +475,24 @@ export default function AdminExamsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--line-soft)] px-3 py-2 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
+              variant="secondary"
+              size="sm"
+              leftIcon={<GraduationCap size={15} />}
+              className="rounded-lg px-3 text-sm font-semibold text-[var(--ink-700)] hover:bg-[var(--bg-page)]"
             >
-              <GraduationCap size={15} />
               Gửi thông báo thí sinh
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--line-soft)] px-3 py-2 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
+              variant="secondary"
+              size="sm"
+              leftIcon={<FlaskConical size={15} />}
+              className="rounded-lg px-3 text-sm font-semibold text-[var(--ink-700)] hover:bg-[var(--bg-page)]"
             >
-              <FlaskConical size={15} />
               Mở sandbox đề thi
-            </button>
+            </Button>
           </div>
         </div>
       </section>

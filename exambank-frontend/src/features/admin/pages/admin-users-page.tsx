@@ -13,6 +13,10 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button/button";
+import { Input } from "@/components/ui/Input/input";
+import { Pagination } from "@/components/ui/Pagination/pagination";
+import { StatCard } from "@/components/ui/StatCard/stat-card";
 
 type StatCard = {
   title: string;
@@ -105,6 +109,7 @@ const users: UserRow[] = [
 function statToneClasses(tone: StatCard["tone"]) {
   if (tone === "success") {
     return {
+      border: "border-emerald-200",
       iconWrap: "bg-emerald-50 text-emerald-700",
       trend: "bg-emerald-100 text-emerald-700",
     };
@@ -112,6 +117,7 @@ function statToneClasses(tone: StatCard["tone"]) {
 
   if (tone === "warning") {
     return {
+      border: "border-amber-200",
       iconWrap: "bg-amber-50 text-amber-700",
       trend: "bg-amber-100 text-amber-700",
     };
@@ -119,12 +125,14 @@ function statToneClasses(tone: StatCard["tone"]) {
 
   if (tone === "danger") {
     return {
+      border: "border-rose-200",
       iconWrap: "bg-rose-50 text-rose-700",
       trend: "bg-rose-100 text-rose-700",
     };
   }
 
   return {
+    border: "border-blue-200",
     iconWrap: "bg-[var(--brand-050)] text-[var(--brand-700)]",
     trend: "bg-[var(--brand-100)] text-[var(--brand-700)]",
   };
@@ -175,13 +183,15 @@ export default function AdminUsersPage() {
             Quản lý và giám sát hệ thống học viên và giảng viên của bạn.
           </p>
         </div>
-        <button
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600),var(--brand-700))] px-5 py-3 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition duration-200 hover:brightness-105"
+          variant="primary"
+          size="lg"
+          leftIcon={<Plus size={16} />}
+          className="rounded-xl"
         >
-          <Plus size={16} />
           Thêm người dùng mới
-        </button>
+        </Button>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -190,44 +200,31 @@ export default function AdminUsersPage() {
           const Icon = item.icon;
 
           return (
-            <article
+            <StatCard
               key={item.title}
-              className="rounded-2xl border border-[var(--line-soft)] bg-white p-5 shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-0.5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span
-                  className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${tone.iconWrap}`}
-                >
-                  <Icon size={19} />
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.trend}`}
-                >
-                  {item.trend}
-                </span>
-              </div>
-              <p className="mt-4 text-sm text-[var(--ink-600)]">{item.title}</p>
-              <p className="mt-1 text-3xl font-bold leading-none text-[var(--ink-900)]">
-                {item.value}
-              </p>
-            </article>
+              title={item.title}
+              value={item.value}
+              icon={<Icon size={19} />}
+              badge={item.trend}
+              cardClassName={`border ${tone.border}`}
+              iconWrapClassName={`h-11 w-11 ${tone.iconWrap}`}
+              badgeClassName={tone.trend}
+              valueClassName="font-bold text-[var(--ink-900)]"
+            />
           );
         })}
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-white shadow-[var(--shadow-soft)]">
         <div className="flex flex-col gap-3 border-b border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 lg:flex-row lg:items-center lg:justify-between">
-          <label className="relative w-full lg:max-w-md">
-            <Search
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-500)]"
-            />
-            <input
-              type="text"
-              placeholder="Tìm kiếm tên, email, ID..."
-              className="w-full rounded-xl border border-[var(--line-soft)] bg-white py-2.5 pl-9 pr-4 text-sm text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-300)] focus:ring-2 focus:ring-[var(--brand-100)]"
-            />
-          </label>
+          <Input
+            type="text"
+            placeholder="Tìm kiếm tên, email, ID..."
+            startAdornment={<Search size={16} className="text-[var(--ink-500)]" />}
+            containerClassName="w-full lg:max-w-md"
+            inputWrapperClassName="h-11"
+            inputClassName="h-11 text-sm"
+          />
 
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
             <select className="rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 text-sm text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-300)] focus:ring-2 focus:ring-[var(--brand-100)]">
@@ -243,12 +240,9 @@ export default function AdminUsersPage() {
               <option>Đã khóa</option>
               <option>Chờ duyệt</option>
             </select>
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)]"
-            >
+            <Button type="button" variant="icon" size="icon" className="h-11 w-11 rounded-xl">
               <Filter size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -327,48 +321,26 @@ export default function AdminUsersPage() {
         <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 sm:flex-row">
           <p className="text-sm text-[var(--ink-600)]">Trang 1 / 150</p>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               disabled
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ink-500)] opacity-50"
+              leftIcon={<ChevronLeft size={16} />}
+              className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
             >
-              <ChevronLeft size={16} />
               Trước
-            </button>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="h-8 w-8 rounded-lg bg-[var(--brand-700)] text-xs font-semibold text-white"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="h-8 w-8 rounded-lg text-xs font-semibold text-[var(--ink-700)] transition hover:bg-white"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                className="h-8 w-8 rounded-lg text-xs font-semibold text-[var(--ink-700)] transition hover:bg-white"
-              >
-                3
-              </button>
-              <span className="px-1 text-sm text-[var(--ink-500)]">...</span>
-              <button
-                type="button"
-                className="h-8 w-8 rounded-lg text-xs font-semibold text-[var(--ink-700)] transition hover:bg-white"
-              >
-                150
-              </button>
-            </div>
-            <button
+            </Button>
+            <Pagination currentPage={1} totalPages={150} />
+            <Button
               type="button"
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--brand-700)] transition hover:bg-white"
+              variant="ghost"
+              size="sm"
+              rightIcon={<ChevronRight size={16} />}
+              className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
             >
               Tiếp
-              <ChevronRight size={16} />
-            </button>
+            </Button>
           </div>
         </div>
       </section>
