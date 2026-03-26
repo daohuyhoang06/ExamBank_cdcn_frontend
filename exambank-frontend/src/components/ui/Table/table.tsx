@@ -1,9 +1,23 @@
 import React from 'react';
 
-export type TableProps = {
-  columns: { key: string; label: string }[];
-  data: Record<string, unknown>[];
+export type TableColumn<T> = {
+  key: keyof T | string;
+  label: string;
+  headerClassName?: string;
+  cellClassName?: string;
+  render?: (row: T, index: number) => React.ReactNode;
+};
+
+export type TableProps<T extends Record<string, unknown>> = {
+  columns: TableColumn<T>[];
+  data: T[];
+  rowKey?: (row: T, index: number) => React.Key;
+  emptyText?: string;
+  dense?: boolean;
   className?: string;
+  tableClassName?: string;
+  headerRowClassName?: string;
+  bodyRowClassName?: string;
 };
 
 const renderCellValue = (value: unknown): React.ReactNode => {
@@ -22,16 +36,28 @@ const renderCellValue = (value: unknown): React.ReactNode => {
   return String(value);
 };
 
-export const Table: React.FC<TableProps> = ({ columns, data, className = '' }) => {
+export function Table<T extends Record<string, unknown>>({
+  columns,
+  data,
+  rowKey,
+  emptyText = 'No data',
+  dense = false,
+  className = '',
+  tableClassName = '',
+  headerRowClassName = '',
+  bodyRowClassName = '',
+}: TableProps<T>) {
+  const cellPadding = dense ? 'px-4 py-3' : 'px-6 py-4';
+
   return (
-    <div className={`mb-6 w-full overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-container-highest)] p-4 ${className}`.trim()}>
-      <table className="w-full border-separate border-spacing-y-[0.45rem] bg-transparent font-[var(--font-body)] text-[var(--body-md)]">
+    <div className={`w-full overflow-x-auto rounded-3xl border border-[var(--line-soft)] bg-white shadow-[var(--shadow-soft)] ${className}`.trim()}>
+      <table className={`w-full text-left ${tableClassName}`.trim()}>
         <thead>
-          <tr>
+          <tr className={`border-b border-[var(--line-soft)] bg-[var(--bg-soft)] text-[0.68rem] uppercase tracking-[0.1em] text-[var(--ink-600)] ${headerRowClassName}`.trim()}>
             {columns.map(col => (
               <th
-                key={col.key}
-                className="whitespace-nowrap border-none bg-transparent px-[0.95rem] py-[0.78rem] text-left font-[var(--font-label)] text-[var(--label-sm)] font-semibold uppercase tracking-[0.08em] text-[var(--on-surface-variant)]"
+                key={String(col.key)}
+                className={`whitespace-nowrap font-semibold ${cellPadding} ${col.headerClassName ?? ''}`.trim()}
               >
                 {col.label}
               </th>
@@ -41,19 +67,22 @@ export const Table: React.FC<TableProps> = ({ columns, data, className = '' }) =
         <tbody>
           {data.length === 0 ? (
             <tr>
-              <td className="px-[0.95rem] py-[0.78rem] text-center text-[var(--color-muted)]" colSpan={columns.length}>
-                No data
+              <td className={`${cellPadding} text-center text-[var(--ink-500)]`} colSpan={columns.length}>
+                {emptyText}
               </td>
             </tr>
           ) : (
             data.map((row, i) => (
-              <tr key={i} className="group">
+              <tr
+                key={rowKey ? rowKey(row, i) : i}
+                className={`border-b border-[var(--line-soft)]/70 transition hover:bg-[var(--bg-soft)]/60 ${bodyRowClassName}`.trim()}
+              >
                 {columns.map(col => (
                   <td
-                    key={col.key}
-                    className="border-none bg-[var(--surface-container-lowest)] px-[0.95rem] py-[0.78rem] text-left text-[var(--on-surface)] first:rounded-l-[var(--radius-md)] last:rounded-r-[var(--radius-md)] group-hover:bg-[var(--surface-container-low)]"
+                    key={String(col.key)}
+                    className={`${cellPadding} text-sm text-[var(--ink-700)] ${col.cellClassName ?? ''}`.trim()}
                   >
-                    {renderCellValue(row[col.key])}
+                    {col.render ? col.render(row, i) : renderCellValue(row[col.key as keyof T])}
                   </td>
                 ))}
               </tr>
@@ -63,4 +92,4 @@ export const Table: React.FC<TableProps> = ({ columns, data, className = '' }) =
       </table>
     </div>
   );
-};
+}

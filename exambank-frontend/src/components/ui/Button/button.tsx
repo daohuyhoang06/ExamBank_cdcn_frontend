@@ -1,42 +1,56 @@
 import React from 'react';
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'danger' | 'success' | 'inverted' | 'outlined';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'soft' | 'danger' | 'success' | 'icon';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'icon';
+  fullWidth?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 };
 
 export const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'primary',
   size = 'md',
+  fullWidth = false,
+  leftIcon,
+  rightIcon,
   className = '',
   ...props
 }) => {
   const baseClass =
-    'inline-flex items-center justify-center gap-2 rounded-[var(--radius-field)] border border-transparent font-[var(--font-label)] font-semibold uppercase tracking-[0.06em] outline-none transition duration-200 active:translate-y-px motion-reduce:transition-none motion-reduce:active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-100 disabled:shadow-none disabled:bg-[var(--surface-dim)] disabled:text-[rgba(16,21,38,0.52)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2';
+    'inline-flex items-center justify-center gap-2 rounded-[var(--radius-field)] border border-transparent font-semibold outline-none transition duration-200 active:translate-y-px motion-reduce:transition-none motion-reduce:active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2';
 
   const variantClass: Record<NonNullable<ButtonProps['variant']>, string> = {
-    primary: 'bg-[var(--hero-gradient)] text-[var(--on-primary)] enabled:hover:shadow-[inset_0_0_0_999px_rgba(255,255,255,0.1),inset_0_1px_0_rgba(255,255,255,0.18)]',
-    secondary: 'bg-transparent text-[var(--on-surface)] shadow-[inset_0_0_0_1px_rgba(95,103,130,0.2)] enabled:hover:bg-[var(--surface-container-low)]',
-    tertiary: 'bg-transparent px-1 text-[var(--primary)] enabled:hover:text-[var(--primary-container)]',
-    danger: 'bg-[#c81e1e] text-white',
-    success: 'bg-[#0f7a4f] text-[#f5fff9]',
-    inverted: 'bg-[#1f2937] text-[#f4f7fb] enabled:hover:shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]',
-    outlined: 'bg-transparent text-[#2a3344] shadow-[inset_0_0_0_1px_rgba(75,85,99,0.25)] enabled:hover:bg-[rgba(238,242,248,0.9)]',
+    primary:
+      'bg-[linear-gradient(180deg,var(--brand-600)_0%,var(--brand-700)_100%)] text-white shadow-[var(--shadow-brand)] enabled:hover:brightness-105',
+    secondary:
+      'bg-white text-[var(--ink-700)] border-[var(--line-soft)] enabled:hover:bg-[var(--bg-soft)]',
+    ghost: 'bg-transparent text-[var(--brand-700)] enabled:hover:bg-[var(--brand-100)]/60',
+    soft: 'bg-[var(--bg-soft)] text-[var(--ink-800)] border-[var(--line-soft)] enabled:hover:bg-[var(--brand-100)]',
+    danger: 'bg-rose-100 text-rose-700 enabled:hover:bg-rose-200',
+    success: 'bg-emerald-100 text-emerald-700 enabled:hover:bg-emerald-200',
+    icon: 'bg-white text-[var(--ink-600)] border-[var(--line-soft)] enabled:hover:bg-[var(--bg-soft)]',
   };
 
   const sizeClass: Record<NonNullable<ButtonProps['size']>, string> = {
-    sm: 'px-3 py-2 text-[var(--label-sm)]',
-    md: 'px-4 py-2.5 text-[var(--label-md)]',
-    lg: 'px-5 py-3 text-[0.88rem]',
+    sm: 'h-9 px-3 text-xs',
+    md: 'h-10 px-4 text-sm',
+    lg: 'h-11 px-5 text-sm',
+    xl: 'h-[58px] px-6 text-base font-bold',
+    icon: 'h-10 w-10 p-0',
   };
+
+  const widthClass = fullWidth ? 'w-full' : '';
 
   return (
     <button
-      className={`${baseClass} ${variantClass[variant]} ${sizeClass[size]} ${className}`.trim()}
+      className={`${baseClass} ${variantClass[variant]} ${sizeClass[size]} ${widthClass} ${className}`.trim()}
       {...props}
     >
+      {leftIcon ? <span className="inline-flex shrink-0">{leftIcon}</span> : null}
       {children}
+      {rightIcon ? <span className="inline-flex shrink-0">{rightIcon}</span> : null}
     </button>
   );
 };

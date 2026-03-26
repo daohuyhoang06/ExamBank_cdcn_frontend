@@ -1,6 +1,5 @@
 import {
   Award,
-  ChevronRight,
   Database,
   Eye,
   Flag,
@@ -10,8 +9,11 @@ import {
   SlidersHorizontal,
   Trash2,
   TrendingUp,
-  ChevronLeft,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button/button";
+import { Input } from "@/components/ui/Input/input";
+import { Pagination } from "@/components/ui/Pagination/pagination";
+import { StatCard } from "@/components/ui/StatCard/stat-card";
 
 type StatCard = {
   title: string;
@@ -180,13 +182,15 @@ export default function AdminQuestionBankPage() {
             </p>
           </div>
 
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600),var(--brand-700))] px-5 py-3 text-sm font-bold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105"
+            variant="primary"
+            size="lg"
+            leftIcon={<PlusCircle size={18} />}
+            className="rounded-xl font-bold"
           >
-            <PlusCircle size={18} />
             Thêm Câu hỏi Mới
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -195,43 +199,31 @@ export default function AdminQuestionBankPage() {
           const tone = statToneClasses(item.tone);
 
           return (
-            <article
+            <StatCard
               key={item.title}
-              className={`rounded-2xl border bg-white p-5 shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-0.5 ${tone.border}`}
-            >
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[var(--ink-600)]">{item.title}</p>
-                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone.iconWrap}`}>
-                  {statIcon(item.title, item.tone)}
-                </span>
-              </div>
-              <p className="truncate text-2xl font-extrabold text-[var(--ink-900)]">{item.value}</p>
-              {item.subtitle ? (
-                <p className="mt-1 text-xs text-[var(--ink-500)]">{item.subtitle}</p>
-              ) : null}
-            </article>
+              title={item.title}
+              value={item.value}
+              subtitle={item.subtitle}
+              icon={statIcon(item.title, item.tone)}
+              layout="inline-title"
+              cardClassName={`border ${tone.border}`}
+              iconWrapClassName={tone.iconWrap}
+              valueClassName="truncate text-2xl text-[var(--ink-900)]"
+            />
           );
         })}
       </section>
 
       <section className="rounded-3xl border border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 shadow-[var(--shadow-soft)]">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))_auto]">
-          <label className="space-y-2">
-            <span className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[var(--ink-500)]">
-              Tìm kiếm
-            </span>
-            <span className="relative block">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-500)]"
-              />
-              <input
-                type="text"
-                placeholder="ID hoặc nội dung câu hỏi..."
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-white py-2.5 pl-9 pr-4 text-sm text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-300)] focus:ring-2 focus:ring-[var(--brand-100)]"
-              />
-            </span>
-          </label>
+          <Input
+            type="text"
+            containerClassName="pt-[1.35rem]"
+            placeholder="ID hoặc nội dung câu hỏi..."
+            startAdornment={<Search size={16} className="text-[var(--ink-500)]" />}
+            inputWrapperClassName="h-11 rounded-xl border border-[var(--line-soft)] bg-white px-3 focus-within:border-[var(--brand-300)] focus-within:ring-2 focus-within:ring-[var(--brand-100)] focus-within:shadow-none"
+            inputClassName="h-11 text-sm text-[var(--ink-700)]"
+          />
 
           <label className="space-y-2">
             <span className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[var(--ink-500)]">
@@ -270,12 +262,9 @@ export default function AdminQuestionBankPage() {
           </label>
 
           <div className="flex items-end">
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-page)]"
-            >
+            <Button type="button" variant="icon" size="icon" className="h-11 w-11 rounded-xl">
               <SlidersHorizontal size={16} />
-            </button>
+            </Button>
           </div>
         </div>
       </section>
@@ -330,27 +319,33 @@ export default function AdminQuestionBankPage() {
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex justify-end gap-1.5">
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-500)] transition hover:bg-[var(--bg-page)] hover:text-[var(--brand-700)]"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-[var(--ink-500)] hover:bg-[var(--bg-page)] hover:text-[var(--brand-700)]"
                           title="Xem"
                         >
                           <Eye size={15} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-500)] transition hover:bg-[var(--bg-page)] hover:text-[var(--brand-700)]"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-[var(--ink-500)] hover:bg-[var(--bg-page)] hover:text-[var(--brand-700)]"
                           title="Sửa"
                         >
                           <Pencil size={15} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-500)] transition hover:bg-red-100 hover:text-rose-700"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-lg p-0 text-[var(--ink-500)] hover:bg-red-100 hover:text-rose-700"
                           title="Xóa"
                         >
                           <Trash2 size={15} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -365,45 +360,7 @@ export default function AdminQuestionBankPage() {
             Hiển thị 1 - 10 trên 45,200 câu hỏi
           </span>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-500)] transition hover:bg-white"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand-700)] text-sm font-bold text-white"
-            >
-              1
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium text-[var(--ink-600)] transition hover:bg-white"
-            >
-              2
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium text-[var(--ink-600)] transition hover:bg-white"
-            >
-              3
-            </button>
-            <span className="px-1 text-sm text-[var(--ink-500)]">...</span>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium text-[var(--ink-600)] transition hover:bg-white"
-            >
-              4520
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-500)] transition hover:bg-white"
-            >
-              <ChevronRight size={15} />
-            </button>
-          </div>
+          <Pagination currentPage={1} totalPages={4520} />
         </div>
       </section>
     </div>

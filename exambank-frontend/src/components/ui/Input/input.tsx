@@ -2,27 +2,68 @@ import React, { useId } from 'react';
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   label?: string;
+  hint?: string;
   error?: string;
+  containerClassName?: string;
+  labelClassName?: string;
+  inputClassName?: string;
+  inputWrapperClassName?: string;
+  startAdornment?: React.ReactNode;
+  endAdornment?: React.ReactNode;
 };
 
-export const Input: React.FC<InputProps> = ({ label, error, className = '', ...props }) => {
+export const Input: React.FC<InputProps> = ({
+  label,
+  hint,
+  error,
+  className = '',
+  containerClassName = '',
+  labelClassName = '',
+  inputClassName = '',
+  inputWrapperClassName = '',
+  startAdornment,
+  endAdornment,
+  ...props
+}) => {
   const generatedId = useId();
   const inputId = props.id ?? generatedId;
+  const hasAdornment = Boolean(startAdornment || endAdornment);
 
   return (
-    <div className={`mb-6 flex flex-col gap-2 ${className}`.trim()}>
+    <div className={`flex flex-col gap-2 ${containerClassName} ${className}`.trim()}>
       {label && (
-        <label htmlFor={inputId} className="font-[var(--font-label)] text-[var(--label-md)] font-semibold uppercase tracking-[0.08em] text-[var(--on-surface-variant)]">
+        <label
+          htmlFor={inputId}
+          className={`font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)] ${labelClassName}`.trim()}
+        >
           {label}
         </label>
       )}
-      <input
-        id={inputId}
-        className={`rounded-[var(--radius-field)] border border-transparent px-3.5 pb-[0.65rem] pt-3.5 font-[var(--font-body)] text-[var(--body-md)] text-[var(--on-surface)] outline-none transition duration-200 focus:border-[var(--brand-500)] focus:bg-[var(--surface-bright)] focus:ring-2 focus:ring-[var(--brand-100)] disabled:cursor-not-allowed disabled:bg-[var(--surface-dim)] disabled:text-[rgba(16,21,38,0.5)] motion-reduce:transition-none ${error ? 'bg-[var(--error-container)] ring-1 ring-[var(--error)]' : 'bg-[var(--surface-container-lowest)] shadow-[inset_0_-1px_0_rgba(95,103,130,0.2)]'}`.trim()}
-        aria-invalid={Boolean(error)}
-        {...props}
-      />
-      {error && <div className="mt-0.5 text-[var(--label-sm)] text-[var(--error)]">{error}</div>}
+
+      {hasAdornment ? (
+        <div
+          className={`flex items-center gap-3 rounded-[var(--radius-field)] border border-[var(--line-soft)] bg-[var(--bg-soft)] px-4 transition duration-200 focus-within:border-[var(--brand-500)] focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(31,99,180,0.14)] motion-reduce:transition-none ${error ? 'border-rose-300 bg-rose-50/60 focus-within:shadow-[0_0_0_4px_rgba(244,63,94,0.16)]' : ''} ${inputWrapperClassName}`.trim()}
+        >
+          {startAdornment ? <span className="inline-flex shrink-0">{startAdornment}</span> : null}
+          <input
+            id={inputId}
+            className={`h-12 w-full border-none bg-transparent text-base text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-500)] disabled:cursor-not-allowed disabled:opacity-50 ${inputClassName}`.trim()}
+            aria-invalid={Boolean(error)}
+            {...props}
+          />
+          {endAdornment ? <span className="inline-flex shrink-0">{endAdornment}</span> : null}
+        </div>
+      ) : (
+        <input
+          id={inputId}
+          className={`h-14 rounded-[var(--radius-field)] border border-transparent bg-[var(--bg-soft)] px-3.5 text-base text-[var(--ink-900)] outline-none transition duration-200 placeholder:text-[var(--ink-500)] focus:border-[var(--brand-500)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${error ? 'border-rose-300 bg-rose-50/60 focus:shadow-[0_0_0_3px_rgba(244,63,94,0.16)]' : ''} ${inputClassName}`.trim()}
+          aria-invalid={Boolean(error)}
+          {...props}
+        />
+      )}
+
+      {error ? <div className="text-sm text-rose-600">{error}</div> : null}
+      {!error && hint ? <div className="text-sm text-[var(--ink-500)]">{hint}</div> : null}
     </div>
   );
 };

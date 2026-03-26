@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/Button/button';
+import { Input } from '@/components/ui/Input/input';
 
 const MailIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[var(--ink-500)]" aria-hidden="true">
@@ -75,15 +77,6 @@ const FacebookIcon = () => (
 );
 
 export default function LoginPage() {
-  const inputShellClass =
-    'flex h-[58px] items-center gap-3 rounded-[var(--radius-field)] border border-[var(--line-soft)] bg-[var(--bg-soft)] px-4 transition duration-200 focus-within:border-[var(--brand-500)] focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(31,99,180,0.14)] motion-reduce:transition-none';
-
-  const socialButtonClass =
-    'inline-flex h-[54px] cursor-pointer items-center justify-center gap-3 rounded-[var(--radius-field)] border border-[var(--line-soft)] bg-[var(--bg-panel)] text-base font-semibold text-[var(--ink-900)] transition duration-200 enabled:hover:bg-[var(--bg-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none';
-
-  const submitClass =
-    'inline-flex h-[60px] items-center justify-center rounded-2xl bg-[linear-gradient(180deg,var(--brand-600)_0%,var(--brand-700)_100%)] text-[1.2rem] font-bold text-white shadow-[var(--shadow-brand)] transition duration-200 ease-out enabled:hover:-translate-y-px enabled:hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:transform-none';
-
   const heroCardStyle = {
     marginTop: '2.5rem',
     maxWidth: '60rem',
@@ -128,35 +121,33 @@ export default function LoginPage() {
           </div>
 
           <form className="flex flex-col gap-[18px]" noValidate>
-            <div className="flex flex-col gap-2.5">
-              <label className="font-[var(--font-label)] text-[0.82rem] font-extrabold tracking-[0.16em] text-[var(--ink-600)]" htmlFor="email">EMAIL</label>
-              <div className={inputShellClass}>
-                <MailIcon />
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="name@gmail.com"
-                  className="w-full border-none bg-transparent text-base text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-500)]"
-                />
-              </div>
-            </div>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              label="EMAIL"
+              placeholder="name@gmail.com"
+              startAdornment={<MailIcon />}
+              containerClassName="gap-2.5"
+              labelClassName="font-extrabold tracking-[0.16em]"
+              inputWrapperClassName="h-[58px]"
+              inputClassName="h-[58px]"
+            />
 
-            <div className="flex flex-col gap-2.5">
-              <label className="font-[var(--font-label)] text-[0.82rem] font-extrabold tracking-[0.16em] text-[var(--ink-600)]" htmlFor="password">MẬT KHẨU</label>
-              <div className={inputShellClass}>
-                <LockIcon />
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••"
-                  className="w-full border-none bg-transparent text-base text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-500)]"
-                />
-              </div>
-            </div>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              label="MẬT KHẨU"
+              placeholder="••••••••"
+              startAdornment={<LockIcon />}
+              containerClassName="gap-2.5"
+              labelClassName="font-extrabold tracking-[0.16em]"
+              inputWrapperClassName="h-[58px]"
+              inputClassName="h-[58px]"
+            />
 
             <div className="mt-1 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <label className="inline-flex cursor-pointer items-center gap-2.5 text-[0.95rem] text-[var(--ink-700)]">
@@ -164,14 +155,14 @@ export default function LoginPage() {
                 <span>Giữ đăng nhập</span>
               </label>
 
-              <button type="button" className="cursor-pointer rounded-sm border-none bg-transparent p-0 text-[0.95rem] font-semibold text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2">
+              <Button type="button" variant="ghost" size="sm" className="h-auto rounded-sm border-none p-0 text-[0.95rem] font-semibold text-[var(--brand-700)]">
                 Quên mật khẩu?
-              </button>
+              </Button>
             </div>
 
-            <button type="submit" className={submitClass}>
+            <Button type="submit" variant="primary" size="xl" fullWidth className="h-[60px] rounded-2xl text-[1.2rem]">
               Đăng nhập
-            </button>
+            </Button>
 
             <div className="mt-1 flex items-center gap-4">
               <span className="h-px flex-1 bg-[var(--line-soft)]" />
@@ -180,15 +171,15 @@ export default function LoginPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button type="button" className={socialButtonClass}>
+              <Button type="button" variant="secondary" size="lg" className="h-[54px] gap-3 rounded-[var(--radius-field)] border-[var(--line-soft)] bg-[var(--bg-panel)] text-base text-[var(--ink-900)] hover:bg-[var(--bg-soft)]">
                 <GoogleIcon />
                 <span>Google</span>
-              </button>
+              </Button>
 
-              <button type="button" className={socialButtonClass}>
+              <Button type="button" variant="secondary" size="lg" className="h-[54px] gap-3 rounded-[var(--radius-field)] border-[var(--line-soft)] bg-[var(--bg-panel)] text-base text-[var(--ink-900)] hover:bg-[var(--bg-soft)]">
                 <FacebookIcon />
                 <span>Facebook</span>
-              </button>
+              </Button>
             </div>
 
             <p className="mt-2 text-center text-[0.98rem] text-[var(--ink-600)]">
