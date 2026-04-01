@@ -10,6 +10,7 @@ import AdminExamsPage from "@/features/admin/pages/admin-exams-page";
 import AdminQuestionBankPage from "@/features/admin/pages/admin-question-bank-page";
 import AdminFinancialPage from "@/features/admin/pages/admin-financial-page";
 import AdminSystemPage from "@/features/admin/pages/admin-system-page";
+import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 
 
 export const router = createBrowserRouter([
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
   {
     path: "/register",
     element: <RegisterPage />,
+  },
+  {
+    path: "/profile",
+    element: <Navigate to="/admin/profile" replace />,
   },
   {
     path: "/admin",
@@ -60,6 +65,10 @@ export const router = createBrowserRouter([
       {
         path: "system",
         element: <AdminSystemPage />,
+      },
+      {
+        path: "profile",
+        element: <AdminProfileDetailPage />,
       },
     ],
   },
