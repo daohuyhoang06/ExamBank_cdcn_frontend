@@ -1,26 +1,17 @@
-import type { ReactNode } from "react";
+import { Outlet } from "react-router-dom";
 import { AppShell } from "@/layouts/shared/AppShell";
 import { studentSidebarItems } from "./studentSidebar.config";
 
-type Props = {
-  children: ReactNode;
-  headerTitle?: string;
-  headerSubtitle?: string;
-};
-
-export function StudentLayout({
-  children,
-  headerTitle,
-  headerSubtitle,
-}: Props) {
+export function StudentLayout() {
+  console.log('StudentLayout rendering');
   return (
     <AppShell
-      headerTitle={headerTitle}
-      headerSubtitle={headerSubtitle}
+      headerTitle="Dashboard"
+      headerSubtitle="Welcome back"
       sidebarItems={studentSidebarItems}
       sidebarSubtitle="Student Dashboard"
     >
-      {children}
+      <Outlet />
     </AppShell>
   );
 }

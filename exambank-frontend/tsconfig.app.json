@@ -15,10 +15,14 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": "./",
+
+    /* ❌ REMOVE baseUrl */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
+
+    /* ✅ tắt cảnh báo deprecated */
+    "ignoreDeprecations": "6.0",
 
     /* Linting */
     "strict": true,
