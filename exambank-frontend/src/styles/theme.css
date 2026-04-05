@@ -29,6 +29,12 @@
   --error: #ba1a1a;
   --error-container: #ffdad6;
 
+  /* Backgrounds */
+  --bg-page: #f8f9ff;
+
+  /* Lines */
+  --line-soft: #e1e7f3;
+
   /* Type families */
   --font-display: 'Merriweather', Georgia, serif;
   --font-body: 'Be Vietnam Pro', 'Segoe UI', sans-serif;

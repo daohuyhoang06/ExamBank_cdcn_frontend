@@ -10,7 +10,17 @@ import AdminExamsPage from "@/features/admin/pages/admin-exams-page";
 import AdminQuestionBankPage from "@/features/admin/pages/admin-question-bank-page";
 import AdminFinancialPage from "@/features/admin/pages/admin-financial-page";
 import AdminSystemPage from "@/features/admin/pages/admin-system-page";
+import UserHomePage from "@/features/user/pages/UserHomePage";
+import { StudentLayout } from "@/layouts/student/StudentLayout";
+import ExamBankPage from "@/features/user/pages/ExamBankPage";
+import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
+import Mysubmit from "@/features/user/pages/submit-exam/Mysubmit";
+import Examreview from "@/features/user/pages/makeexam/Examreview";
+// Import trang Comment bạn vừa tạo
+import Comment from "@/features/user/pages/Comment"; 
+import Exampage from "@/features/user/pages/makeexam/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
+
 
 
 export const router = createBrowserRouter([
@@ -26,6 +36,8 @@ export const router = createBrowserRouter([
     path: "/register",
     element: <RegisterPage />,
   },
+  
+  // --- NHÓM ROUTES CHO ADMIN ---
   {
     path: "/profile",
     element: <Navigate to="/admin/profile" replace />,
@@ -34,37 +46,43 @@ export const router = createBrowserRouter([
     path: "/admin",
     element: <AdminShell />,
     children: [
+      { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+      { path: "dashboard", element: <AdminDashboardPage /> },
+      { path: "users", element: <AdminUsersPage /> },
+      { path: "content", element: <AdminContentPage /> },
+      { path: "exams", element: <AdminExamsPage /> },
+      { path: "question-bank", element: <AdminQuestionBankPage /> },
+      { path: "financial", element: <AdminFinancialPage /> },
+      { path: "system", element: <AdminSystemPage /> },
+    ],
+  },
+
+  // --- NHÓM ROUTES CHO STUDENT (USER) ---
+  {
+    path: "/user",
+    element: <StudentLayout />,
+    children: [
       {
-        index: true,
-        element: <Navigate to="/admin/dashboard" replace />,
+        index: true, // URL: /user
+        element: <UserHomePage />,
       },
       {
-        path: "dashboard",
-        element: <AdminDashboardPage />,
+        path: "exambank", // URL gốc: /user/exambank
+        children: [
+          { index: true, element: <ExamBankPage /> },
+          { path: "submit", element: <SubmitExamPage /> },
+          { path: "mysubmit", element: <Mysubmit /> },
+          { path: "examreview", element: <Examreview /> },
+        
+        ],
       },
+        {
+      path: "exam/:examId",
+      element: <Exampage />,
+    },
       {
-        path: "users",
-        element: <AdminUsersPage />,
-      },
-      {
-        path: "content",
-        element: <AdminContentPage />,
-      },
-      {
-        path: "exams",
-        element: <AdminExamsPage />,
-      },
-      {
-        path: "question-bank",
-        element: <AdminQuestionBankPage />,
-      },
-      {
-        path: "financial",
-        element: <AdminFinancialPage />,
-      },
-      {
-        path: "system",
-        element: <AdminSystemPage />,
+        path: "comment", // URL: /user/comment
+        element: <Comment />,
       },
       {
         path: "profile",

@@ -1,8 +1,48 @@
-import { FileText, Gauge, UserCog } from "lucide-react";
-import type { SidebarNavItem } from "@/layouts/shared/AppSidebar";
+import { 
+  LayoutDashboard, 
+  UserCircle, 
+  FileText, // Đã sửa: Viết liền, không có dấu cách
+  BarChart3, 
+  Settings,
+  HelpCircle
+} from "lucide-react";
+
+// Khai báo interface để đồng bộ với AppShell
+export interface SidebarNavItem {
+  label: string;
+  path: string;
+  icon: any;
+}
 
 export const studentSidebarItems: SidebarNavItem[] = [
-  { label: "Danh sách đề", path: "/exams", icon: FileText },
-  { label: "Hồ sơ", path: "/profile", icon: UserCog },
-  { label: "Xếp hạng", path: "/ranking", icon: Gauge },
+  {
+    label: "Trang chủ",
+    path: "/user",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Hồ sơ",
+    path: "/user/profile",
+    icon: UserCircle,
+  },
+  {
+    label: "Đề của bạn",
+    path: "/user/comment",
+    icon: FileText,
+  },
+  {
+    label: "Thống kê",
+    path: "/user/statistics",
+    icon: BarChart3,
+  },
+  {
+    label: "Cài đặt",
+    path: "/user/settings",
+    icon: Settings,
+  },
+  {
+    label: "Hỗ trợ",
+    path: "/user/support",
+    icon: HelpCircle,
+  },
 ];
