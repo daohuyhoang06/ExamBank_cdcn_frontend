@@ -2,18 +2,54 @@ import React from 'react';
 
 export type CardProps = React.HTMLAttributes<HTMLDivElement> & {
   title?: string;
+  subtitle?: string;
   footer?: React.ReactNode;
+  bodyClassName?: string;
+  headerClassName?: string;
+  variant?: 'default' | 'soft' | 'outline' | 'brandTint' | 'glass';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
 };
 
-export const Card: React.FC<CardProps> = ({ title, footer, children, className = '', ...props }) => {
+export const Card: React.FC<CardProps> = ({
+  title,
+  subtitle,
+  footer,
+  children,
+  className = '',
+  bodyClassName = '',
+  headerClassName = '',
+  variant = 'default',
+  padding = 'md',
+  ...props
+}) => {
+  const variantClass: Record<NonNullable<CardProps['variant']>, string> = {
+    default: 'border border-[var(--line-soft)] bg-white shadow-[var(--shadow-soft)]',
+    soft: 'border border-[var(--line-soft)] bg-[var(--bg-soft)] shadow-[var(--shadow-soft)]',
+    outline: 'border border-[var(--line-soft)] bg-transparent',
+    brandTint: 'border border-[var(--brand-100)] bg-[var(--brand-100)]/35',
+    glass: 'border border-white/30 bg-white/70 backdrop-blur-md',
+  };
+
+  const paddingClass: Record<NonNullable<CardProps['padding']>, string> = {
+    none: '',
+    sm: 'p-4',
+    md: 'p-5',
+    lg: 'p-8',
+  };
+
   return (
     <div
-      className={`relative mb-8 flex flex-col gap-4 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-container-low)] p-6 before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(132deg,rgba(255,255,255,0.45)_0%,rgba(255,255,255,0)_44%)] before:content-[''] ${className}`.trim()}
+      className={`overflow-hidden rounded-3xl ${variantClass[variant]} ${paddingClass[padding]} ${className}`.trim()}
       {...props}
     >
-      {title && <div className="mb-2 font-[var(--font-display)] text-[1.45rem] font-bold text-[var(--on-surface)]">{title}</div>}
-      <div className="z-10 flex-1 rounded-[calc(var(--radius-lg)-0.25rem)] bg-[var(--surface-container-lowest)] p-6">{children}</div>
-      {footer && <div className="mt-4 rounded-[calc(var(--radius-lg)-0.25rem)] bg-[var(--surface-container-lowest)] p-4 text-right">{footer}</div>}
+      {title ? (
+        <div className={headerClassName}>
+          <h3 className="font-[var(--font-label)] text-lg font-bold text-[var(--ink-900)]">{title}</h3>
+          {subtitle ? <p className="mt-1 text-sm text-[var(--ink-600)]">{subtitle}</p> : null}
+        </div>
+      ) : null}
+      <div className={bodyClassName}>{children}</div>
+      {footer ? <div className="mt-4">{footer}</div> : null}
     </div>
   );
 };

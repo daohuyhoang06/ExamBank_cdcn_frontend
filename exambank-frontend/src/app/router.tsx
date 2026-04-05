@@ -19,6 +19,9 @@ import Examreview from "@/features/user/pages/makeexam/Examreview";
 // Import trang Comment bạn vừa tạo
 import Comment from "@/features/user/pages/Comment"; 
 import Exampage from "@/features/user/pages/makeexam/Exampage";
+import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
+
+
 
 export const router = createBrowserRouter([
   {
@@ -35,6 +38,10 @@ export const router = createBrowserRouter([
   },
   
   // --- NHÓM ROUTES CHO ADMIN ---
+  {
+    path: "/profile",
+    element: <Navigate to="/admin/profile" replace />,
+  },
   {
     path: "/admin",
     element: <AdminShell />,
@@ -76,6 +83,10 @@ export const router = createBrowserRouter([
       {
         path: "comment", // URL: /user/comment
         element: <Comment />,
+      },
+      {
+        path: "profile",
+        element: <AdminProfileDetailPage />,
       },
     ],
   },

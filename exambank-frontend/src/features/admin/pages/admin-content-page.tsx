@@ -1,8 +1,6 @@
 import {
   ArrowRight,
   Check,
-  ChevronLeft,
-  ChevronRight,
   CircleAlert,
   Eye,
   Filter,
@@ -11,6 +9,9 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button/button";
+import { Pagination } from "@/components/ui/Pagination/pagination";
+import { StatCard } from "@/components/ui/StatCard/stat-card";
 
 type ModerationStat = {
   title: string;
@@ -153,50 +154,50 @@ export default function AdminContentPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--line-soft)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)]"
+            variant="secondary"
+            size="md"
+            leftIcon={<Filter size={15} />}
+            className="rounded-xl text-sm font-semibold text-[var(--ink-700)] hover:bg-[var(--bg-soft)]"
           >
-            <Filter size={15} />
             Bộ lọc
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600),var(--brand-700))] px-5 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105"
+            variant="primary"
+            size="md"
+            leftIcon={<Check size={15} />}
+            className="rounded-xl px-5 text-sm font-semibold"
           >
-            <Check size={15} />
             Phê duyệt nhanh
-          </button>
+          </Button>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((item) => {
           const tone = statToneClasses(item.tone);
+          const icon = item.tone === "danger"
+            ? <CircleAlert size={18} />
+            : item.tone === "success"
+              ? <Check size={18} />
+              : item.tone === "warning"
+                ? <Flag size={18} />
+                : <TrendingUp size={18} />;
 
           return (
-            <article
+            <StatCard
               key={item.title}
-              className={`rounded-2xl border p-5 shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-0.5 ${tone.wrap}`}
-            >
-              <div className="mb-4 flex items-start justify-between gap-2">
-                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone.icon}`}>
-                  {item.tone === "danger" ? <CircleAlert size={18} /> : null}
-                  {item.tone === "success" ? <Check size={18} /> : null}
-                  {item.tone === "warning" ? <Flag size={18} /> : null}
-                  {item.tone === "primary" ? <TrendingUp size={18} /> : null}
-                </span>
-                {item.hint ? (
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.badge}`}>
-                    {item.hint}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-sm text-[var(--ink-600)]">{item.title}</p>
-              <p className={`mt-1 text-3xl font-extrabold leading-none ${tone.value}`}>
-                {item.value}
-              </p>
-            </article>
+              title={item.title}
+              value={item.value}
+              icon={icon}
+              badge={item.hint}
+              cardClassName={`border shadow-[var(--shadow-soft)] ${tone.wrap}`}
+              iconWrapClassName={tone.icon}
+              badgeClassName={tone.badge}
+              valueClassName={tone.value}
+            />
           );
         })}
       </section>
@@ -214,18 +215,22 @@ export default function AdminContentPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
-              className="rounded-lg bg-rose-100 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-200"
+              variant="danger"
+              size="sm"
+              className="rounded-lg px-3 text-xs font-bold text-rose-700"
             >
               TỪ CHỐI HÀNG LOẠT
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-200"
+              variant="success"
+              size="sm"
+              className="rounded-lg px-3 text-xs font-bold text-emerald-700"
             >
               PHÊ DUYỆT HÀNG LOẠT
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -286,27 +291,33 @@ export default function AdminContentPage() {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="inline-flex items-center gap-1">
-                      <button
+                      <Button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-700 transition hover:bg-emerald-100"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-lg p-0 text-emerald-700 hover:bg-emerald-100"
                         title="Duyệt"
                       >
                         <Check size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-700 transition hover:bg-rose-100"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-lg p-0 text-rose-700 hover:bg-rose-100"
                         title="Từ chối"
                       >
                         <Gavel size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)]"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-lg p-0 text-[var(--ink-600)] hover:bg-[var(--bg-soft)]"
                         title="Xem chi tiết"
                       >
                         <Eye size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -317,45 +328,7 @@ export default function AdminContentPage() {
 
         <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 sm:flex-row">
           <p className="text-sm text-[var(--ink-600)]">Hiển thị 1 - 10 trong tổng số 156 nội dung</p>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-soft)] text-[var(--ink-600)] transition hover:bg-white"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand-700)] text-xs font-bold text-white"
-            >
-              1
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-[var(--ink-700)] transition hover:bg-white"
-            >
-              2
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-[var(--ink-700)] transition hover:bg-white"
-            >
-              3
-            </button>
-            <span className="px-1 text-xs text-[var(--ink-600)]">...</span>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-[var(--ink-700)] transition hover:bg-white"
-            >
-              16
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-soft)] text-[var(--ink-600)] transition hover:bg-white"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
+          <Pagination currentPage={1} totalPages={16} />
         </div>
       </section>
 
@@ -369,12 +342,14 @@ export default function AdminContentPage() {
               dạng câu hỏi tối ưu cho trải nghiệm người dùng. Hãy ưu tiên xử lý
               các mục có gắn nhãn "Khẩn cấp" trước.
             </p>
-            <button
+            <Button
               type="button"
-              className="mt-6 rounded-lg bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-[0.1em] text-[var(--brand-700)] transition hover:opacity-90"
+              variant="secondary"
+              size="sm"
+              className="mt-6 rounded-lg bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-[0.1em] text-[var(--brand-700)] hover:opacity-90"
             >
               Xem quy định chi tiết
-            </button>
+            </Button>
           </div>
           <div className="pointer-events-none absolute -right-12 -top-16 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-14 right-10 h-52 w-52 rounded-full bg-blue-300/20 blur-3xl" />
@@ -389,13 +364,15 @@ export default function AdminContentPage() {
             Hiện có 12 nội dung đang gần quá hạn xử lý theo SLA kiểm duyệt. Ưu
             tiên xử lý các mục bị báo cáo và các đề thi gắn nhãn khẩn cấp.
           </p>
-          <button
+          <Button
             type="button"
-            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--brand-700)] transition hover:underline"
+            variant="ghost"
+            size="sm"
+            rightIcon={<ArrowRight size={16} />}
+            className="mt-4 h-auto px-0 text-sm font-semibold text-[var(--brand-700)] hover:underline"
           >
             Mở danh sách ưu tiên
-            <ArrowRight size={16} />
-          </button>
+          </Button>
         </article>
       </section>
     </div>
