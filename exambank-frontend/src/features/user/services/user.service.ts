@@ -8,6 +8,7 @@ import {
   mockLeaderboard,
   mockSubmissions,
   mockSelectedFile,
+  mockExam,
 } from '../mocks/user.mock';
 
 import type {
@@ -20,16 +21,15 @@ import type {
   LeaderboardUser,
   Submission,
   SelectedFile,
+  Exam,
 } from '../types/user.type';
 
-// User service functions to return mock data
+// ================= USER SERVICE =================
 export const userService = {
-  // For Comment.tsx
   getComments: async (): Promise<UserComment[]> => {
     return mockComments;
   },
 
-  // For ExamBankPage.tsx
   getEducationLevels: async (): Promise<EducationLevel[]> => {
     return mockEducationLevels;
   },
@@ -38,7 +38,6 @@ export const userService = {
     return mockSubjects;
   },
 
-  // For UserHomePage.tsx
   getRecommendations: async (): Promise<Recommendation[]> => {
     return mockRecommendations;
   },
@@ -47,7 +46,6 @@ export const userService = {
     return mockRankings;
   },
 
-  // For makeexam/Examreview.tsx
   getTopics: async (): Promise<TopicData[]> => {
     return mockTopics;
   },
@@ -56,13 +54,34 @@ export const userService = {
     return mockLeaderboard;
   },
 
-  // For submit-exam/Mysubmit.tsx
   getSubmissions: async (): Promise<Submission[]> => {
     return mockSubmissions;
   },
 
-  // For submit-exam/SubmitExamPage.tsx
   getSelectedFile: async (): Promise<SelectedFile> => {
     return mockSelectedFile;
   },
+};
+
+// ================= EXAM SERVICE =================
+export const examService = {
+  getExamById: async (id: string): Promise<Exam | null> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (id === mockExam.id) {
+          resolve(mockExam);
+        } else {
+          resolve(null);
+        }
+      }, 500);
+    });
+  },
+
+  getAllExams: async (): Promise<Exam[]> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve([mockExam]);
+      }, 500);
+    });
+  }
 };

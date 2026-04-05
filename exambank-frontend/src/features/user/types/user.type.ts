@@ -79,3 +79,49 @@ export interface SelectedFile {
   name: string;
   size: string; // e.g., "1.2 MB"
 }
+
+
+ // Đề thi
+ // src/features/exam/types.ts
+
+export type QuestionType = 
+  | "multiple_choice" 
+  | "true_false" 
+  | "fill_blank";
+
+export interface BaseQuestion {
+  id: string;
+  type: QuestionType;
+  question: string;
+  score: number;
+}
+
+export interface MultipleChoiceQuestion extends BaseQuestion {
+  type: "multiple_choice";
+  options: string[];
+  correctAnswer: number; // index
+}
+
+export interface TrueFalseQuestion extends BaseQuestion {
+  type: "true_false";
+  correctAnswer: boolean;
+}
+
+export interface FillBlankQuestion extends BaseQuestion {
+  type: "fill_blank";
+  correctAnswer: string;
+}
+
+export type Question = 
+  | MultipleChoiceQuestion
+  | TrueFalseQuestion
+  | FillBlankQuestion;
+
+export interface Exam {
+  id: string;
+  title: string;
+  description: string;
+  duration: number; // phút
+  questions: Question[];
+  createdAt: string;
+}

@@ -10,8 +10,6 @@ import {
 import type{ Submission } from '../../types/user.type';
 import { userService } from '../../services/user.service';
 
-const SUBMISSIONS_DATA: Submission[] = [];
-
 const cn = (...classes: (string | boolean | undefined | null)[]) => classes.filter(Boolean).join(' ');
 
 export default function MySubmissionsPage() {

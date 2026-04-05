@@ -9,6 +9,7 @@ import type {
   LeaderboardUser,
   Submission,
   SelectedFile,
+  Exam,
 } from '../types/user.type';
 
 // Mock data for Comment.tsx
@@ -185,4 +186,47 @@ export const mockSubmissions: Submission[] = [
 export const mockSelectedFile: SelectedFile = {
   name: "math_final_assessment_v2.pdf",
   size: "1.2 MB",
+};
+
+
+// Mock data đề thi
+// src/features/exam/mockExam.ts
+
+
+
+export const mockExam: Exam = {
+  id: "exam_001",
+  title: "Đề thi React cơ bản",
+  description: "Kiểm tra kiến thức React và JavaScript",
+  duration: 30,
+  createdAt: "2026-04-05",
+  questions: [
+    {
+      id: "q1",
+      type: "multiple_choice",
+      question: "React là gì?",
+      options: [
+        "Thư viện JavaScript",
+        "Ngôn ngữ lập trình",
+        "Hệ điều hành",
+        "Database"
+      ],
+      correctAnswer: 0,
+      score: 1
+    },
+    {
+      id: "q2",
+      type: "true_false",
+      question: "useState là hook trong React",
+      correctAnswer: true,
+      score: 1
+    },
+    {
+      id: "q3",
+      type: "fill_blank",
+      question: "Hook dùng để quản lý state là ______",
+      correctAnswer: "useState",
+      score: 2
+    }
+  ]
 };

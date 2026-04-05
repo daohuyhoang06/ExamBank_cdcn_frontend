@@ -16,9 +16,9 @@ import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
 import Mysubmit from "@/features/user/pages/submit-exam/Mysubmit";
 import Examreview from "@/features/user/pages/makeexam/Examreview";
-
 // Import trang Comment bạn vừa tạo
 import Comment from "@/features/user/pages/Comment"; 
+import Exampage from "@/features/user/pages/makeexam/Exampage";
 
 export const router = createBrowserRouter([
   {
@@ -66,8 +66,13 @@ export const router = createBrowserRouter([
           { path: "submit", element: <SubmitExamPage /> },
           { path: "mysubmit", element: <Mysubmit /> },
           { path: "examreview", element: <Examreview /> },
+        
         ],
       },
+        {
+      path: "exam/:examId",
+      element: <Exampage />,
+    },
       {
         path: "comment", // URL: /user/comment
         element: <Comment />,
