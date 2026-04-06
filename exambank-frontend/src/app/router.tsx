@@ -20,6 +20,12 @@ import Examreview from "@/features/user/pages/makeexam/Examreview";
 import Comment from "@/features/user/pages/Comment"; 
 import Exampage from "@/features/user/pages/makeexam/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
+import ModeratorShell from "@/features/moderator/pages/moderator-shell";
+import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
+import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
+import ModeratorComposerPage from "@/features/moderator/pages/moderator-composer-page";
+import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
+import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
 
 
 
@@ -54,6 +60,18 @@ export const router = createBrowserRouter([
       { path: "question-bank", element: <AdminQuestionBankPage /> },
       { path: "financial", element: <AdminFinancialPage /> },
       { path: "system", element: <AdminSystemPage /> },
+    ],
+  },
+  {
+    path: "/moderator",
+    element: <ModeratorShell />,
+    children: [
+      { index: true, element: <Navigate to="/moderator/queue" replace /> },
+      { path: "queue", element: <ModeratorQueuePage /> },
+      { path: "grading", element: <ModeratorGradingPage /> },
+      { path: "composer", element: <ModeratorComposerPage /> },
+      { path: "editorial", element: <ModeratorEditorialPage /> },
+      { path: "submit-review", element: <ModeratorSubmitReviewPage /> },
     ],
   },
 
