@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Star,
   ChevronRight,
@@ -12,13 +12,13 @@ import {
   Verified,
   Award
 } from 'lucide-react';
-import type { Comment } from '../types/user.type';
+import type { UserComment } from '../types/user.type';
 import { userService } from '../services/user.service';
 import { mockComments } from '../mocks/user.mock';
 
 // --- Main Page Component ---
 export default function DiscussionDetailPage() {
-  const [comments, setComments] = useState<Comment[]>(mockComments);
+  const [comments, setComments] = useState<UserComment[]>(mockComments);
 
   useEffect(() => {
     const fetchComments = async () => {

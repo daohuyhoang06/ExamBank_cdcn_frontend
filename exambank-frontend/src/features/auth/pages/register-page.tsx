@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { type FormEvent, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
+import { authService } from '@/features/auth/services/auth.service';
 
 const SparklesIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -55,6 +58,107 @@ const CapIcon = () => (
 );
 
 export default function RegisterPage() {
+  const navigate = useNavigate();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [termsAgree, setTermsAgree] = useState(false);
+
+  const [fullNameError, setFullNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [termsError, setTermsError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getApiErrorMessage = (error: unknown) => {
+    if (isAxiosError(error)) {
+      const responseData = error.response?.data as { message?: string; error?: string } | undefined;
+      return responseData?.message ?? responseData?.error ?? 'Đăng ký thất bại, vui lòng thử lại.';
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Đăng ký thất bại, vui lòng thử lại.';
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError('');
+
+    const normalizedFullName = fullName.trim();
+    const normalizedEmail = email.trim();
+    const normalizedPassword = password.trim();
+    const normalizedConfirmPassword = confirmPassword.trim();
+    let isValid = true;
+
+    if (!normalizedFullName) {
+      setFullNameError('Vui lòng nhập họ và tên.');
+      isValid = false;
+    } else {
+      setFullNameError('');
+    }
+
+    if (!normalizedEmail) {
+      setEmailError('Vui lòng nhập email.');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+
+    if (!normalizedPassword) {
+      setPasswordError('Vui lòng nhập mật khẩu.');
+      isValid = false;
+    } else if (normalizedPassword.length < 8) {
+      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.');
+      isValid = false;
+    } else {
+      setPasswordError('');
+    }
+
+    if (!normalizedConfirmPassword) {
+      setConfirmPasswordError('Vui lòng xác nhận mật khẩu.');
+      isValid = false;
+    } else if (normalizedConfirmPassword !== normalizedPassword) {
+      setConfirmPasswordError('Mật khẩu xác nhận không khớp.');
+      isValid = false;
+    } else {
+      setConfirmPasswordError('');
+    }
+
+    if (!termsAgree) {
+      setTermsError('Bạn cần đồng ý điều khoản trước khi đăng ký.');
+      isValid = false;
+    } else {
+      setTermsError('');
+    }
+
+    if (!isValid) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await authService.register({
+        fullName: normalizedFullName,
+        email: normalizedEmail,
+        password: normalizedPassword,
+        confirmPassword: normalizedConfirmPassword,
+      });
+
+      navigate('/login', { replace: true });
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[linear-gradient(160deg,#eef4ff_0%,#f6fbff_45%,#f2f9f4_100%)] px-4 py-5 sm:px-6 sm:py-8">
       <div className="pointer-events-none absolute -right-16 top-[-100px] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(31,99,180,0.22),transparent_72%)]" />
@@ -114,7 +218,7 @@ export default function RegisterPage() {
             
             </div>
 
-            <form className="flex flex-col gap-5" noValidate>
+            <form className="flex flex-col gap-5" noValidate onSubmit={handleSubmit}>
               <div className="grid gap-5 md:grid-cols-2">
                 <Input
                   id="fullName"
@@ -123,6 +227,9 @@ export default function RegisterPage() {
                   required
                   label="Họ và Tên"
                   placeholder="Nguyễn Văn A"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  error={fullNameError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
 
@@ -133,6 +240,9 @@ export default function RegisterPage() {
                   required
                   label="Email"
                   placeholder="name@example.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  error={emailError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
               </div>
@@ -145,6 +255,9 @@ export default function RegisterPage() {
                   required
                   label="Mật khẩu"
                   placeholder="••••••••"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  error={passwordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
 
@@ -155,19 +268,38 @@ export default function RegisterPage() {
                   required
                   label="Xác nhận mật khẩu"
                   placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  error={confirmPasswordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
               </div>
 
               <label className="mt-0.5 inline-flex items-start gap-2.5 text-[0.94rem] leading-[1.5] text-[var(--ink-600)]" htmlFor="termsAgree">
-                <input className="mt-0.5 h-[14px] w-[14px] accent-[var(--brand-600)]" id="termsAgree" type="checkbox" required />
+                <input
+                  className="mt-0.5 h-[14px] w-[14px] accent-[var(--brand-600)]"
+                  id="termsAgree"
+                  type="checkbox"
+                  checked={termsAgree}
+                  onChange={(event) => setTermsAgree(event.target.checked)}
+                />
                 <span>
                   Tôi đồng ý với <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Điều khoản</Button> và{' '}
                   <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Chính sách bảo mật</Button>
                 </span>
               </label>
 
-              <Button className="mt-1 h-[58px] text-[1.18rem]" type="submit" size="xl" variant="primary" fullWidth>Đăng ký tài khoản</Button>
+              {termsError ? <p className="-mt-2 text-sm font-semibold text-rose-600">{termsError}</p> : null}
+
+              {submitError ? (
+                <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
+                  {submitError}
+                </p>
+              ) : null}
+
+              <Button className="mt-1 h-[58px] text-[1.18rem]" type="submit" size="xl" variant="primary" fullWidth disabled={isSubmitting}>
+                {isSubmitting ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
+              </Button>
 
               <div className="mt-1 flex items-center gap-4">
                 <span className="h-px flex-1 bg-[var(--line-soft)]" />

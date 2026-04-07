@@ -10,12 +10,17 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+import { isAxiosError } from "axios";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button/button";
 import { Card } from "@/components/ui/Card/card";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
+import { setAuthToken } from "@/lib/api-client";
+import { getAdminUserCardMetrics } from "@/features/admin/services/admin-users.service";
+import { authStorageKeys } from "@/features/auth/services/auth.service";
 
 type DashboardStat = {
   title: string;
@@ -44,7 +49,6 @@ const dashboardStats: DashboardStat[] = [
     to: "/admin/users",
     icon: Users,
     accent: "blue",
-    badge: "+1.8%",
   },
   {
     title: "Nội dung",
@@ -109,6 +113,13 @@ const urgentActions: QuickAction[] = [
   },
 ];
 
+const initialUserCard: DashboardStat = {
+  ...dashboardStats[0],
+  value: "0",
+  metaOne: "Đang hoạt động 0",
+  metaTwo: "Mới hôm nay +0",
+};
+
 function metricClasses(accent: DashboardStat["accent"]) {
   if (accent === "orange") {
     return {
@@ -146,7 +157,55 @@ function metricClasses(accent: DashboardStat["accent"]) {
 }
 
 export default function AdminDashboardPage() {
+  const navigate = useNavigate();
+  const [userCard, setUserCard] = useState<DashboardStat>(initialUserCard);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    function formatNumber(value: number) {
+      return new Intl.NumberFormat("vi-VN").format(value);
+    }
+
+    async function loadUserCard() {
+      try {
+        const metrics = await getAdminUserCardMetrics();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUserCard({
+          ...dashboardStats[0],
+          value: formatNumber(metrics.totalUsers),
+          metaOne: `Đang hoạt động ${formatNumber(metrics.activeUsers)}`,
+          metaTwo: `Mới hôm nay +${formatNumber(metrics.newUsersToday)}`,
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (isAxiosError(error) && error.response?.status === 401) {
+          setAuthToken(null);
+          localStorage.removeItem(authStorageKeys.USER_KEY);
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        setUserCard(initialUserCard);
+      }
+    }
+
+    void loadUserCard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
   const maxValue = Math.max(...weeklyCredits.map((item) => Math.max(item.topUp, item.used)));
+  const cards = [userCard, ...dashboardStats.slice(1)];
 
   return (
     <div className="space-y-8">
@@ -160,25 +219,17 @@ export default function AdminDashboardPage() {
         <div className="flex gap-3">
           <Button
             type="button"
-            variant="secondary"
-            size="md"
-            className="rounded-lg text-sm font-semibold text-[var(--brand-700)] hover:bg-[var(--bg-page)]"
-          >
-            Xuất báo cáo
-          </Button>
-          <Button
-            type="button"
             variant="primary"
             size="md"
             className="rounded-lg text-sm font-semibold"
           >
-            Tạo kỳ thi mới
+            Xuất báo cáo
           </Button>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        {dashboardStats.map((card) => {
+        {cards.map((card) => {
           const Icon = card.icon;
           const classes = metricClasses(card.accent);
           const badgeClassName =
