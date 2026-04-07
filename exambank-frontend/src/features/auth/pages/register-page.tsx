@@ -57,12 +57,32 @@ const CapIcon = () => (
   </svg>
 );
 
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+    <path
+      d="M12 5c4.8 0 8.7 2.8 10.6 7-1.9 4.2-5.8 7-10.6 7S3.3 16.2 1.4 12C3.3 7.8 7.2 5 12 5Zm0 2C8.4 7 5.3 9 3.6 12 5.3 15 8.4 17 12 17s6.7-2 8.4-5C18.7 9 15.6 7 12 7Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+    <path
+      d="m3.2 2 18.8 18.8-1.4 1.4-3.2-3.2a11.6 11.6 0 0 1-5.4 1.3c-4.8 0-8.8-2.8-10.6-7a12.4 12.4 0 0 1 4.4-5.2L1.8 3.4 3.2 2Zm15.9 13a10.8 10.8 0 0 0 1.4-2.9C18.7 9 15.6 7 12 7c-1 0-2 .2-2.9.5l1.7 1.7c.4-.2.8-.3 1.2-.3a2.8 2.8 0 0 1 2.8 2.8c0 .4-.1.8-.3 1.2l2.6 2.1Zm-6.4 1.8-2-2a2.8 2.8 0 0 1-1.5-4.8L7 7.8C5.5 8.8 4.3 10.2 3.6 12 5.3 15 8.4 17 12 17c.7 0 1.4-.1 2.1-.2l-1.4-1.4Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAgree, setTermsAgree] = useState(false);
 
   const [fullNameError, setFullNameError] = useState('');
@@ -250,7 +270,7 @@ export default function RegisterPage() {
               <div className="grid gap-5 md:grid-cols-2">
                 <Input
                   id="registerPassword"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   label="Mật khẩu"
@@ -259,11 +279,21 @@ export default function RegisterPage() {
                   onChange={(event) => setPassword(event.target.value)}
                   error={passwordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                  endAdornment={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--line-soft)] hover:text-[var(--ink-700)]"
+                      aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    >
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  }
                 />
 
                 <Input
                   id="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   label="Xác nhận mật khẩu"
@@ -272,6 +302,16 @@ export default function RegisterPage() {
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   error={confirmPasswordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                  endAdornment={
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--line-soft)] hover:text-[var(--ink-700)]"
+                      aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+                    >
+                      {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  }
                 />
               </div>
 
