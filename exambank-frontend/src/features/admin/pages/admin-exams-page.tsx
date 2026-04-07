@@ -9,7 +9,6 @@ import {
   FlaskConical,
   GraduationCap,
   Orbit,
-  PlusCircle,
   Search,
   Sparkles,
   Trash2,
@@ -206,15 +205,6 @@ export default function AdminExamsPage() {
           </p>
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          size="lg"
-          leftIcon={<PlusCircle size={18} />}
-          className="rounded-xl px-6 font-bold"
-        >
-          Tạo kỳ thi mới
-        </Button>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

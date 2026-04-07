@@ -5,7 +5,6 @@ import {
   Clock, 
   ChevronLeft, 
   ChevronRight, 
-  Send, 
   CheckCircle2, 
   HelpCircle, 
   LayoutGrid, 

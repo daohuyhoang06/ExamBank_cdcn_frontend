@@ -1,17 +1,10 @@
 import { Bell, LogOut, Search, Settings, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-
-type NotificationType = "moderation" | "financial" | "system" | "community";
-
-type NotificationItem = {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: NotificationType;
-  unread?: boolean;
-};
+import { NotificationPopover } from "./notification-popover";
+import type { NotificationItem } from "./notification-popover";
+import { authStorageKeys } from "@/features/auth/services/auth.service";
+import { setAuthToken } from "@/lib/api-client";
 
 const initialNotifications: NotificationItem[] = [
   {
@@ -49,60 +42,65 @@ const initialNotifications: NotificationItem[] = [
   },
 ];
 
-const notificationTypeStyles: Record<
-  NotificationType,
-  {
-    badge: string;
-    icon: string;
-    label: string;
-  }
-> = {
-  moderation: {
-    badge: "bg-blue-100 text-blue-700",
-    icon: "bg-blue-600",
-    label: "Moderation",
-  },
-  financial: {
-    badge: "bg-amber-100 text-amber-700",
-    icon: "bg-amber-500",
-    label: "Financial",
-  },
-  system: {
-    badge: "bg-emerald-100 text-emerald-700",
-    icon: "bg-emerald-500",
-    label: "System",
-  },
-  community: {
-    badge: "bg-slate-200 text-slate-700",
-    icon: "bg-slate-500",
-    label: "Community",
-  },
-};
-
 type Props = {
   title?: string;
   subtitle?: string;
+  notificationItems?: NotificationItem[];
 };
 
 export function AppHeader({
   title = "Scholarly Sanctuary",
   subtitle = "Xin chào",
+  notificationItems: notificationItemsProp,
 }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [notificationItems, setNotificationItems] = useState(initialNotifications);
+  const isStudentArea = location.pathname.startsWith("/user");
+
+  const [notificationItems, setNotificationItems] = useState<NotificationItem[]>(
+    notificationItemsProp ?? initialNotifications
+  );
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
+
   const unreadCount = notificationItems.filter((item) => item.unread).length;
+
+  const currentUserDisplayName = (() => {
+    const fallbackName = "Người dùng";
+
+    try {
+      const rawUser = localStorage.getItem(authStorageKeys.USER_KEY);
+      if (!rawUser) {
+        return fallbackName;
+      }
+
+      const parsedUser = JSON.parse(rawUser) as {
+        fullName?: string;
+        name?: string;
+        email?: string;
+      };
+
+      return parsedUser.fullName ?? parsedUser.name ?? parsedUser.email ?? fallbackName;
+    } catch {
+      return fallbackName;
+    }
+  })();
+
+  const avatarInitial = (currentUserDisplayName.trim().charAt(0) || "A").toUpperCase();
+  const headerMetaTitle = isStudentArea ? "Tài khoản" : title;
+  const headerMetaSubtitle = isStudentArea ? currentUserDisplayName : subtitle;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
+
       if (notificationMenuRef.current && !notificationMenuRef.current.contains(target)) {
         setIsNotificationOpen(false);
       }
+
       if (avatarMenuRef.current && !avatarMenuRef.current.contains(target)) {
         setIsAvatarMenuOpen(false);
       }
@@ -127,12 +125,39 @@ export function AppHeader({
   }
 
   function handleLogout() {
+    setAuthToken(null);
+    localStorage.removeItem(authStorageKeys.USER_KEY);
     setIsAvatarMenuOpen(false);
     navigate("/login");
   }
 
+  function handleNotificationItemClick(item: NotificationItem) {
+    setNotificationItems((prev) =>
+      prev.map((notification) =>
+        notification.id === item.id ? { ...notification, unread: false } : notification
+      )
+    );
+
+    setIsNotificationOpen(false);
+
+    if (item.href) {
+      navigate(item.href);
+    }
+  }
+
+  function handleViewAllNotifications() {
+    setIsNotificationOpen(false);
+
+    if (location.pathname.startsWith("/admin")) {
+      navigate("/admin/notifications");
+      return;
+    }
+
+    navigate("/notifications");
+  }
+
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line-soft)] bg-white/88 px-6 py-4 backdrop-blur-xl">
+    <header className="relative z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line-soft)] bg-white/88 px-6 py-4 backdrop-blur-xl">
       <div className="flex min-w-[16rem] items-center gap-3 rounded-full border border-[var(--line-soft)] bg-[var(--bg-page)] px-4 py-2.5">
         <Search size={16} className="text-[var(--ink-500)]" />
         <input
@@ -164,81 +189,19 @@ export function AppHeader({
           </button>
 
           {isNotificationOpen ? (
-            <div
-              role="dialog"
-              aria-label="Thông báo"
-              className="absolute right-0 top-12 z-30 w-[22.5rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]"
-            >
-              <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
-                <h3 className="font-[var(--font-label)] text-[0.82rem] font-semibold text-[var(--brand-700)]">
-                  Notifications
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNotificationItems((prev) => prev.map((item) => ({ ...item, unread: false })));
-                  }}
-                  className="text-[9px] font-semibold text-emerald-700 transition hover:text-emerald-800"
-                >
-                  Mark all as read
-                </button>
-              </div>
-
-              <div className="max-h-[21rem] overflow-y-auto px-2 pb-2">
-                {notificationItems.map((item) => {
-                  const itemStyle = notificationTypeStyles[item.type];
-
-                  return (
-                    <article
-                      key={item.id}
-                      className="relative mb-1.5 rounded-xl bg-white/70 px-3 py-2.5"
-                    >
-                      <div className="flex gap-2.5">
-                        <div className="pt-0.5">
-                          <span
-                            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-white ${itemStyle.icon}`}
-                            aria-hidden="true"
-                          >
-                            <Bell size={12} />
-                          </span>
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex items-start justify-between gap-2">
-                            <p className="text-[0.72rem] font-semibold leading-4 text-[var(--ink-900)]">
-                              {item.title}
-                            </p>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <span
-                                className={`rounded-full px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.07em] ${itemStyle.badge}`}
-                              >
-                                {itemStyle.label}
-                              </span>
-                              {item.unread ? (
-                                <span className="h-1.5 w-1.5 rounded-full bg-blue-700" aria-label="Chưa đọc" />
-                              ) : null}
-                            </div>
-                          </div>
-                          <p className="text-[0.64rem] leading-3.5 text-[var(--ink-600)]">{item.description}</p>
-                          <p className="mt-1 text-[9px] text-[var(--ink-500)]">{item.time}</p>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-
-              <div className="px-3 pb-3 pt-1">
-                <button
-                  type="button"
-                  className="w-full rounded-lg bg-[var(--brand-700)] px-3 py-2 text-[10px] font-semibold text-white transition hover:brightness-110"
-                >
-                  View all notifications
-                </button>
-              </div>
-            </div>
+            <NotificationPopover
+              items={notificationItems}
+              onMarkAllAsRead={() => {
+                setNotificationItems((prev) =>
+                  prev.map((item) => ({ ...item, unread: false }))
+                );
+              }}
+              onItemClick={handleNotificationItemClick}
+              onViewAll={handleViewAllNotifications}
+            />
           ) : null}
         </div>
+
         <button
           type="button"
           className="rounded-full border border-transparent p-2 text-[var(--ink-600)] transition duration-200 hover:border-[var(--line-soft)] hover:bg-[var(--bg-page)]"
@@ -249,9 +212,12 @@ export function AppHeader({
         <div className="mx-1 h-7 w-px bg-[var(--line-soft)]" />
 
         <div className="text-right">
-          <p className="font-[var(--font-label)] text-xs text-[var(--ink-600)]">{title}</p>
-          <p className="font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">{subtitle}</p>
+          <p className="font-[var(--font-label)] text-xs text-[var(--ink-600)]">{headerMetaTitle}</p>
+          <p className="font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">
+            {headerMetaSubtitle}
+          </p>
         </div>
+
         <div className="relative" ref={avatarMenuRef}>
           <button
             type="button"
@@ -262,7 +228,7 @@ export function AppHeader({
             aria-expanded={isAvatarMenuOpen}
             title="Tài khoản"
           >
-            A
+            {avatarInitial}
           </button>
 
           {isAvatarMenuOpen ? (

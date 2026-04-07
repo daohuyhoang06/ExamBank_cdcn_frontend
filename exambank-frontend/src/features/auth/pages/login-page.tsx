@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { type FormEvent, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
+import { authService } from '@/features/auth/services/auth.service';
 
 const MailIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[var(--ink-500)]" aria-hidden="true">
@@ -77,6 +80,84 @@ const FacebookIcon = () => (
 );
 
 export default function LoginPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getApiErrorMessage = (error: unknown) => {
+    if (isAxiosError(error)) {
+      const responseData = error.response?.data as { message?: string; error?: string } | undefined;
+      return responseData?.message ?? responseData?.error ?? 'Đăng nhập thất bại, vui lòng thử lại.';
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Đăng nhập thất bại, vui lòng thử lại.';
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError('');
+
+    const normalizedEmail = email.trim();
+    let isValid = true;
+
+    if (!normalizedEmail) {
+      setEmailError('Vui lòng nhập email.');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+
+    if (!password.trim()) {
+      setPasswordError('Vui lòng nhập mật khẩu.');
+      isValid = false;
+    } else {
+      setPasswordError('');
+    }
+
+    if (!isValid) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await authService.login({
+        email: normalizedEmail,
+        password,
+        rememberMe,
+      });
+
+      const normalizedRoles = [result.user?.role, ...(result.user?.roles ?? [])]
+        .filter((role): role is string => Boolean(role))
+        .map((role) => role.toUpperCase().replace("ROLE_", ""));
+
+      if (normalizedRoles.includes("ADMIN")) {
+        navigate('/admin', { replace: true });
+        return;
+      }
+
+      if (normalizedRoles.includes("MODERATOR")) {
+        navigate('/moderator', { replace: true });
+        return;
+      }
+
+      navigate('/user', { replace: true });
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const heroCardStyle = {
     marginTop: '2.5rem',
     maxWidth: '60rem',
@@ -120,7 +201,7 @@ export default function LoginPage() {
             <p className="text-[1.02rem] leading-[1.6] text-[var(--ink-600)]">Tiếp tục lộ trình học tập cùng cộng đồng.</p>
           </div>
 
-          <form className="flex flex-col gap-[18px]" noValidate>
+          <form className="flex flex-col gap-[18px]" noValidate onSubmit={handleSubmit}>
             <Input
               id="email"
               type="email"
@@ -128,6 +209,9 @@ export default function LoginPage() {
               required
               label="EMAIL"
               placeholder="name@gmail.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              error={emailError}
               startAdornment={<MailIcon />}
               containerClassName="gap-2.5"
               labelClassName="font-extrabold tracking-[0.16em]"
@@ -142,6 +226,9 @@ export default function LoginPage() {
               required
               label="MẬT KHẨU"
               placeholder="••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              error={passwordError}
               startAdornment={<LockIcon />}
               containerClassName="gap-2.5"
               labelClassName="font-extrabold tracking-[0.16em]"
@@ -151,7 +238,12 @@ export default function LoginPage() {
 
             <div className="mt-1 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <label className="inline-flex cursor-pointer items-center gap-2.5 text-[0.95rem] text-[var(--ink-700)]">
-                <input className="h-[17px] w-[17px] accent-[var(--brand-600)]" type="checkbox" />
+                <input
+                  className="h-[17px] w-[17px] accent-[var(--brand-600)]"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
                 <span>Giữ đăng nhập</span>
               </label>
 
@@ -160,8 +252,14 @@ export default function LoginPage() {
               </Button>
             </div>
 
-            <Button type="submit" variant="primary" size="xl" fullWidth className="h-[60px] rounded-2xl text-[1.2rem]">
-              Đăng nhập
+            {submitError ? (
+              <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
+                {submitError}
+              </p>
+            ) : null}
+
+            <Button type="submit" variant="primary" size="xl" fullWidth className="h-[60px] rounded-2xl text-[1.2rem]" disabled={isSubmitting}>
+              {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Button>
 
             <div className="mt-1 flex items-center gap-4">

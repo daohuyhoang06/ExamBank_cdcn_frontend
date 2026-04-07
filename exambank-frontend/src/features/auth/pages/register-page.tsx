@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { type FormEvent, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
+import { authService } from '@/features/auth/services/auth.service';
 
 const SparklesIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -54,7 +57,128 @@ const CapIcon = () => (
   </svg>
 );
 
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+    <path
+      d="M12 5c4.8 0 8.7 2.8 10.6 7-1.9 4.2-5.8 7-10.6 7S3.3 16.2 1.4 12C3.3 7.8 7.2 5 12 5Zm0 2C8.4 7 5.3 9 3.6 12 5.3 15 8.4 17 12 17s6.7-2 8.4-5C18.7 9 15.6 7 12 7Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+    <path
+      d="m3.2 2 18.8 18.8-1.4 1.4-3.2-3.2a11.6 11.6 0 0 1-5.4 1.3c-4.8 0-8.8-2.8-10.6-7a12.4 12.4 0 0 1 4.4-5.2L1.8 3.4 3.2 2Zm15.9 13a10.8 10.8 0 0 0 1.4-2.9C18.7 9 15.6 7 12 7c-1 0-2 .2-2.9.5l1.7 1.7c.4-.2.8-.3 1.2-.3a2.8 2.8 0 0 1 2.8 2.8c0 .4-.1.8-.3 1.2l2.6 2.1Zm-6.4 1.8-2-2a2.8 2.8 0 0 1-1.5-4.8L7 7.8C5.5 8.8 4.3 10.2 3.6 12 5.3 15 8.4 17 12 17c.7 0 1.4-.1 2.1-.2l-1.4-1.4Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export default function RegisterPage() {
+  const navigate = useNavigate();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [termsAgree, setTermsAgree] = useState(false);
+
+  const [fullNameError, setFullNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [termsError, setTermsError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getApiErrorMessage = (error: unknown) => {
+    if (isAxiosError(error)) {
+      const responseData = error.response?.data as { message?: string; error?: string } | undefined;
+      return responseData?.message ?? responseData?.error ?? 'Đăng ký thất bại, vui lòng thử lại.';
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Đăng ký thất bại, vui lòng thử lại.';
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError('');
+
+    const normalizedFullName = fullName.trim();
+    const normalizedEmail = email.trim();
+    const normalizedPassword = password.trim();
+    const normalizedConfirmPassword = confirmPassword.trim();
+    let isValid = true;
+
+    if (!normalizedFullName) {
+      setFullNameError('Vui lòng nhập họ và tên.');
+      isValid = false;
+    } else {
+      setFullNameError('');
+    }
+
+    if (!normalizedEmail) {
+      setEmailError('Vui lòng nhập email.');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+
+    if (!normalizedPassword) {
+      setPasswordError('Vui lòng nhập mật khẩu.');
+      isValid = false;
+    } else if (normalizedPassword.length < 8) {
+      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự.');
+      isValid = false;
+    } else {
+      setPasswordError('');
+    }
+
+    if (!normalizedConfirmPassword) {
+      setConfirmPasswordError('Vui lòng xác nhận mật khẩu.');
+      isValid = false;
+    } else if (normalizedConfirmPassword !== normalizedPassword) {
+      setConfirmPasswordError('Mật khẩu xác nhận không khớp.');
+      isValid = false;
+    } else {
+      setConfirmPasswordError('');
+    }
+
+    if (!termsAgree) {
+      setTermsError('Bạn cần đồng ý điều khoản trước khi đăng ký.');
+      isValid = false;
+    } else {
+      setTermsError('');
+    }
+
+    if (!isValid) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await authService.register({
+        fullName: normalizedFullName,
+        email: normalizedEmail,
+        password: normalizedPassword,
+        confirmPassword: normalizedConfirmPassword,
+      });
+
+      navigate('/login', { replace: true });
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[linear-gradient(160deg,#eef4ff_0%,#f6fbff_45%,#f2f9f4_100%)] px-4 py-5 sm:px-6 sm:py-8">
       <div className="pointer-events-none absolute -right-16 top-[-100px] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(31,99,180,0.22),transparent_72%)]" />
@@ -114,7 +238,7 @@ export default function RegisterPage() {
             
             </div>
 
-            <form className="flex flex-col gap-5" noValidate>
+            <form className="flex flex-col gap-5" noValidate onSubmit={handleSubmit}>
               <div className="grid gap-5 md:grid-cols-2">
                 <Input
                   id="fullName"
@@ -123,6 +247,9 @@ export default function RegisterPage() {
                   required
                   label="Họ và Tên"
                   placeholder="Nguyễn Văn A"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  error={fullNameError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
 
@@ -133,6 +260,9 @@ export default function RegisterPage() {
                   required
                   label="Email"
                   placeholder="name@example.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  error={emailError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
               </div>
@@ -140,34 +270,76 @@ export default function RegisterPage() {
               <div className="grid gap-5 md:grid-cols-2">
                 <Input
                   id="registerPassword"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   label="Mật khẩu"
                   placeholder="••••••••"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  error={passwordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                  endAdornment={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--line-soft)] hover:text-[var(--ink-700)]"
+                      aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    >
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  }
                 />
 
                 <Input
                   id="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   label="Xác nhận mật khẩu"
                   placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  error={confirmPasswordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
+                  endAdornment={
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--line-soft)] hover:text-[var(--ink-700)]"
+                      aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+                    >
+                      {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  }
                 />
               </div>
 
               <label className="mt-0.5 inline-flex items-start gap-2.5 text-[0.94rem] leading-[1.5] text-[var(--ink-600)]" htmlFor="termsAgree">
-                <input className="mt-0.5 h-[14px] w-[14px] accent-[var(--brand-600)]" id="termsAgree" type="checkbox" required />
+                <input
+                  className="mt-0.5 h-[14px] w-[14px] accent-[var(--brand-600)]"
+                  id="termsAgree"
+                  type="checkbox"
+                  checked={termsAgree}
+                  onChange={(event) => setTermsAgree(event.target.checked)}
+                />
                 <span>
                   Tôi đồng ý với <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Điều khoản</Button> và{' '}
                   <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Chính sách bảo mật</Button>
                 </span>
               </label>
 
-              <Button className="mt-1 h-[58px] text-[1.18rem]" type="submit" size="xl" variant="primary" fullWidth>Đăng ký tài khoản</Button>
+              {termsError ? <p className="-mt-2 text-sm font-semibold text-rose-600">{termsError}</p> : null}
+
+              {submitError ? (
+                <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
+                  {submitError}
+                </p>
+              ) : null}
+
+              <Button className="mt-1 h-[58px] text-[1.18rem]" type="submit" size="xl" variant="primary" fullWidth disabled={isSubmitting}>
+                {isSubmitting ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
+              </Button>
 
               <div className="mt-1 flex items-center gap-4">
                 <span className="h-px flex-1 bg-[var(--line-soft)]" />
