@@ -24,6 +24,7 @@ import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
 import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
 import ModeratorComposerPage from "@/features/moderator/pages/moderator-composer-page";
+import ModeratorComposerFormPage from "@/features/moderator/pages/moderator-composer-form-page";
 import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
 import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
 
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
       { path: "queue", element: <ModeratorQueuePage /> },
       { path: "grading", element: <ModeratorGradingPage /> },
       { path: "composer", element: <ModeratorComposerPage /> },
+      { path: "composer/form", element: <ModeratorComposerFormPage /> },
       { path: "editorial", element: <ModeratorEditorialPage /> },
       { path: "submit-review", element: <ModeratorSubmitReviewPage /> },
     ],
