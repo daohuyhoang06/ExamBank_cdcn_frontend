@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NotificationPopover } from "./notification-popover";
 import type { NotificationItem } from "./notification-popover";
-import { authStorageKeys } from "@/features/auth/services/auth.service";
+import { clearStoredAuthUser, getStoredAuthUser } from "@/features/auth/services/auth.service";
 import { setAuthToken } from "@/lib/api-client";
 
 const initialNotifications: NotificationItem[] = [
@@ -70,28 +70,20 @@ export function AppHeader({
 
   const currentUserDisplayName = (() => {
     const fallbackName = "Người dùng";
+    const currentUser = getStoredAuthUser() as
+      | {
+          fullName?: string;
+          name?: string;
+          email?: string;
+        }
+      | null;
 
-    try {
-      const rawUser = localStorage.getItem(authStorageKeys.USER_KEY);
-      if (!rawUser) {
-        return fallbackName;
-      }
-
-      const parsedUser = JSON.parse(rawUser) as {
-        fullName?: string;
-        name?: string;
-        email?: string;
-      };
-
-      return parsedUser.fullName ?? parsedUser.name ?? parsedUser.email ?? fallbackName;
-    } catch {
-      return fallbackName;
-    }
+    return currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName;
   })();
 
   const avatarInitial = (currentUserDisplayName.trim().charAt(0) || "A").toUpperCase();
   const headerMetaTitle = isStudentArea ? "Tài khoản" : title;
-  const headerMetaSubtitle = isStudentArea ? currentUserDisplayName : subtitle;
+  const headerMetaSubtitle = currentUserDisplayName || subtitle;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -126,7 +118,7 @@ export function AppHeader({
 
   function handleLogout() {
     setAuthToken(null);
-    localStorage.removeItem(authStorageKeys.USER_KEY);
+    clearStoredAuthUser();
     setIsAvatarMenuOpen(false);
     navigate("/login");
   }
