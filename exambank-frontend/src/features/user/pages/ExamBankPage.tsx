@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
@@ -9,10 +10,12 @@ import {
   BookMarked
 } from 'lucide-react';
 
-import type { EducationLevel, Subject } from '../types/user.type';
+import type { EducationLevel, ExamListItem, Subject } from '../types/user.type';
 import { userService } from '../services/user.service';
+import { examService } from '../services/user.service';
 
 export default function ExamBankPage() {
+  const navigate = useNavigate();
   // State
   const [selectedLevel, setSelectedLevel] = useState<EducationLevel | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -20,6 +23,9 @@ export default function ExamBankPage() {
   const [isSubjectOpen, setIsSubjectOpen] = useState(false);
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [keyword, setKeyword] = useState('');
+  const [allExams, setAllExams] = useState<ExamListItem[]>([]);
+  const [filteredExams, setFilteredExams] = useState<ExamListItem[]>([]);
 
   // Fetch data từ service
   useEffect(() => {
@@ -27,9 +33,12 @@ export default function ExamBankPage() {
       try {
         const levels = await userService.getEducationLevels();
         const subs = await userService.getSubjects();
+        const exams = await examService.getAllExams();
 
         setEducationLevels(levels);
         setSubjects(subs);
+        setAllExams(exams);
+        setFilteredExams(exams);
 
         // set default
         if (levels.length > 0) setSelectedLevel(levels[0]);
@@ -41,6 +50,28 @@ export default function ExamBankPage() {
 
     fetchData();
   }, []);
+
+  const applyFilters = (nextKeyword = keyword, nextSubject = selectedSubject) => {
+    const normalizedKeyword = nextKeyword.trim().toLowerCase();
+    const normalizedSubject = nextSubject.trim().toLowerCase();
+    const hasSubjectFilter = nextSubject && nextSubject !== 'Tất cả môn học';
+
+    const next = allExams.filter((exam) => {
+      const matchesKeyword =
+        !normalizedKeyword || exam.title.toLowerCase().includes(normalizedKeyword);
+
+      const examSubject = (exam.subjectName ?? '').toLowerCase();
+
+      const matchesSubject =
+        !hasSubjectFilter ||
+        examSubject.includes(normalizedSubject) ||
+        exam.title.toLowerCase().includes(normalizedSubject);
+
+      return matchesKeyword && matchesSubject;
+    });
+
+    setFilteredExams(next);
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20">
@@ -62,6 +93,8 @@ export default function ExamBankPage() {
           <input
             type="text"
             placeholder="Tên đề thi..."
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold"
           />
         </div>
@@ -129,6 +162,7 @@ export default function ExamBankPage() {
                   onClick={() => {
                     setSelectedSubject(sub);
                     setIsSubjectOpen(false);
+                    applyFilters(keyword, sub);
                   }}
                   className="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex justify-between"
                 >
@@ -140,37 +174,51 @@ export default function ExamBankPage() {
           )}
         </div>
 
-        <button className="px-6 py-3 bg-blue-600 text-white rounded-2xl">
+        <button onClick={() => applyFilters()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl">
           Lọc
         </button>
       </div>
 
       {/* List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white p-3 rounded-2xl border">
+        {filteredExams.map((exam) => (
+          <div key={exam.id} className="bg-white p-3 rounded-2xl border">
             <img
               src="https://images.unsplash.com/photo-1606326666490-45757474e788"
+              alt={exam.title}
               className="rounded-xl mb-3"
             />
 
             <h3 className="font-bold text-sm mb-2">
-              Đề thi - {selectedLevel?.name} - {selectedSubject}
+              {exam.title}
             </h3>
+
+            <p className="text-xs text-slate-400 mb-3">
+              {exam.subjectName ?? selectedSubject ?? 'Đa môn'} • {exam.durationMinutes ?? 30} phút
+            </p>
 
             <div className="flex justify-between">
               <div className="flex items-center gap-1 text-yellow-500">
                 <Star className="w-4 h-4 fill-current" />
-                <span>4.8</span>
+                <span>4.{(exam.id % 4) + 5}</span>
               </div>
 
-              <button className="text-blue-600 flex items-center gap-1">
+              <button
+                onClick={() => navigate(`/user/exam/${exam.id}`)}
+                className="text-blue-600 flex items-center gap-1"
+              >
                 Làm ngay <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {filteredExams.length === 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500">
+          Không tìm thấy đề phù hợp bộ lọc hiện tại.
+        </div>
+      )}
     </div>
   );
 } 

@@ -10,4 +10,18 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          query: ["@tanstack/react-query"],
+          forms: ["react-hook-form", "@hookform/resolvers", "zod"],
+          icons: ["lucide-react", "@fortawesome/fontawesome-free"],
+          utils: ["axios", "zustand", "clsx", "tailwind-merge"],
+        },
+      },
+    },
+  },
 });

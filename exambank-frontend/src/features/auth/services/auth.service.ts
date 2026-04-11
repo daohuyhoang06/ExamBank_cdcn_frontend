@@ -189,6 +189,11 @@ export const authService = {
     const response = await postWithFallback(AUTH_REGISTER_PATH, LEGACY_REGISTER_PATH, registerBody);
     return normalizeAuthResponse(response.data);
   },
+
+  logout() {
+    setAuthToken(null);
+    clearStoredAuthUserInternal();
+  },
 };
 
 export const authStorageKeys = {
