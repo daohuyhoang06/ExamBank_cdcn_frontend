@@ -1,3 +1,4 @@
+import { getStoredAuthToken } from "@/lib/api-client";
 import axios, { AxiosHeaders } from "axios";
 import type {
   AccountStatus,
@@ -134,31 +135,13 @@ type BackendUser = {
   createdAt?: string;
 };
 
-const tokenKeys = ["token", "authToken", "accessToken", "jwt"];
-
 const getStoredToken = (): string | null => {
-  if (typeof window === "undefined") {
+  const token = getStoredAuthToken();
+  if (!token || !token.trim()) {
     return null;
   }
 
-  for (const key of tokenKeys) {
-    const raw = window.localStorage.getItem(key);
-    if (raw && raw.trim()) {
-      return raw.trim();
-    }
-  }
-
-  const authRaw = window.localStorage.getItem("auth");
-  if (!authRaw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(authRaw) as { token?: string; accessToken?: string };
-    return parsed.token ?? parsed.accessToken ?? null;
-  } catch {
-    return null;
-  }
+  return token.trim();
 };
 
 const toAccountStatus = (status?: string): AccountStatus => {
