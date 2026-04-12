@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, 
   ArrowRight, 
@@ -10,12 +11,11 @@ import {
 } from "lucide-react";
 import type { Recommendation, Ranking } from '../types/user.type';
 import { userService } from '../services/user.service';
-import { mockRecommendations, mockRankings } from '../mocks/user.mock';
 
 export default function UserHomePage() {
-  console.log('UserHomePage rendering');
-  const [recommendations, setRecommendations] = useState<Recommendation[]>(mockRecommendations);
-  const [rankings, setRankings] = useState<Ranking[]>(mockRankings);
+  const navigate = useNavigate();
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [rankings, setRankings] = useState<Ranking[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -24,7 +24,6 @@ export default function UserHomePage() {
         const ranks = await userService.getRankings();
         setRecommendations(recs);
         setRankings(ranks);
-        console.log('Data loaded:', recs, ranks);
       } catch (error) {
         console.error('Error loading data:', error);
       }
@@ -68,7 +67,10 @@ export default function UserHomePage() {
                   style={{ width: "65%" }}
                 />
               </div>
-              <button className="mt-6 bg-gradient-to-r from-[#003466] to-[#1a4b84] hover:opacity-90 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+              <button
+                onClick={() => navigate('/user/exambank')}
+                className="mt-6 bg-gradient-to-r from-[#003466] to-[#1a4b84] hover:opacity-90 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+              >
                 Làm bài ngay
               </button>
             </div>
@@ -113,7 +115,10 @@ export default function UserHomePage() {
         <section className="lg:col-span-8 space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-800">Gợi ý đề thi dựa trên điểm yếu</h3>
-            <button className="text-xs font-bold text-blue-700 flex items-center gap-1 hover:underline">
+              <button
+                onClick={() => navigate('/user/exambank')}
+                className="text-xs font-bold text-blue-700 flex items-center gap-1 hover:underline"
+              >
               Xem tất cả <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -125,6 +130,7 @@ export default function UserHomePage() {
               return (
                 <div
                   key={item.title}
+                  onClick={() => navigate(item.documentId ? `/user/comment/${item.documentId}` : '/user/exambank')}
                   className={`bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-l-4 transition-all hover:shadow-md cursor-pointer group ${isError ? 'border-l-red-400' : 'border-l-blue-400'}`}
                 >
                   <div className="flex justify-between items-start mb-4">
@@ -174,6 +180,9 @@ export default function UserHomePage() {
                 {item.rank === 1 && <Award className="w-5 h-5 text-amber-500 fill-amber-500/20" />}
               </div>
             ))}
+            {rankings.length === 0 && (
+              <p className="px-2 text-sm text-slate-400">Chưa có dữ liệu bảng xếp hạng.</p>
+            )}
           </div>
 
           {/* User Rank Footer */}

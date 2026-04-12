@@ -1,17 +1,18 @@
 import { 
   LayoutDashboard, 
   UserCircle, 
-  FileText, // Đã sửa: Viết liền, không có dấu cách
+  FileText,
   BarChart3, 
   Settings,
   HelpCircle
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 // Khai báo interface để đồng bộ với AppShell
 export interface SidebarNavItem {
   label: string;
   path: string;
-  icon: any;
+  icon: LucideIcon;
 }
 
 export const studentSidebarItems: SidebarNavItem[] = [
@@ -26,23 +27,23 @@ export const studentSidebarItems: SidebarNavItem[] = [
     icon: UserCircle,
   },
   {
-    label: "Đề của bạn",
-    path: "/user/comment",
+    label: "Ngân hàng đề",
+    path: "/user/exambank",
     icon: FileText,
   },
   {
-    label: "Thống kê",
-    path: "/user/statistics",
+    label: "Bài đã nộp",
+    path: "/user/exambank/mysubmit",
     icon: BarChart3,
   },
   {
-    label: "Cài đặt",
-    path: "/user/settings",
+    label: "Tải đề lên",
+    path: "/user/exambank/submit",
     icon: Settings,
   },
   {
-    label: "Hỗ trợ",
-    path: "/user/support",
+    label: "Thảo luận đề",
+    path: "/user/comment",
     icon: HelpCircle,
   },
 ];

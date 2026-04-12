@@ -15,10 +15,9 @@ import { StudentLayout } from "@/layouts/student/StudentLayout";
 import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
 import Mysubmit from "@/features/user/pages/submit-exam/Mysubmit";
-import Examreview from "@/features/user/pages/makeexam/Examreview";
-// Import trang Comment bạn vừa tạo
-import Comment from "@/features/user/pages/Comment"; 
-import Exampage from "@/features/user/pages/makeexam/Exampage";
+import Examreview from "@/features/user/pages/makeexam/page/Examreview";
+import Comment from "@/features/user/pages/Comment";
+import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
@@ -102,6 +101,10 @@ export const router = createBrowserRouter([
     },
       {
         path: "comment", // URL: /user/comment
+        element: <Comment />,
+      },
+      {
+        path: "comment/:documentId", // URL: /user/comment/:documentId
         element: <Comment />,
       },
       {
