@@ -3,23 +3,20 @@ import {
   AlertTriangle,
   BellRing,
   Camera,
-  Eye,
   Globe2,
   Lock,
-  Mail,
   Save,
   Shield,
   UserCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { authService } from "@/features/auth/services/auth.service";
+import { authService, syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { userService } from "../services/user.service";
 import type { UserProfile } from "../types/user.type";
 
 type NoticeType = "success" | "error" | "info";
 
 type UiPreferences = {
-  username: string;
   bio: string;
   language: string;
   notifyEmail: boolean;
@@ -54,11 +51,10 @@ const extractErrorMessage = (error: unknown): string => {
     return error.message;
   }
 
-  return "Da xay ra loi khong xac dinh.";
+  return "Đã xảy ra lỗi không xác định.";
 };
 
-const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
-  username: profile.username,
+const buildDefaultPreferences = (): UiPreferences => ({
   bio: "",
   language: "vi-VN",
   notifyEmail: true,
@@ -70,36 +66,66 @@ const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
 
 const readStoredPreferences = (profile: UserProfile): UiPreferences => {
   if (typeof window === "undefined") {
-    return buildDefaultPreferences(profile);
+    return buildDefaultPreferences();
   }
 
   const key = `user-profile-ui:${profile.id}`;
   const raw = window.localStorage.getItem(key);
   if (!raw) {
-    return buildDefaultPreferences(profile);
+    return buildDefaultPreferences();
   }
 
   try {
     const parsed = JSON.parse(raw) as Partial<UiPreferences>;
     return {
-      ...buildDefaultPreferences(profile),
+      ...buildDefaultPreferences(),
       ...parsed,
-      username: parsed.username?.trim() || profile.username,
       avatarUrl: parsed.avatarUrl?.trim() || DEFAULT_AVATAR,
       profileVisibility: parsed.profileVisibility === "private" ? "private" : "public",
     };
   } catch {
-    return buildDefaultPreferences(profile);
+    return buildDefaultPreferences();
   }
+};
+
+const formatProfileDate = (isoDate?: string): string => {
+  if (!isoDate) {
+    return "Chưa có dữ liệu";
+  }
+
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "Chưa có dữ liệu";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 };
 
 export default function UserProfileSettingsPage() {
   const navigate = useNavigate();
+
+  const normalizeText = (value: string): string => value.trim();
+  const normalizeEmail = (value: string): string => value.trim().toLowerCase();
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [savedName, setSavedName] = useState("");
+  const [savedEmail, setSavedEmail] = useState("");
   const [preferences, setPreferences] = useState<UiPreferences>({
-    username: "",
+    bio: "",
+    language: "vi-VN",
+    notifyEmail: true,
+    notifyPush: true,
+    notifyMentor: false,
+    profileVisibility: "public",
+    avatarUrl: DEFAULT_AVATAR,
+  });
+  const [savedPreferences, setSavedPreferences] = useState<UiPreferences>({
     bio: "",
     language: "vi-VN",
     notifyEmail: true,
@@ -113,6 +139,7 @@ export default function UserProfileSettingsPage() {
     nextPassword: "",
     confirmPassword: "",
   });
+
   const [notice, setNotice] = useState<{ type: NoticeType; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -133,18 +160,40 @@ export default function UserProfileSettingsPage() {
     setName(nextProfile.name);
     setEmail(nextProfile.email);
     setPreferences(stored);
+    setSavedName(nextProfile.name);
+    setSavedEmail(nextProfile.email);
+    setSavedPreferences(stored);
   };
 
-  const persistPreferences = (): void => {
+  const hasProfileChanges = useMemo(
+    () =>
+      normalizeText(name) !== normalizeText(savedName) ||
+      normalizeEmail(email) !== normalizeEmail(savedEmail),
+    [email, name, savedEmail, savedName],
+  );
+
+  const hasBackendProfileChanges = useMemo(
+    () => normalizeText(name) !== normalizeText(savedName) || normalizeEmail(email) !== normalizeEmail(savedEmail),
+    [email, name, savedEmail, savedName],
+  );
+
+  const hasPreferenceChanges = useMemo(
+    () => JSON.stringify(preferences) !== JSON.stringify(savedPreferences),
+    [preferences, savedPreferences],
+  );
+
+  const persistPreferences = (nextPreferences: UiPreferences = preferences): void => {
     if (typeof window === "undefined" || !profileStorageKey) {
       return;
     }
-    window.localStorage.setItem(profileStorageKey, JSON.stringify(preferences));
+
+    window.localStorage.setItem(profileStorageKey, JSON.stringify(nextPreferences));
   };
 
   const fetchProfile = useCallback(async (): Promise<void> => {
     setLoading(true);
     setNotice(null);
+
     try {
       const data = await userService.getMyProfile();
       hydrateFromProfile(data);
@@ -178,18 +227,18 @@ export default function UserProfileSettingsPage() {
 
   const saveProfileToBackend = async (): Promise<UserProfile> => {
     if (!profile) {
-      throw new Error("Khong tim thay thong tin nguoi dung hien tai.");
+      throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
     }
 
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
 
     if (!trimmedName) {
-      throw new Error("Ho ten khong duoc de trong.");
+      throw new Error("Họ tên không được để trống.");
     }
 
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      throw new Error("Email khong hop le.");
+      throw new Error("Email không hợp lệ.");
     }
 
     return userService.updateMyProfile({
@@ -201,11 +250,28 @@ export default function UserProfileSettingsPage() {
   const handleSaveProfile = async (): Promise<void> => {
     setSavingProfile(true);
     setNotice(null);
+
     try {
-      const updated = await saveProfileToBackend();
-      hydrateFromProfile(updated);
-      persistPreferences();
-      setNotice({ type: "success", message: "Da cap nhat thong tin ca nhan thanh cong." });
+      const updated = hasBackendProfileChanges ? await saveProfileToBackend() : profile;
+      if (!updated) {
+        throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
+      }
+
+      setProfile(updated);
+      setName(updated.name);
+      setEmail(updated.email);
+      setSavedName(updated.name);
+      setSavedEmail(updated.email);
+      setSavedPreferences(preferences);
+
+      syncStoredAuthUser({
+        fullName: updated.name,
+        name: updated.name,
+        email: updated.email,
+      });
+
+      persistPreferences(preferences);
+      setNotice({ type: "success", message: "Đã cập nhật thông tin cá nhân thành công." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -216,15 +282,16 @@ export default function UserProfileSettingsPage() {
   const handleSavePassword = async (): Promise<void> => {
     setSavingPassword(true);
     setNotice(null);
+
     try {
       if (!passwordForm.currentPassword.trim()) {
-        throw new Error("Vui long nhap mat khau hien tai.");
+        throw new Error("Vui lòng nhập mật khẩu hiện tại.");
       }
       if (passwordForm.nextPassword.trim().length < 8) {
-        throw new Error("Mat khau moi can toi thieu 8 ky tu.");
+        throw new Error("Mật khẩu mới cần tối thiểu 8 ký tự.");
       }
       if (passwordForm.nextPassword !== passwordForm.confirmPassword) {
-        throw new Error("Mat khau xac nhan khong trung khop.");
+        throw new Error("Mật khẩu xác nhận không trùng khớp.");
       }
 
       await userService.updateMyPassword({
@@ -232,11 +299,9 @@ export default function UserProfileSettingsPage() {
         newPassword: passwordForm.nextPassword,
         confirmPassword: passwordForm.confirmPassword,
       });
+
       setPasswordForm({ currentPassword: "", nextPassword: "", confirmPassword: "" });
-      setNotice({
-        type: "success",
-        message: "Da cap nhat mat khau thanh cong.",
-      });
+      setNotice({ type: "success", message: "Đã cập nhật mật khẩu thành công." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -247,14 +312,31 @@ export default function UserProfileSettingsPage() {
   const handleSaveAll = async (): Promise<void> => {
     setSavingAll(true);
     setNotice(null);
+
     try {
-      const updated = await saveProfileToBackend();
-      hydrateFromProfile(updated);
-      persistPreferences();
+      const updated = hasBackendProfileChanges ? await saveProfileToBackend() : profile;
+      if (!updated) {
+        throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
+      }
+
+      setProfile(updated);
+      setName(updated.name);
+      setEmail(updated.email);
+      setSavedName(updated.name);
+      setSavedEmail(updated.email);
+      setSavedPreferences(preferences);
+
+      syncStoredAuthUser({
+        fullName: updated.name,
+        name: updated.name,
+        email: updated.email,
+      });
+
+      persistPreferences(preferences);
       setNotice({
         type: "info",
         message:
-          "Da luu thong tin ho so len backend. Cac tuy chon ngon ngu/thong bao/hien thi duoc luu cuc bo do backend chua co API tuong ung.",
+          "Đã lưu hồ sơ thành công. Thông tin cá nhân được lưu vào backend, các tùy chọn giao diện được lưu trên trình duyệt.",
       });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -269,7 +351,7 @@ export default function UserProfileSettingsPage() {
     }
 
     if (typeof window !== "undefined") {
-      const confirmed = window.confirm("Ban co chac chan muon vo hieu hoa tai khoan?");
+      const confirmed = window.confirm("Bạn có chắc chắn muốn vô hiệu hóa tài khoản?");
       if (!confirmed) {
         return;
       }
@@ -277,10 +359,13 @@ export default function UserProfileSettingsPage() {
 
     setChangingStatus(true);
     setNotice(null);
+
     try {
       const updated = await userService.updateMyStatus("INACTIVE");
-      hydrateFromProfile(updated);
-      setNotice({ type: "success", message: "Tai khoan da duoc chuyen sang trang thai INACTIVE." });
+      setProfile(updated);
+      setName(updated.name);
+      setEmail(updated.email);
+      setNotice({ type: "success", message: "Tài khoản đã được chuyển sang trạng thái INACTIVE." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -292,6 +377,7 @@ export default function UserProfileSettingsPage() {
     if (!profile) {
       return;
     }
+
     const stored = readStoredPreferences(profile);
     setName(profile.name);
     setEmail(profile.email);
@@ -307,19 +393,32 @@ export default function UserProfileSettingsPage() {
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      setNotice({ type: "error", message: "Kich thuoc anh vuot qua 2MB." });
+      setNotice({ type: "error", message: "Kích thước ảnh vượt quá 2MB." });
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
-    setPreferences((prev) => ({ ...prev, avatarUrl: objectUrl }));
-    setNotice({ type: "info", message: "Anh dai dien da duoc cap nhat tam thoi. Bam Luu tat ca thay doi de ghi nho." });
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setNotice({ type: "error", message: "Không thể đọc tệp ảnh đã chọn." });
+        return;
+      }
+
+      setPreferences((prev) => ({ ...prev, avatarUrl: reader.result as string }));
+      setNotice({ type: "info", message: "Ảnh đại diện đã đổi. Nhấn Lưu để áp dụng." });
+    };
+    reader.onerror = () => {
+      setNotice({ type: "error", message: "Không thể đọc tệp ảnh đã chọn." });
+    };
+    reader.readAsDataURL(file);
+
+    event.target.value = "";
   };
 
   if (loading) {
     return (
       <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-8 text-center text-[var(--ink-600)]">
-        Dang tai du lieu ho so...
+        Đang tải dữ liệu hồ sơ...
       </div>
     );
   }
@@ -327,23 +426,52 @@ export default function UserProfileSettingsPage() {
   if (!profile) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-rose-700">
-        Khong the tai du lieu ho so. Vui long dang nhap de su dung endpoint /api/v1/users/me.
+        Không thể tải dữ liệu hồ sơ. Vui lòng đăng nhập lại để dùng API /api/v1/users/me.
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pb-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-extrabold text-[var(--ink-900)]">Cai dat tai khoan</h1>
-        <p className="text-[var(--ink-600)]">
-          Cap nhat thong tin ca nhan va thiet lap bao mat cho hanh trinh hoc tap cua ban.
-        </p>
+    <div className="space-y-6 pb-8">
+      <header className="relative overflow-hidden rounded-[28px] border border-[#c8d9ff] bg-[linear-gradient(140deg,#0c3a72_0%,#0f4d96_42%,#136f84_100%)] p-6 text-white shadow-[0_18px_40px_rgba(15,77,150,0.32)] sm:p-8">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-cyan-200/30 blur-3xl" />
+
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <p className="inline-flex w-fit items-center rounded-full border border-white/35 bg-white/15 px-3 py-1 text-xs font-semibold tracking-[0.12em]">
+              HỒ SƠ NGƯỜI DÙNG
+            </p>
+            <h1 className="text-3xl font-black leading-tight sm:text-[2.2rem]">Quản lý tài khoản cá nhân</h1>
+            <p className="max-w-2xl text-sm leading-6 text-blue-100 sm:text-[0.95rem]">
+              Cập nhật thông tin của bạn, tăng cường bảo mật và cá nhân hóa trải nghiệm học tập trên ExamBank.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
+            <div className="rounded-2xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-md">
+              <p className="text-blue-100/90">Vai trò</p>
+              <p className="mt-1 font-bold text-white">{profile.roles.join(", ")}</p>
+            </div>
+            <div className="rounded-2xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-md">
+              <p className="text-blue-100/90">Ngày tham gia</p>
+              <p className="mt-1 font-bold text-white">{formatProfileDate(profile.createdAt)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-md">
+              <p className="text-blue-100/90">Điểm XP</p>
+              <p className="mt-1 font-bold text-white">{profile.xp}</p>
+            </div>
+            <div className="rounded-2xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-md">
+              <p className="text-blue-100/90">Chuỗi học tập</p>
+              <p className="mt-1 font-bold text-white">{profile.streak} ngày</p>
+            </div>
+          </div>
+        </div>
       </header>
 
       {notice ? (
         <div
-          className={`rounded-2xl border px-4 py-3 text-sm ${
+          className={`rounded-2xl border px-4 py-3 text-sm font-medium ${
             notice.type === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : notice.type === "error"
@@ -355,80 +483,73 @@ export default function UserProfileSettingsPage() {
         </div>
       ) : null}
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
-            <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
-              <UserCircle2 size={20} />
-              Thong tin ca nhan
-            </h2>
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <h2 className="mb-6 flex items-center gap-2 text-xl font-extrabold text-[var(--brand-700)]">
+            <UserCircle2 size={20} />
+            Thông tin cá nhân
+          </h2>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-[var(--ink-600)]">Ho va ten</span>
-                  <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
-                  />
-                </label>
-
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-[var(--ink-600)]">Ten hien thi / Username</span>
-                  <input
-                    value={preferences.username}
-                    onChange={(event) =>
-                      setPreferences((prev) => ({ ...prev, username: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
-                  />
-                </label>
-              </div>
-
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="space-y-1.5 text-sm">
-                <span className="font-semibold text-[var(--ink-600)]">Email</span>
+                <span className="font-semibold text-[var(--ink-700)]">Họ và tên</span>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
                   className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
                 />
               </label>
-
-              <label className="space-y-1.5 text-sm">
-                <span className="font-semibold text-[var(--ink-600)]">Tieu su (Bio)</span>
-                <textarea
-                  rows={4}
-                  value={preferences.bio}
-                  onChange={(event) =>
-                    setPreferences((prev) => ({ ...prev, bio: event.target.value }))
-                  }
-                  className="w-full resize-none rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => void handleSaveProfile()}
-                disabled={savingProfile}
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <Save size={15} />
-                {savingProfile ? "Dang luu..." : "Luu thong tin ca nhan"}
-              </button>
             </div>
+
+            <label className="space-y-1.5 text-sm">
+              <span className="font-semibold text-[var(--ink-700)]">Email</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+              />
+            </label>
+
+            <label className="space-y-1.5 text-sm">
+              <span className="font-semibold text-[var(--ink-700)]">Tiểu sử</span>
+              <textarea
+                rows={4}
+                value={preferences.bio}
+                onChange={(event) =>
+                  setPreferences((prev) => ({ ...prev, bio: event.target.value }))
+                }
+                className="w-full resize-none rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                placeholder="Ví dụ: Mình đang luyện thi THPT Quốc gia và thích môn Toán, Lý."
+              />
+            </label>
+
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700">
+              Họ tên và email sẽ được lưu trực tiếp vào backend qua API /api/v1/users/me. Các tùy chọn giao diện như tiểu sử, ngôn ngữ sẽ được lưu trên trình duyệt.
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleSaveProfile()}
+              disabled={savingProfile || !hasProfileChanges}
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Save size={15} />
+              {savingProfile ? "Đang lưu..." : "Lưu thông tin cá nhân"}
+            </button>
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 text-center">
-          <div className="mx-auto w-fit">
-            <div className="relative mx-auto h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-lg">
-              <img src={preferences.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+        <aside className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <div className="text-center">
+            <div className="relative mx-auto h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-xl ring-2 ring-[var(--brand-100)]">
+              <img src={preferences.avatarUrl} alt="Ảnh đại diện" className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => avatarFileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 rounded-full bg-[var(--brand-700)] p-2 text-white"
+                className="absolute bottom-0 right-0 rounded-full bg-[var(--brand-700)] p-2 text-white shadow-lg"
+                title="Đổi ảnh"
               >
                 <Camera size={14} />
               </button>
@@ -441,32 +562,30 @@ export default function UserProfileSettingsPage() {
               />
             </div>
 
-            <p className="mt-4 text-sm font-semibold text-[var(--ink-900)]">Anh dai dien</p>
-            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF hoac PNG. Toi da 2MB.</p>
+            <p className="mt-4 text-base font-bold text-[var(--ink-900)]">{name || "Người dùng"}</p>
+            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF hoặc PNG. Tối đa 2MB.</p>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-3 text-left text-xs text-[var(--ink-600)]">
-            <p className="font-semibold text-[var(--ink-700)]">Thong tin he thong</p>
-            <p className="mt-1">ID: {profile.id}</p>
-            <p>Vai tro: {profile.roles.join(", ")}</p>
-            <p>Trang thai: {profile.status}</p>
-            <p>XP: {profile.xp}</p>
+          <div className="mt-6 space-y-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-4 text-sm">
+            <p className="font-bold text-[var(--ink-900)]">Thông tin hệ thống</p>
+            <p className="text-[var(--ink-700)]">Mã người dùng: #{profile.id}</p>
+            <p className="text-[var(--ink-700)]">Vai trò: {profile.roles.join(", ")}</p>
+            <p className="text-[var(--ink-700)]">Trạng thái: {profile.status}</p>
+            <p className="text-[var(--ink-700)]">Số dư coin: {profile.coinBalance}</p>
           </div>
         </aside>
       </section>
 
-      <section className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
-        <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
-          <Lock size={20} />
-          Bao mat tai khoan
-        </h2>
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <h2 className="mb-5 flex items-center gap-2 text-xl font-extrabold text-[var(--brand-700)]">
+            <Lock size={20} />
+            Bảo mật tài khoản
+          </h2>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Doi mat khau</p>
-
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Mat khau hien tai</span>
+              <span className="font-semibold text-[var(--ink-700)]">Mật khẩu hiện tại</span>
               <input
                 type="password"
                 value={passwordForm.currentPassword}
@@ -478,7 +597,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Mat khau moi</span>
+              <span className="font-semibold text-[var(--ink-700)]">Mật khẩu mới</span>
               <input
                 type="password"
                 value={passwordForm.nextPassword}
@@ -490,7 +609,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Xac nhan mat khau moi</span>
+              <span className="font-semibold text-[var(--ink-700)]">Xác nhận mật khẩu mới</span>
               <input
                 type="password"
                 value={passwordForm.confirmPassword}
@@ -508,64 +627,20 @@ export default function UserProfileSettingsPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Shield size={15} />
-              {savingPassword ? "Dang cap nhat..." : "Cap nhat mat khau"}
+              {savingPassword ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
             </button>
           </div>
-
-          <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Tai khoan lien ket</p>
-
-            <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-white shadow-sm">
-                    <Mail size={16} className="text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--ink-900)]">Google</p>
-                    <p className="text-xs text-emerald-600">Da ket noi (hien thi mau)</p>
-                  </div>
-                </div>
-                <button type="button" className="text-xs font-semibold text-rose-600">
-                  Huy ket noi
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-white shadow-sm">
-                    <Eye size={16} className="text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--ink-900)]">Facebook</p>
-                    <p className="text-xs text-[var(--ink-500)]">Chua ket noi</p>
-                  </div>
-                </div>
-                <button type="button" className="text-xs font-semibold text-[var(--brand-700)]">
-                  Ket noi ngay
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-              Chuc nang lien ket tai khoan chua co endpoint tuong ung trong backend hien tai.
-            </div>
-          </div>
         </div>
-      </section>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
-          <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
+        <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <h2 className="mb-5 flex items-center gap-2 text-xl font-extrabold text-[var(--brand-700)]">
             <BellRing size={20} />
-            Tuy chon hien thi
+            Tùy chọn hiển thị
           </h2>
 
           <div className="space-y-4">
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Ngon ngu he thong</span>
+              <span className="font-semibold text-[var(--ink-700)]">Ngôn ngữ hệ thống</span>
               <select
                 value={preferences.language}
                 onChange={(event) =>
@@ -573,14 +648,14 @@ export default function UserProfileSettingsPage() {
                 }
                 className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
               >
-                <option value="vi-VN">Tieng Viet (Vietnam)</option>
+                <option value="vi-VN">Tiếng Việt</option>
                 <option value="en-US">English (US)</option>
-                <option value="ja-JP">Nihongo (Japan)</option>
+                <option value="ja-JP">日本語 (Japanese)</option>
               </select>
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Thong bao qua Email</span>
+              <span>Thông báo qua email</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyEmail}
@@ -592,7 +667,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Thong bao day (Browser)</span>
+              <span>Thông báo đẩy (trình duyệt)</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyPush}
@@ -604,7 +679,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Tin nhan tu giang vien</span>
+              <span>Nhận tin nhắn từ giảng viên</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyMentor}
@@ -616,67 +691,59 @@ export default function UserProfileSettingsPage() {
             </label>
           </div>
         </div>
+      </section>
 
-        <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
-          <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
-            <Globe2 size={20} />
-            Quyen rieng tu
-          </h2>
+      <section className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <h2 className="mb-5 flex items-center gap-2 text-xl font-extrabold text-[var(--brand-700)]">
+          <Globe2 size={20} />
+          Quyền riêng tư
+        </h2>
 
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
-              <p className="font-semibold text-amber-800">Trang thai ho so</p>
-              <p className="mt-1 text-amber-700">
-                API backend hien chua co endpoint rieng cho profile visibility, trang thai nay duoc luu cuc bo.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreferences((prev) => ({ ...prev, profileVisibility: "public" }))
-                  }
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    preferences.profileVisibility === "public"
-                      ? "bg-amber-700 text-white"
-                      : "bg-white text-amber-800"
-                  }`}
-                >
-                  Cong khai
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreferences((prev) => ({ ...prev, profileVisibility: "private" }))
-                  }
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    preferences.profileVisibility === "private"
-                      ? "bg-amber-700 text-white"
-                      : "bg-white text-amber-800"
-                  }`}
-                >
-                  Rieng tu
-                </button>
-              </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
+            <p className="font-semibold text-amber-800">Hiển thị hồ sơ</p>
+            <p className="mt-1 text-amber-700">
+              Chế độ hiển thị hồ sơ hiện được lưu trên trình duyệt. Bạn vẫn có thể bật/tắt nhanh tại đây.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setPreferences((prev) => ({ ...prev, profileVisibility: "public" }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  preferences.profileVisibility === "public"
+                    ? "bg-amber-700 text-white"
+                    : "bg-white text-amber-800"
+                }`}
+              >
+                Công khai
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setPreferences((prev) => ({ ...prev, profileVisibility: "private" }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  preferences.profileVisibility === "private"
+                    ? "bg-amber-700 text-white"
+                    : "bg-white text-amber-800"
+                }`}
+              >
+                Riêng tư
+              </button>
             </div>
-
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm"
-            >
-              <span>Xuat du lieu ca nhan</span>
-              <span className="text-[var(--ink-400)]">(sap co)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void handleDeactivateAccount()}
-              disabled={changingStatus || profile.status === "INACTIVE"}
-              className="flex w-full items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <span>Vo hieu hoa tai khoan</span>
-              <AlertTriangle size={16} />
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => void handleDeactivateAccount()}
+            disabled={changingStatus || profile.status === "INACTIVE"}
+            className="inline-flex w-full items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70 lg:w-[260px]"
+          >
+            <span>Vô hiệu hóa tài khoản</span>
+            <AlertTriangle size={16} />
+          </button>
         </div>
       </section>
 
@@ -686,16 +753,16 @@ export default function UserProfileSettingsPage() {
           onClick={handleReset}
           className="rounded-xl border border-[var(--line-soft)] px-5 py-2.5 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
         >
-          Huy thay doi
+          Khôi phục
         </button>
         <button
           type="button"
           onClick={() => void handleSaveAll()}
-          disabled={savingAll}
-          className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+          disabled={savingAll || (!hasProfileChanges && !hasPreferenceChanges)}
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save size={15} />
-          {savingAll ? "Dang luu..." : "Luu tat ca thay doi"}
+          {savingAll ? "Đang lưu..." : "Lưu tất cả thay đổi"}
         </button>
       </div>
     </div>

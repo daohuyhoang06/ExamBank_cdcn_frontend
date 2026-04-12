@@ -214,26 +214,115 @@ const parseOptions = (rawOptions?: string | null): string[] => {
     return [];
   }
 
+  const cleanOptionText = (value: string): string =>
+    value
+      .trim()
+      .replace(/^[A-Da-d]\s*[\).:\-]\s*/, "")
+      .trim();
+
+  const finalize = (source: string[]): string[] => {
+    return source
+      .map((item) => cleanOptionText(item))
+      .filter((item) => item.length > 0);
+  };
+
+  const parseStructuredValue = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return finalize(
+        value
+          .map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+            if (item && typeof item === "object") {
+              const optionObj = item as {
+                content?: string;
+                text?: string;
+                value?: string;
+                label?: string;
+                option?: string;
+              };
+              return optionObj.content ?? optionObj.text ?? optionObj.value ?? optionObj.label ?? optionObj.option ?? "";
+            }
+            return "";
+          })
+      );
+    }
+
+    if (value && typeof value === "object") {
+      const optionObj = value as {
+        options?: unknown;
+        choices?: unknown;
+        answers?: unknown;
+      };
+
+      const fromOptions = parseStructuredValue(optionObj.options);
+      if (fromOptions.length > 0) {
+        return fromOptions;
+      }
+
+      const fromChoices = parseStructuredValue(optionObj.choices);
+      if (fromChoices.length > 0) {
+        return fromChoices;
+      }
+
+      return parseStructuredValue(optionObj.answers);
+    }
+
+    return [];
+  };
+
   try {
     const parsed = JSON.parse(rawOptions) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((item) => {
-          if (typeof item === "string") {
-            return item;
-          }
-          if (item && typeof item === "object") {
-            const optionObj = item as { content?: string; text?: string; value?: string };
-            return optionObj.content ?? optionObj.text ?? optionObj.value ?? "";
-          }
-          return "";
-        })
-        .filter((item) => item.trim().length > 0);
+    const structured = parseStructuredValue(parsed);
+    if (structured.length > 0) {
+      return structured;
     }
-    return [];
   } catch {
+    // Fallback parsing is handled below for non-JSON legacy formats.
+  }
+
+  // Fallback for legacy/plain-text option formats, e.g. "A. ...\nB. ..." or "opt1|opt2|opt3|opt4".
+  const normalized = rawOptions.replace(/\r/g, "\n").trim();
+  if (!normalized) {
     return [];
   }
+
+  const splitByLabel = normalized
+    .split(/(?:^|\n)\s*[A-Da-d]\s*[\).:\-]\s*/g)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (splitByLabel.length >= 2) {
+    return finalize(splitByLabel);
+  }
+
+  for (const separator of ["|", ";", "\n"]) {
+    if (!normalized.includes(separator)) {
+      continue;
+    }
+
+    const parts = normalized
+      .split(separator)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+    if (parts.length >= 2) {
+      return finalize(parts);
+    }
+  }
+
+  return [];
+};
+
+const looksLikeTrueFalseOptions = (source: string[]): boolean => {
+  if (source.length !== 2) {
+    return false;
+  }
+
+  const normalized = source.map((item) => item.trim().toLowerCase());
+  const hasTrue = normalized.some((item) => item === "đúng" || item === "dung" || item === "true");
+  const hasFalse = normalized.some((item) => item === "sai" || item === "false");
+  return hasTrue && hasFalse;
 };
 
 const parseMcqAnswerIndex = (answer: string | null | undefined, options: string[]): number => {
@@ -338,6 +427,16 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
   const options = parseOptions(item.options);
   const answerText = (item.answer ?? "").trim();
   const score = item.difficulty && item.difficulty > 0 ? item.difficulty : 1;
+
+  if (looksLikeTrueFalseOptions(options)) {
+    return {
+      id: String(item.questionId),
+      type: "true_false",
+      question: item.content,
+      correctAnswer: answerText.toLowerCase() === "đúng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
+      score,
+    };
+  }
 
   if (options.length > 0) {
     return {
@@ -472,11 +571,9 @@ export const userService = {
   },
 
   updateMyProfile: async (payload: UpdateUserProfilePayload): Promise<UserProfile> => {
-    const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
     const { data } = await api.put<BackendUser>("/api/v1/users/me", {
       email: payload.email,
       name: payload.name,
-      status: current.status ?? "ACTIVE",
     });
     return mapBackendUserToProfile(data);
   },

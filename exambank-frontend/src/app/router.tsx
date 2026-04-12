@@ -19,6 +19,7 @@ import Examreview from "@/features/user/pages/makeexam/page/Examreview";
 import Comment from "@/features/user/pages/Comment";
 import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
+import UserProfileSettingsPage from "@/features/user/pages/UserProfileSettingsPage";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
 import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
@@ -46,7 +47,7 @@ export const router = createBrowserRouter([
   // --- NHÓM ROUTES CHO ADMIN ---
   {
     path: "/profile",
-    element: <Navigate to="/admin/profile" replace />,
+    element: <Navigate to="/user/profile" replace />,
   },
   {
     path: "/admin",
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
       { path: "question-bank", element: <AdminQuestionBankPage /> },
       { path: "financial", element: <AdminFinancialPage /> },
       { path: "system", element: <AdminSystemPage /> },
+      { path: "profile", element: <AdminProfileDetailPage /> },
     ],
   },
   {
@@ -109,7 +111,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "profile",
-        element: <AdminProfileDetailPage />,
+        element: <UserProfileSettingsPage />,
       },
     ],
   },

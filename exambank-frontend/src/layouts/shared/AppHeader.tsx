@@ -112,7 +112,7 @@ export function AppHeader({
       return;
     }
 
-    navigate("/profile");
+    navigate("/user/profile");
     setIsAvatarMenuOpen(false);
   }
 

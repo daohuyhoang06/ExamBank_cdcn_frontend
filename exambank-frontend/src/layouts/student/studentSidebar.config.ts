@@ -1,6 +1,5 @@
 import { 
   LayoutDashboard, 
-  UserCircle, 
   FileText,
   BarChart3, 
   Settings,
@@ -20,11 +19,6 @@ export const studentSidebarItems: SidebarNavItem[] = [
     label: "Trang chủ",
     path: "/user",
     icon: LayoutDashboard,
-  },
-  {
-    label: "Hồ sơ",
-    path: "/user/profile",
-    icon: UserCircle,
   },
   {
     label: "Ngân hàng đề",

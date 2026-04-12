@@ -66,6 +66,7 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
           role: rawUser.role,
           roles: rawUser.roles,
           fullName: rawUser.fullName ?? rawUser.name,
+          name: rawUser.name,
         }
       : undefined,
     message: raw.message,
@@ -123,6 +124,14 @@ function saveUser(user: AuthSuccess["user"], persist: boolean) {
   }
 }
 
+function hasPersistentUser(): boolean {
+  try {
+    return Boolean(localStorage.getItem(PERSISTENT_USER_KEY) ?? localStorage.getItem(USER_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export function getStoredAuthUser(): AuthSuccess["user"] | null {
   const parseUser = (rawUser: string | null) => {
     if (!rawUser) {
@@ -157,6 +166,19 @@ export function getStoredAuthUser(): AuthSuccess["user"] | null {
 
 export function clearStoredAuthUser() {
   clearStoredAuthUserInternal();
+}
+
+export function syncStoredAuthUser(nextUser: AuthSuccess["user"]): void {
+  if (!nextUser) {
+    return;
+  }
+
+  const mergedUser = {
+    ...(getStoredAuthUser() ?? {}),
+    ...nextUser,
+  };
+
+  saveUser(mergedUser, hasPersistentUser());
 }
 
 export const authService = {
