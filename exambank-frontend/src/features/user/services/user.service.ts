@@ -1,4 +1,4 @@
-import axios, { AxiosHeaders } from "axios";
+import { apiClient } from "@/lib/api-client";
 import type {
   AccountStatus,
   ChangePasswordPayload,
@@ -21,14 +21,7 @@ import type {
   UserProfile,
 } from "../types/user.type";
 
-const API_BASE_URL =
-  ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").trim() ||
-  "http://localhost:8080";
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 20000,
-});
+const api = apiClient;
 
 const DEFAULT_EDUCATION_LEVELS: EducationLevel[] = [
   { id: "10", name: "Lớp 10", group: "THPT" },
@@ -134,33 +127,6 @@ type BackendUser = {
   createdAt?: string;
 };
 
-const tokenKeys = ["token", "authToken", "accessToken", "jwt"];
-
-const getStoredToken = (): string | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  for (const key of tokenKeys) {
-    const raw = window.localStorage.getItem(key);
-    if (raw && raw.trim()) {
-      return raw.trim();
-    }
-  }
-
-  const authRaw = window.localStorage.getItem("auth");
-  if (!authRaw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(authRaw) as { token?: string; accessToken?: string };
-    return parsed.token ?? parsed.accessToken ?? null;
-  } catch {
-    return null;
-  }
-};
-
 const toAccountStatus = (status?: string): AccountStatus => {
   if (status === "INACTIVE" || status === "BANNED") {
     return status;
@@ -203,25 +169,6 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
   createdAt: user.createdAt,
-});
-
-api.interceptors.request.use((config) => {
-  const token = getStoredToken();
-  if (!token) {
-    return config;
-  }
-
-  if (!config.headers) {
-    config.headers = new AxiosHeaders();
-  }
-
-  if (typeof config.headers.set === "function") {
-    config.headers.set("Authorization", `Bearer ${token}`);
-  } else {
-    (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
-  }
-
-  return config;
 });
 
 const toRelativeTime = (isoDate?: string): string => {

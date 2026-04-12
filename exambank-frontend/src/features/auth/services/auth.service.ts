@@ -164,11 +164,15 @@ export const authService = {
     const response = await postWithFallback(AUTH_LOGIN_PATH, LEGACY_LOGIN_PATH, payload);
     const result = normalizeAuthResponse(response.data);
     const persistSession = Boolean(payload.rememberMe);
+    const normalizedToken = result.token?.trim();
 
-    if (result.token) {
-      setAuthToken(result.token, persistSession);
+    if (!normalizedToken) {
+      setAuthToken(null);
+      clearStoredAuthUserInternal();
+      throw new Error("Dang nhap that bai: phan hoi khong chua access token hop le.");
     }
 
+    setAuthToken(normalizedToken, persistSession);
     saveUser(result.user, persistSession);
     return result;
   },
