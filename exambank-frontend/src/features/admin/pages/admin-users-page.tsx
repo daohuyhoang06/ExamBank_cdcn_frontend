@@ -24,6 +24,10 @@ import {
   createAdminUser,
   getAdminUsers,
   getAdminUsersPageCardMetrics,
+  updateAdminUser,
+  deleteAdminUser,
+  assignRoleToUser,
+  removeRoleFromUser,
 } from "@/features/admin/services/admin-users.service";
 import type {
   AdminCreateUserPayload,
@@ -41,9 +45,10 @@ type StatCard = {
 };
 
 type UserRow = {
+  userId?: number | string;
   name: string;
   email: string;
-  id: string;
+  idDisplay: string;
   role: "Sinh viên" | "Giảng viên" | "Cộng tác viên" | "Quản trị viên";
   joinedAt: string;
   lastActive: string;
@@ -59,6 +64,7 @@ type CreateUserFormState = {
   password: string;
   roleCode: AdminUserRoleCode;
   status: AdminUserStatusCode;
+  userId?: number | string;
 };
 
 type CreateUserFormErrors = {
@@ -227,9 +233,10 @@ function mapUsersToRows(items: AdminUserRecord[]): UserRow[] {
     const fallbackName = email ? email.split("@")[0] : `User ${index + 1}`;
 
     return {
+      userId: item.id,
       name: item.name?.trim() || fallbackName,
       email: email || "--",
-      id: item.id != null ? `#${item.id}` : "--",
+      idDisplay: item.id != null ? `#${item.id}` : "--",
       role: normalizeRole(item.primaryRole, item.roles),
       joinedAt: formatDisplayDate(item.createdAt),
       lastActive: "--",
@@ -302,6 +309,9 @@ export default function AdminUsersPage() {
   const [createUserForm, setCreateUserForm] = useState<CreateUserFormState>(defaultCreateUserForm);
   const [createUserErrors, setCreateUserErrors] = useState<CreateUserFormErrors>({});
   const [createUserSubmitError, setCreateUserSubmitError] = useState("");
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
+  const [isDeletingUserId, setIsDeletingUserId] = useState<string | null>(null);
 
   async function loadUsersPageData() {
     const [metrics, users] = await Promise.all([
@@ -317,6 +327,7 @@ export default function AdminUsersPage() {
     setCreateUserForm(defaultCreateUserForm);
     setCreateUserErrors({});
     setCreateUserSubmitError("");
+    setIsEditMode(false);
   }
 
   function openCreateUserModal() {
@@ -329,6 +340,56 @@ export default function AdminUsersPage() {
       return;
     }
     setIsCreateModalOpen(false);
+  }
+
+  function openEditUserModal(user: AdminUserRecord) {
+    const roleCode = (user.primaryRole?.toUpperCase() || "USER") as AdminUserRoleCode;
+    const status = (user.status?.toUpperCase() || "ACTIVE") as AdminUserStatusCode;
+    
+    setCreateUserForm({
+      name: user.name || "",
+      email: user.email || "",
+      password: "", // Keep empty for edit mode
+      roleCode,
+      status,
+      userId: user.id,
+    });
+    setIsEditMode(true);
+    setActionMenuOpenId(null);
+    setIsCreateModalOpen(true);
+  }
+
+  async function handleDeleteUser(userId: string | number) {
+    if (!window.confirm("Bạn có chắc muốn xóa người dùng này?")) {
+      return;
+    }
+
+    setIsDeletingUserId(String(userId));
+    try {
+      await deleteAdminUser(userId);
+      await loadUsersPageData();
+      setActionMenuOpenId(null);
+    } catch (error) {
+      const errorMsg = getApiErrorMessage(error);
+      alert(`Lỗi xóa người dùng: ${errorMsg}`);
+    } finally {
+      setIsDeletingUserId(null);
+    }
+  }
+
+  async function handleAssignRole(userId: string | number, roleCode: AdminUserRoleCode) {
+    try {
+      await assignRoleToUser(userId, roleCode);
+      await loadUsersPageData();
+      setActionMenuOpenId(null);
+    } catch (error) {
+      const errorMsg = getApiErrorMessage(error);
+      alert(`Lỗi phân công vai trò: ${errorMsg}`);
+    }
+  }
+
+  function toggleActionMenu(userId: string) {
+    setActionMenuOpenId(actionMenuOpenId === userId ? null : userId);
   }
 
   useEffect(() => {
@@ -391,9 +452,14 @@ export default function AdminUsersPage() {
       nextErrors.email = "Email không hợp lệ.";
     }
 
-    if (!password) {
-      nextErrors.password = "Vui lòng nhập mật khẩu.";
-    } else if (password.length < 8) {
+    // Password is required for create, optional for edit
+    if (!isEditMode) {
+      if (!password) {
+        nextErrors.password = "Vui lòng nhập mật khẩu.";
+      } else if (password.length < 8) {
+        nextErrors.password = "Mật khẩu phải có ít nhất 8 ký tự.";
+      }
+    } else if (password && password.length < 8) {
       nextErrors.password = "Mật khẩu phải có ít nhất 8 ký tự.";
     }
 
@@ -424,7 +490,11 @@ export default function AdminUsersPage() {
     setIsCreatingUser(true);
 
     try {
-      await createAdminUser(payload);
+      if (isEditMode && createUserForm.userId) {
+        await updateAdminUser(createUserForm.userId, payload);
+      } else {
+        await createAdminUser(payload);
+      }
       await loadUsersPageData();
       setIsCreateModalOpen(false);
       resetCreateUserForm();
@@ -473,10 +543,12 @@ export default function AdminUsersPage() {
               </span>
               <div>
                 <h2 className="font-[var(--font-label)] text-2xl font-black tracking-tight text-[var(--brand-700)]">
-                  Thêm người dùng mới
+                  {isEditMode ? "Chỉnh sửa người dùng" : "Thêm người dùng mới"}
                 </h2>
                 <p className="mt-1 text-sm text-[var(--ink-600)]">
-                  Tạo tài khoản người dùng trực tiếp từ trang quản trị.
+                  {isEditMode
+                    ? "Cập nhật thông tin chi tiết người dùng."
+                    : "Tạo tài khoản người dùng trực tiếp từ trang quản trị."}
                 </p>
               </div>
             </div>
@@ -511,8 +583,8 @@ export default function AdminUsersPage() {
             value={createUserForm.password}
             onChange={(event) => setCreateUserField("password", event.target.value)}
             error={createUserErrors.password}
-            hint="Mật khẩu tối thiểu 8 ký tự"
-            placeholder="Nhập mật khẩu"
+            hint={isEditMode ? "Để trống nếu không đổi mật khẩu" : "Mật khẩu tối thiểu 8 ký tự"}
+            placeholder={isEditMode ? "Không bắt buộc" : "Nhập mật khẩu"}
             autoComplete="new-password"
             containerClassName="gap-2.5"
           />
@@ -578,7 +650,13 @@ export default function AdminUsersPage() {
               leftIcon={<Plus size={14} />}
               disabled={isCreatingUser}
             >
-              {isCreatingUser ? "Đang tạo..." : "Tạo người dùng"}
+              {isCreatingUser
+                ? isEditMode
+                  ? "Đang cập nhật..."
+                  : "Đang tạo..."
+                : isEditMode
+                  ? "Cập nhật người dùng"
+                  : "Tạo người dùng"}
             </Button>
           </div>
         </form>
@@ -681,7 +759,7 @@ export default function AdminUsersPage() {
 
                   return (
                     <tr
-                      key={`${user.id}-${user.email}`}
+                      key={`${user.userId ?? user.idDisplay}-${user.email}`}
                       className="border-b border-[var(--line-soft)]/70 transition hover:bg-[var(--brand-050)]/50"
                     >
                       <td className="px-6 py-4">
@@ -697,7 +775,7 @@ export default function AdminUsersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-[var(--ink-600)]">{user.id}</td>
+                      <td className="px-4 py-4 text-sm text-[var(--ink-600)]">{user.idDisplay}</td>
                       <td className="px-4 py-4">
                         <span
                           className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] ${roleClasses(user.role)}`}
@@ -720,12 +798,61 @@ export default function AdminUsersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)]"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)]"
+                            onClick={() => toggleActionMenu(String(user.userId ?? user.idDisplay))}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          {actionMenuOpenId === String(user.userId ?? user.idDisplay) && (
+                            <div className="absolute right-0 top-full mt-1 z-10 rounded-lg border border-[var(--line-soft)] bg-white shadow-lg">
+                              <button
+                                type="button"
+                                className="block w-full px-4 py-2 text-left text-sm text-[var(--ink-700)] hover:bg-[var(--bg-soft)] first:rounded-t-lg"
+                                onClick={() =>
+                                  openEditUserModal({
+                                    id: user.userId,
+                                    name: user.name,
+                                    email: user.email,
+                                    primaryRole:
+                                      user.role === "Quản trị viên"
+                                        ? "ADMIN"
+                                        : user.role === "Cộng tác viên"
+                                          ? "MODERATOR"
+                                          : "USER",
+                                    status:
+                                      user.status === "Đang hoạt động"
+                                        ? "ACTIVE"
+                                        : user.status === "Đã khóa"
+                                          ? "BANNED"
+                                          : "INACTIVE",
+                                  })
+                                }
+                              >
+                                Chỉnh sửa
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-4 py-2 text-left text-sm text-rose-700 hover:bg-rose-50"
+                                onClick={() => handleDeleteUser(user.userId ?? user.idDisplay)}
+                                disabled={isDeletingUserId === String(user.userId ?? user.idDisplay)}
+                              >
+                                {isDeletingUserId === String(user.userId ?? user.idDisplay)
+                                  ? "Đang xóa..."
+                                  : "Xóa"}
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-4 py-2 text-left text-sm text-[var(--ink-700)] hover:bg-[var(--bg-soft)] last:rounded-b-lg"
+                                onClick={() => setActionMenuOpenId(null)}
+                              >
+                                Đóng
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -5,6 +5,7 @@ import type {
   AdminUserCardMetrics,
   AdminUsersPageCardMetrics,
   AdminUserRecord,
+  AdminUpdateUserPayload,
 } from "@/features/admin/types/admin-users.type";
 
 const PRIMARY_USERS_PATH = "/api/v1/users";
@@ -110,6 +111,108 @@ async function createUserResponse(payload: AdminCreateUserPayload) {
   }
 }
 
+async function updateUserResponse(userId: number | string, payload: AdminUpdateUserPayload) {
+  const token = getStoredAuthToken();
+  const requestConfig = {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  };
+
+  const requestBody: {
+    email: string;
+    name: string;
+    password?: string;
+    role: string;
+    status: string;
+    xp: number;
+    coinBalance: number;
+    streak: number;
+  } = {
+    email: payload.email,
+    name: payload.name,
+    role: payload.roleCode,
+    status: payload.status,
+    xp: 0,
+    coinBalance: 0,
+    streak: 0,
+  };
+
+  if (payload.password && payload.password.trim()) {
+    requestBody.password = payload.password;
+  }
+
+  try {
+    return await apiClient.put(`${PRIMARY_USERS_PATH}/${userId}`, requestBody, requestConfig);
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return apiClient.put(`${FALLBACK_USERS_PATH}/${userId}`, requestBody, requestConfig);
+    }
+
+    throw error;
+  }
+}
+
+async function deleteUserResponse(userId: number | string) {
+  const token = getStoredAuthToken();
+  const requestConfig = {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  };
+
+  try {
+    return await apiClient.delete(`${PRIMARY_USERS_PATH}/${userId}`, requestConfig);
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return apiClient.delete(`${FALLBACK_USERS_PATH}/${userId}`, requestConfig);
+    }
+
+    throw error;
+  }
+}
+
+async function assignRoleResponse(userId: number | string, roleCode: string) {
+  const token = getStoredAuthToken();
+  const requestConfig = {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  };
+
+  const requestBody = {
+    roleCode: roleCode,
+  };
+
+  return await apiClient.post(
+    `/api/v1/admin/users/${userId}/roles`,
+    requestBody,
+    requestConfig
+  );
+}
+
+async function removeRoleResponse(userId: number | string, roleCode: string) {
+  const token = getStoredAuthToken();
+  const requestConfig = {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  };
+
+  return await apiClient.delete(
+    `/api/v1/admin/users/${userId}/roles/${roleCode}`,
+    requestConfig
+  );
+}
+
 function isSameDay(input: Date, ref: Date) {
   return (
     input.getFullYear() === ref.getFullYear() &&
@@ -178,4 +281,39 @@ export async function getAdminUserCardMetrics(): Promise<AdminUserCardMetrics> {
     activeUsers: metrics.activeUsers,
     newUsersToday: metrics.newUsersToday,
   };
+}
+
+export async function updateAdminUser(
+  userId: number | string,
+  payload: AdminUpdateUserPayload
+): Promise<AdminUserRecord> {
+  const normalizedPayload: AdminUpdateUserPayload = {
+    ...payload,
+    email: payload.email.trim().toLowerCase(),
+    name: payload.name.trim(),
+    password: payload.password?.trim(),
+  };
+
+  const response = await updateUserResponse(userId, normalizedPayload);
+  return response.data as AdminUserRecord;
+}
+
+export async function deleteAdminUser(userId: number | string): Promise<void> {
+  await deleteUserResponse(userId);
+}
+
+export async function assignRoleToUser(
+  userId: number | string,
+  roleCode: string
+): Promise<AdminUserRecord> {
+  const response = await assignRoleResponse(userId, roleCode);
+  return response.data as AdminUserRecord;
+}
+
+export async function removeRoleFromUser(
+  userId: number | string,
+  roleCode: string
+): Promise<AdminUserRecord> {
+  const response = await removeRoleResponse(userId, roleCode);
+  return response.data as AdminUserRecord;
 }
