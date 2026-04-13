@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
 
   Trophy, 
@@ -13,6 +14,7 @@ import { userService } from '../../services/user.service';
 const cn = (...classes: (string | boolean | undefined | null)[]) => classes.filter(Boolean).join(' ');
 
 export default function MySubmissionsPage() {
+  const navigate = useNavigate();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
 
   useEffect(() => {
@@ -36,9 +38,9 @@ export default function MySubmissionsPage() {
         
         {/* Stats nhỏ gọn bên phải */}
         <div className="flex gap-6 bg-white shadow-sm border border-slate-100 px-6 py-4 rounded-2xl">
-          <StatItem value="14" label="Shared" color="text-[#003466]" />
+          <StatItem value={String(submissions.length)} label="Shared" color="text-[#003466]" />
           <div className="w-px bg-slate-100 h-8 self-center" />
-          <StatItem value="11" label="Approved" color="text-[#006e2f]" />
+          <StatItem value={String(submissions.filter((item) => item.status === 'Approved').length)} label="Approved" color="text-[#006e2f]" />
         </div>
       </section>
 
@@ -76,7 +78,7 @@ export default function MySubmissionsPage() {
                   </td>
                   <td className="px-8 py-5 text-right">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                      <RowAction icon={<Eye size={18} />} />
+                      <RowAction icon={<Eye size={18} />} onClick={() => navigate(`/user/comment/${item.id}`)} />
                       <RowAction icon={<Trash2 size={18} />} isDelete />
                     </div>
                   </td>
@@ -86,6 +88,12 @@ export default function MySubmissionsPage() {
           </table>
         </div>
       </div>
+
+      {submissions.length === 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500 mb-8">
+          Bạn chưa có bài nộp nào. Hãy tải đề đầu tiên của bạn.
+        </div>
+      )}
 
       {/* 3. Bottom Cards - Milestone & Tip */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -119,7 +127,10 @@ export default function MySubmissionsPage() {
       </div>
 
       {/* Floating Action Button (FAB) */}
-      <button className="fixed bottom-8 right-8 flex items-center gap-2 bg-[#003466] text-white px-6 py-4 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all z-40 ring-4 ring-white/50">
+      <button
+        onClick={() => navigate('/user/exambank/submit')}
+        className="fixed bottom-8 right-8 flex items-center gap-2 bg-[#003466] text-white px-6 py-4 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all z-40 ring-4 ring-white/50"
+      >
         <PlusCircle size={20} />
         <span className="font-bold text-sm">New Submission</span>
       </button>
@@ -156,11 +167,14 @@ const StatusBadge = ({ status, reason }: { status: Submission['status']; reason?
   );
 };
 
-const RowAction = ({ icon, isDelete }: { icon: React.ReactNode; isDelete?: boolean }) => (
-  <button className={cn(
-    "p-2 rounded-lg transition-all",
-    isDelete ? "text-slate-300 hover:text-red-600 hover:bg-red-50" : "text-slate-300 hover:text-blue-600 hover:bg-blue-50"
-  )}>
+const RowAction = ({ icon, isDelete, onClick }: { icon: React.ReactNode; isDelete?: boolean; onClick?: () => void }) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "p-2 rounded-lg transition-all",
+      isDelete ? "text-slate-300 hover:text-red-600 hover:bg-red-50" : "text-slate-300 hover:text-blue-600 hover:bg-blue-50"
+    )}
+  >
     {icon}
   </button>
 );

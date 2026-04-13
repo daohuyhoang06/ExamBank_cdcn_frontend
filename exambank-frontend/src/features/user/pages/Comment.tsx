@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Star,
   ChevronRight,
@@ -12,21 +13,109 @@ import {
   Verified,
   Award
 } from 'lucide-react';
-import type { UserComment } from '../types/user.type';
+import type { Comment } from '../types/user.type';
 import { userService } from '../services/user.service';
-import { mockComments } from '../mocks/user.mock';
 
 // --- Main Page Component ---
 export default function DiscussionDetailPage() {
-  const [comments, setComments] = useState<UserComment[]>(mockComments);
+  const { documentId } = useParams();
+  const navigate = useNavigate();
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [relatedDocuments, setRelatedDocuments] = useState<Array<{ id: number; title: string; subject?: string; averageRating?: number; semesterYear?: string }>>([]);
+  const [documentTitle, setDocumentTitle] = useState('Chi tiết thảo luận');
+  const [ratingAverage, setRatingAverage] = useState(0);
+  const [ratingCount, setRatingCount] = useState(0);
+  const [activeDocumentId, setActiveDocumentId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [submitMessage, setSubmitMessage] = useState('');
 
   useEffect(() => {
-    const fetchComments = async () => {
-      const data = await userService.getComments();
-      setComments(data);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        let resolvedDocumentId = documentId ? Number(documentId) : null;
+
+        if (!resolvedDocumentId || Number.isNaN(resolvedDocumentId)) {
+          const documents = await userService.getDocuments({ status: 'APPROVED', size: 1 });
+          if (documents.length > 0) {
+            resolvedDocumentId = documents[0].id;
+            navigate(`/user/comment/${resolvedDocumentId}`, { replace: true });
+          }
+        }
+
+        if (!resolvedDocumentId) {
+          setComments([]);
+          setIsLoading(false);
+          return;
+        }
+
+        setActiveDocumentId(resolvedDocumentId);
+
+        const [document, commentList, stats, related] = await Promise.all([
+          userService.getDocumentById(resolvedDocumentId),
+          userService.getComments(resolvedDocumentId),
+          userService.getDocumentRatingStats(resolvedDocumentId),
+          userService.getDocuments({ status: 'APPROVED', size: 3, sort: 'highest_rated' }),
+        ]);
+
+        setDocumentTitle(document.title);
+        setComments(commentList);
+        setRatingAverage(stats.average);
+        setRatingCount(stats.count);
+        setRelatedDocuments(
+          related
+            .filter((item) => item.id !== resolvedDocumentId)
+            .slice(0, 3)
+            .map((item) => ({
+              id: item.id,
+              title: item.title,
+              subject: item.subject,
+              averageRating: item.averageRating,
+              semesterYear: item.semesterYear,
+            })),
+        );
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    fetchComments();
-  }, []);
+    fetchData();
+  }, [documentId, navigate]);
+
+  const handleSubmitReview = async () => {
+    if (!activeDocumentId) {
+      return;
+    }
+    if (reviewRating < 1) {
+      setSubmitMessage('Vui lòng chọn số sao trước khi gửi.');
+      return;
+    }
+
+    try {
+      await userService.createOrUpdateReview(activeDocumentId, reviewRating, reviewText);
+      const [nextComments, nextStats] = await Promise.all([
+        userService.getComments(activeDocumentId),
+        userService.getDocumentRatingStats(activeDocumentId),
+      ]);
+      setComments(nextComments);
+      setRatingAverage(nextStats.average);
+      setRatingCount(nextStats.count);
+      setReviewText('');
+      setReviewRating(0);
+      setSubmitMessage('Đã gửi đánh giá thành công.');
+    } catch (error) {
+      console.error(error);
+      setSubmitMessage('Không thể gửi đánh giá. Vui lòng đăng nhập và thử lại.');
+    }
+  };
+
+  if (isLoading) {
+    return <div className="py-20 text-center text-slate-500 font-semibold">Đang tải thảo luận...</div>;
+  }
 
   return (
     <div className="w-full space-y-10 animate-in fade-in duration-500 pb-20">
@@ -42,18 +131,21 @@ export default function DiscussionDetailPage() {
             <span className="text-[#003466] font-bold">Chi tiết thảo luận</span>
           </nav>
           <h1 className="text-4xl font-black text-[#003466] tracking-tight">
-            Đại số Tuyến tính Nâng cao
+            {documentTitle}
           </h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
               <Star size={16} fill="#ffa825" className="text-[#ffa825] mr-1" />
-              <span className="font-bold text-[#ffa825]">4.5</span>
+              <span className="font-bold text-[#ffa825]">{ratingAverage.toFixed(1)}</span>
               <span className="text-slate-400 ml-1 font-medium">/ 5</span>
             </div>
-            <span className="text-slate-500 font-medium">(120 đánh giá)</span>
+            <span className="text-slate-500 font-medium">({ratingCount} đánh giá)</span>
           </div>
         </div>
-        <button className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all">
+        <button
+          onClick={() => navigate('/user/exambank')}
+          className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all"
+        >
           Làm lại đề thi
         </button>
       </div>
@@ -127,12 +219,16 @@ export default function DiscussionDetailPage() {
                 <span className="text-sm font-bold text-slate-600">Chấm điểm:</span>
                 <div className="flex gap-1 text-slate-300">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} size={24} className="hover:text-[#ffa825] cursor-pointer transition-colors" />
+                    <button key={i} onClick={() => setReviewRating(i + 1)} className="cursor-pointer transition-colors">
+                      <Star size={24} className={reviewRating >= i + 1 ? 'text-[#ffa825]' : 'text-slate-300'} fill={reviewRating >= i + 1 ? 'currentColor' : 'none'} />
+                    </button>
                   ))}
                 </div>
               </div>
               <div className="space-y-4">
                 <textarea 
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
                   className="w-full bg-white rounded-2xl p-5 border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-[#003466] min-h-[140px] text-sm transition-all"
                   placeholder="Chia sẻ cảm nghĩ của bạn về độ khó, kiến thức và chất lượng đề thi..."
                 />
@@ -140,10 +236,14 @@ export default function DiscussionDetailPage() {
                   <button className="flex items-center gap-2 text-[#003466] font-bold hover:bg-blue-50 px-4 py-2 rounded-xl transition-all text-sm">
                     <ImageIcon size={20} /> Thêm hình ảnh
                   </button>
-                  <button className="bg-[#003466] text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-md">
+                  <button
+                    onClick={handleSubmitReview}
+                    className="bg-[#003466] text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-md"
+                  >
                     Gửi đánh giá
                   </button>
                 </div>
+                {submitMessage && <p className="text-xs text-slate-500 font-semibold">{submitMessage}</p>}
               </div>
             </div>
           </section>
@@ -205,7 +305,7 @@ export default function DiscussionDetailPage() {
             </div>
 
             <button className="w-full py-5 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all">
-              Xem thêm 118 bình luận khác
+              Tổng cộng {comments.length} bình luận
             </button>
           </section>
         </div>
@@ -235,23 +335,27 @@ export default function DiscussionDetailPage() {
           <div className="space-y-6">
             <h3 className="font-bold text-[#003466] text-lg">Đề thi liên quan</h3>
             <div className="space-y-4">
-              {[
-                { tag: "Đại số 1", title: "Không gian Vector & Ma trận căn bản", info: "45 câu • 60 phút", rate: "4.8", color: "bg-emerald-50 text-emerald-700" },
-                { tag: "Giải tích 2", title: "Chuỗi Fourier và Ứng dụng", info: "30 câu • 45 phút", rate: "4.2", color: "bg-amber-50 text-amber-700" },
-                { tag: "Toán Rời rạc", title: "Lý thuyết Đồ thị nâng cao", info: "50 câu • 90 phút", rate: "4.9", color: "bg-blue-50 text-blue-700" },
-              ].map((exam, i) => (
-                <div key={i} className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
-                  <span className={`text-[10px] font-black px-2 py-1 rounded ${exam.color}`}>{exam.tag}</span>
+              {relatedDocuments.map((exam) => (
+                <div
+                  key={exam.id}
+                  onClick={() => navigate(`/user/comment/${exam.id}`)}
+                  className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+                >
+                  <span className="text-[10px] font-black px-2 py-1 rounded bg-blue-50 text-blue-700">{exam.subject ?? 'Đa môn'}</span>
                   <h4 className="font-bold text-[#003466] mt-3 group-hover:text-blue-600 transition-colors">{exam.title}</h4>
                   <div className="flex justify-between items-center mt-4">
-                    <span className="text-[11px] text-slate-400 font-medium">{exam.info}</span>
+                    <span className="text-[11px] text-slate-400 font-medium">{exam.semesterYear ?? 'N/A'}</span>
                     <div className="flex items-center gap-1 text-[#ffa825]">
                       <Star size={12} fill="currentColor" />
-                      <span className="text-xs font-black">{exam.rate}</span>
+                      <span className="text-xs font-black">{(exam.averageRating ?? 0).toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
               ))}
+
+              {relatedDocuments.length === 0 && (
+                <p className="text-sm text-slate-400">Chưa có đề liên quan.</p>
+              )}
             </div>
           </div>
 

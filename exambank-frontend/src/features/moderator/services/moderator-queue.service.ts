@@ -1,6 +1,9 @@
-import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 
-const MODERATOR_REPORTS_PATH = "/api/moderator/reports";
+﻿import { apiClient, getStoredAuthToken } from "@/lib/api-client";
+
+const MODERATOR_DOCUMENTS_PATH = "/api/moderator/documents";
+const DOCUMENTS_PATH = "/api/documents";
+
 
 type ApiEnvelope = {
   data?: unknown;
@@ -10,20 +13,8 @@ type ApiEnvelope = {
   items?: unknown;
 };
 
-type ReportReason = "COPYRIGHT" | "INCORRECT_CONTENT" | "LOW_QUALITY" | "DUPLICATE" | "OTHER";
-type ReportStatus = "PENDING" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
 
-type ModeratorReportApiRecord = {
-  id: number;
-  documentId: number | null;
-  documentTitle: string | null;
-  reporterName: string | null;
-  reason: ReportReason;
-  status: ReportStatus;
-  moderatorNote: string | null;
-  resolutionAction: string | null;
-  createdAt: string | number | unknown[] | Record<string, unknown> | null;
-};
+type DocumentStatus = "PENDING" | "APPROVED" | "REJECTED" | "PENDING_REVIEW" | "TRANSFORMED" | string;
 
 type DocumentApiRecord = {
   id: number;
@@ -32,32 +23,48 @@ type DocumentApiRecord = {
   subject: string | null;
   semesterYear: string | null;
   type: string | null;
+  lecturer: string | null;
+  fileUrl: string | null;
   fileType: string | null;
+  status: DocumentStatus;
+  downloadCount: number | null;
+  moderatorNote: string | null;
   uploadedByName: string | null;
   submittedAt: string | number | unknown[] | Record<string, unknown> | null;
+  publishedAt: string | number | unknown[] | Record<string, unknown> | null;
   createdAt: string | number | unknown[] | Record<string, unknown> | null;
 };
 
 export type ModeratorQueueRecord = {
   id: string;
-  reportId: number;
   documentId: number;
   title: string;
   subject: string;
   school: string;
   uploader: string;
   uploadedAt: string;
-  hasReport: boolean;
-  reportReason: string;
-  reporterName: string;
-  duplicateRisk: "Thấp" | "Vừa" | "Cao";
+  status: DocumentStatus;
+  moderatorNote: string | null;
   level: "THCS" | "THPT";
   pages: number;
   fileType: "PDF" | "DOCX" | "Ảnh";
   category: string;
+  semesterYear: string;
+  lecturer: string;
+  fileUrl: string | null;
+  downloadCount: number;
   tags: string[];
   estimatedDifficulty: number | null;
   durationMinutes: number;
+};
+
+export type ModeratorMetadataPayload = {
+  title: string;
+  school?: string;
+  subject?: string;
+  semesterYear?: string;
+  type?: string;
+  lecturer?: string;
 };
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -118,10 +125,7 @@ function extractArray(value: unknown): unknown[] {
     return [];
   }
 
-  const candidates = [
-    (objectValue as ApiEnvelope).content,
-    (objectValue as ApiEnvelope).items,
-  ];
+  const candidates = [(objectValue as ApiEnvelope).content, (objectValue as ApiEnvelope).items];
 
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
@@ -175,15 +179,7 @@ function parseApiDateTime(value: unknown): Date | null {
   const second = toNumber(objectValue.second) ?? 0;
   const nano = toNumber(objectValue.nano) ?? 0;
 
-  const parsed = new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    second,
-    Math.floor(nano / 1_000_000)
-  );
+  const parsed = new Date(year, month - 1, day, hour, minute, second, Math.floor(nano / 1_000_000));
 
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -203,31 +199,9 @@ function formatDateTime(value: unknown): string {
   }).format(parsed);
 }
 
-function mapReportReason(reason: ReportReason): string {
-  switch (reason) {
-    case "COPYRIGHT":
-      return "Vi phạm bản quyền";
-    case "INCORRECT_CONTENT":
-      return "Nội dung sai";
-    case "LOW_QUALITY":
-      return "Chất lượng thấp";
-    case "DUPLICATE":
-      return "Trùng lặp";
-    default:
-      return "Khác";
-  }
-}
-
-function mapDuplicateRisk(reason: ReportReason): "Thấp" | "Vừa" | "Cao" {
-  if (reason === "DUPLICATE" || reason === "COPYRIGHT") {
-    return "Cao";
-  }
-
-  if (reason === "INCORRECT_CONTENT" || reason === "LOW_QUALITY") {
-    return "Vừa";
-  }
-
-  return "Thấp";
+function toDateTimestamp(value: unknown): number {
+  const parsed = parseApiDateTime(value);
+  return parsed ? parsed.getTime() : 0;
 }
 
 function mapFileType(value: string | null): "PDF" | "DOCX" | "Ảnh" {
@@ -258,35 +232,13 @@ function inferLevel(semesterYear: string | null, school: string | null): "THCS" 
   return "THPT";
 }
 
-function normalizeModeratorReport(value: unknown): ModeratorReportApiRecord | null {
-  const objectValue = toObject(value);
-  if (!objectValue) {
-    return null;
+function normalizeStatus(value: unknown): DocumentStatus {
+  const status = toStringOrNull(value)?.toUpperCase();
+  if (!status) {
+    return "PENDING";
   }
 
-  const id = toNumber(objectValue.id);
-  const reason = toStringOrNull(objectValue.reason) as ReportReason | null;
-  const status = toStringOrNull(objectValue.status) as ReportStatus | null;
-  if (id === null || !reason || !status) {
-    return null;
-  }
-
-  return {
-    id,
-    documentId: toNumber(objectValue.documentId),
-    documentTitle: toStringOrNull(objectValue.documentTitle),
-    reporterName: toStringOrNull(objectValue.reporterName),
-    reason,
-    status,
-    moderatorNote: toStringOrNull(objectValue.moderatorNote),
-    resolutionAction: toStringOrNull(objectValue.resolutionAction),
-    createdAt: (objectValue.createdAt ?? objectValue.created_at) as
-      | string
-      | number
-      | unknown[]
-      | Record<string, unknown>
-      | null,
-  };
+  return status;
 }
 
 function normalizeDocument(value: unknown): DocumentApiRecord | null {
@@ -309,20 +261,16 @@ function normalizeDocument(value: unknown): DocumentApiRecord | null {
     subject: toStringOrNull(objectValue.subject),
     semesterYear: toStringOrNull(objectValue.semesterYear),
     type: toStringOrNull(objectValue.type),
+    lecturer: toStringOrNull(objectValue.lecturer),
+    fileUrl: toStringOrNull(objectValue.fileUrl),
     fileType: toStringOrNull(objectValue.fileType),
+    status: normalizeStatus(objectValue.status),
+    downloadCount: toNumber(objectValue.downloadCount),
+    moderatorNote: toStringOrNull(objectValue.moderatorNote),
     uploadedByName: toStringOrNull(objectValue.uploadedByName),
-    submittedAt: (objectValue.submittedAt ?? objectValue.submitted_at) as
-      | string
-      | number
-      | unknown[]
-      | Record<string, unknown>
-      | null,
-    createdAt: (objectValue.createdAt ?? objectValue.created_at) as
-      | string
-      | number
-      | unknown[]
-      | Record<string, unknown>
-      | null,
+    submittedAt: (objectValue.submittedAt ?? objectValue.submitted_at) as string | number | unknown[] | Record<string, unknown> | null,
+    publishedAt: (objectValue.publishedAt ?? objectValue.published_at) as string | number | unknown[] | Record<string, unknown> | null,
+    createdAt: (objectValue.createdAt ?? objectValue.created_at) as string | number | unknown[] | Record<string, unknown> | null,
   };
 }
 
@@ -337,124 +285,130 @@ function buildAuthConfig() {
     : undefined;
 }
 
-async function fetchDocumentMap(documentIds: number[]) {
-  const uniqueIds = Array.from(new Set(documentIds));
-  if (uniqueIds.length === 0) {
-    return new Map<number, DocumentApiRecord>();
-  }
+async function listModeratorDocuments(): Promise<DocumentApiRecord[]> {
+  const response = await apiClient.get(MODERATOR_DOCUMENTS_PATH, buildAuthConfig());
 
-  const settled = await Promise.allSettled(
-    uniqueIds.map(async (documentId) => {
-      const response = await apiClient.get(`/api/documents/${documentId}`, buildAuthConfig());
-      return normalizeDocument(response.data);
-    })
-  );
-
-  const mapped = new Map<number, DocumentApiRecord>();
-  for (const result of settled) {
-    if (result.status !== "fulfilled" || !result.value) {
-      continue;
-    }
-
-    mapped.set(result.value.id, result.value);
-  }
-
-  return mapped;
+  return extractArray(response.data)
+    .map(normalizeDocument)
+    .filter((item): item is DocumentApiRecord => item !== null);
 }
 
-function toQueueRecord(report: ModeratorReportApiRecord, document: DocumentApiRecord | undefined): ModeratorQueueRecord | null {
-  if (!report.documentId) {
-    return null;
-  }
+async function listAllDocuments(): Promise<DocumentApiRecord[]> {
+  const response = await apiClient.get(DOCUMENTS_PATH, {
+    ...buildAuthConfig(),
+    params: { page: 0, size: 200 },
+  });
 
-  const title = document?.title ?? report.documentTitle ?? `Tài liệu #${report.documentId}`;
-  const school = document?.school ?? "Chưa cập nhật";
-  const subject = document?.subject ?? "Chưa phân môn";
-  const uploader = document?.uploadedByName ?? "Người dùng";
-  const uploadedAt = formatDateTime(document?.submittedAt ?? document?.createdAt ?? report.createdAt);
-  const semesterYear = document?.semesterYear ?? null;
-  const category = document?.type ?? "Đề thi học kỳ";
+  return extractArray(response.data)
+    .map(normalizeDocument)
+    .filter((item): item is DocumentApiRecord => item !== null);
+}
+
+function toQueueRecord(document: DocumentApiRecord): ModeratorQueueRecord {
+  const school = document.school ?? "Chưa cập nhật";
+  const subject = document.subject ?? "Chưa phân môn";
+  const semesterYear = document.semesterYear ?? "";
+  const category = document.type ?? "Đề thi học kỳ";
   const tags = [semesterYear, category].filter((item): item is string => Boolean(item && item.trim().length > 0));
 
   return {
-    id: String(report.id),
-    reportId: report.id,
-    documentId: report.documentId,
-    title,
+    id: String(document.id),
+    documentId: document.id,
+    title: document.title,
     subject,
     school,
-    uploader,
-    uploadedAt,
-    hasReport: true,
-    reportReason: mapReportReason(report.reason),
-    reporterName: report.reporterName ?? "Ẩn danh",
-    duplicateRisk: mapDuplicateRisk(report.reason),
+    uploader: document.uploadedByName ?? "Người dùng",
+    uploadedAt: formatDateTime(document.submittedAt ?? document.createdAt),
+    status: document.status,
+    moderatorNote: document.moderatorNote,
     level: inferLevel(semesterYear, school),
     pages: 1,
-    fileType: mapFileType(document?.fileType ?? null),
+    fileType: mapFileType(document.fileType),
     category,
+    semesterYear,
+    lecturer: document.lecturer ?? "",
+    fileUrl: document.fileUrl,
+    downloadCount: document.downloadCount ?? 0,
     tags,
     estimatedDifficulty: null,
     durationMinutes: 90,
   };
 }
 
-export async function listModeratorQueueItems(reason?: ReportReason): Promise<ModeratorQueueRecord[]> {
-  const response = await apiClient.get(
-    MODERATOR_REPORTS_PATH,
-    {
-      ...buildAuthConfig(),
-      params: reason ? { reason } : undefined,
+export async function listModeratorQueueItems(): Promise<ModeratorQueueRecord[]> {
+  const [moderatorResult, allDocumentsResult] = await Promise.allSettled([
+    listModeratorDocuments(),
+    listAllDocuments(),
+  ]);
+
+  if (moderatorResult.status === "rejected" && allDocumentsResult.status === "rejected") {
+    throw moderatorResult.reason;
+  }
+
+  const merged = new Map<number, DocumentApiRecord>();
+
+  if (allDocumentsResult.status === "fulfilled") {
+    for (const item of allDocumentsResult.value) {
+      merged.set(item.id, item);
     }
-  );
+  }
 
-  const reports = extractArray(response.data)
-    .map(normalizeModeratorReport)
-    .filter((item): item is ModeratorReportApiRecord => item !== null)
-    .filter((item) => item.status === "PENDING");
+  if (moderatorResult.status === "fulfilled") {
+    for (const item of moderatorResult.value) {
+      merged.set(item.id, item);
+    }
+  }
 
-  const documentMap = await fetchDocumentMap(
-    reports
-      .map((item) => item.documentId)
-      .filter((item): item is number => typeof item === "number" && Number.isFinite(item))
-  );
-
-  return reports
-    .map((report) => toQueueRecord(report, report.documentId ? documentMap.get(report.documentId) : undefined))
-    .filter((item): item is ModeratorQueueRecord => item !== null);
+  return Array.from(merged.values())
+    .sort((first, second) => {
+      const secondTime = toDateTimestamp(second.submittedAt ?? second.createdAt ?? second.publishedAt);
+      const firstTime = toDateTimestamp(first.submittedAt ?? first.createdAt ?? first.publishedAt);
+      return secondTime - firstTime;
+    })
+    .map(toQueueRecord);
 }
 
-export async function markModeratorQueueItemInReview(record: ModeratorQueueRecord) {
-  const response = await apiClient.put(
-    `/api/moderator/reports/${record.reportId}/in-review`,
-    undefined,
-    buildAuthConfig()
-  );
+export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord, payload: ModeratorMetadataPayload) {
+  const title = payload.title.trim();
+  if (!title) {
+    throw new Error("Vui lòng nhập tiêu đề.");
+  }
+
+  const response = await apiClient.put(`/api/moderator/documents/${record.documentId}/metadata`, undefined, {
+    ...buildAuthConfig(),
+    params: {
+      title,
+      ...(payload.school?.trim() ? { school: payload.school.trim() } : {}),
+      ...(payload.subject?.trim() ? { subject: payload.subject.trim() } : {}),
+      ...(payload.semesterYear?.trim() ? { semesterYear: payload.semesterYear.trim() } : {}),
+      ...(payload.type?.trim() ? { type: payload.type.trim() } : {}),
+      ...(payload.lecturer?.trim() ? { lecturer: payload.lecturer.trim() } : {}),
+    },
+  });
 
   return response.data;
 }
 
 export async function approveModeratorQueueItem(record: ModeratorQueueRecord, moderatorNote?: string) {
-  const response = await apiClient.put(
-    `/api/moderator/reports/${record.reportId}/resolve`,
-    {
-      action: "REJECTED",
-      moderatorNote: moderatorNote?.trim() || "Báo cáo chưa đủ căn cứ, giữ nguyên tài liệu.",
-      resolutionAction: "DISMISS",
-    },
-    buildAuthConfig()
-  );
-
+  const trimmedNote = moderatorNote?.trim();
+  const response = await apiClient.put(`/api/moderator/documents/${record.documentId}/approve`, undefined, {
+    ...buildAuthConfig(),
+    params: trimmedNote ? { moderatorNote: trimmedNote } : undefined,
+  });
   return response.data;
 }
 
 export async function rejectModeratorQueueItem(record: ModeratorQueueRecord, rejectionReason: string) {
+  const finalReason = rejectionReason.trim();
+  if (!finalReason) {
+    throw new Error("Vui lòng nhập lý do từ chối.");
+  }
+
   const response = await apiClient.put(
-    `/api/moderator/reports/${record.reportId}/resolve`,
+    `/api/moderator/documents/${record.documentId}/reject`,
     {
-      action: "RESOLVED",
-      moderatorNote: rejectionReason.trim(),
-      resolutionAction: "HIDE_DOCUMENT",
+      moderatorNote: finalReason,
+      rejectionReason: finalReason,
     },
     buildAuthConfig()
   );

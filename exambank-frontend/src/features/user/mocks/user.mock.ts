@@ -1,4 +1,3 @@
-import { BookOpen, Languages } from 'lucide-react';
 import type {
   UserComment,
   EducationLevel,
@@ -79,7 +78,6 @@ export const mockRecommendations: Recommendation[] = [
   {
     title: "Chuyên đề Hàm số & Đạo hàm",
     description: "Phân tích cho thấy bạn thường sai...",
-    icon: BookOpen as any,
     tag: "Cần cải thiện",
     color: "error",
     stats: "30 câu • 45 phút",
@@ -87,7 +85,6 @@ export const mockRecommendations: Recommendation[] = [
   {
     title: "Đọc hiểu Tiếng Anh IELTS 6.5+",
     description: "Tăng cường vốn từ vựng học thuật...",
-    icon: Languages as any,
     tag: "Đề nghị học tập",
     color: "primary",
     stats: "20 câu • 30 phút",
@@ -95,7 +92,6 @@ export const mockRecommendations: Recommendation[] = [
   {
     title: "Lý thuyết Hóa học hữu cơ",
     description: "Cần ôn tập thêm...",
-    icon: BookOpen as any,
     tag: "Khuyến nghị",
     color: "secondary",
     stats: "25 câu • 40 phút",
