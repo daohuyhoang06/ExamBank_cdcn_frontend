@@ -106,6 +106,12 @@ export function AppHeader({
   }, []);
 
   function handleOpenProfile() {
+    if (isStudentArea) {
+      navigate("/user/profile");
+      setIsAvatarMenuOpen(false);
+      return;
+    }
+
     if (location.pathname.startsWith("/admin")) {
       navigate("/admin/profile");
       setIsAvatarMenuOpen(false);

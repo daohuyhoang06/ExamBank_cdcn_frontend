@@ -206,11 +206,19 @@ export default function UserProfileSettingsPage() {
           ? ((error as { response?: { status?: number } }).response?.status ?? 0)
           : 0;
 
-      if (status === 401 || status === 403) {
+      if (status === 401) {
         authService.logout();
         navigate("/login", {
           replace: true,
           state: { from: "/user/profile" },
+        });
+        return;
+      }
+
+      if (status === 403) {
+        setNotice({
+          type: "error",
+          message: "Bạn không có quyền truy cập trang hồ sơ này.",
         });
         return;
       }
@@ -426,7 +434,7 @@ export default function UserProfileSettingsPage() {
   if (!profile) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-rose-700">
-        Không thể tải dữ liệu hồ sơ. Vui lòng đăng nhập lại để dùng API /api/v1/users/me.
+        {notice?.message ?? "Không thể tải dữ liệu hồ sơ. Vui lòng thử lại sau."}
       </div>
     );
   }
