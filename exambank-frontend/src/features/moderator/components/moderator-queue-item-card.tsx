@@ -74,7 +74,7 @@ export function ModeratorQueueItemCard({
         <div className="relative flex h-[100px] w-[82px] shrink-0 items-center justify-center rounded-[16px] bg-[#f5f7fb] ring-1 ring-[#edf1f6]">
           <img
             src={defaultQueueThumbnail}
-            alt="áº¢nh máº·c Ä‘á»‹nh tÃ i liá»‡u"
+            alt="Ảnh mặc định tài liệu"
             className="h-[96px] w-[76px] rounded-[12px] object-cover"
             loading="lazy"
           />
@@ -119,7 +119,7 @@ export function ModeratorQueueItemCard({
 
           {item.moderatorNote ? (
             <p className="mt-2 line-clamp-1 text-[12px] font-medium text-amber-700">
-              Ghi chÃº: {item.moderatorNote}
+              Ghi chú: {item.moderatorNote}
             </p>
           ) : null}
         </div>
