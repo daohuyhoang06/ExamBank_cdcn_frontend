@@ -304,6 +304,7 @@ export default function AdminUsersPage() {
   const [userRows, setUserRows] = useState<UserRow[]>([]);
   const [roleFilter, setRoleFilter] = useState<RoleFilterValue>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserForm, setCreateUserForm] = useState<CreateUserFormState>(defaultCreateUserForm);
@@ -321,6 +322,7 @@ export default function AdminUsersPage() {
 
     setStats(buildStats(metrics));
     setUserRows(mapUsersToRows(users));
+    setCurrentPage(1);
   }
 
   function resetCreateUserForm() {
@@ -340,6 +342,11 @@ export default function AdminUsersPage() {
       return;
     }
     setIsCreateModalOpen(false);
+  }
+
+  function openCreateUserModal() {
+    resetCreateUserForm();
+    setIsCreateModalOpen(true);
   }
 
   function openEditUserModal(user: AdminUserRecord) {
@@ -408,12 +415,14 @@ export default function AdminUsersPage() {
 
         setStats(buildStats(metrics));
         setUserRows(mapUsersToRows(users));
+        setCurrentPage(1);
       } catch {
         if (!isMounted) {
           return;
         }
         setStats(defaultStats);
         setUserRows([]);
+        setCurrentPage(1);
       }
     }
 
@@ -423,6 +432,10 @@ export default function AdminUsersPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [roleFilter, statusFilter]);
 
   function setCreateUserField<K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) {
     setCreateUserForm((prev) => ({
@@ -510,6 +523,18 @@ export default function AdminUsersPage() {
     const matchesStatus = statusFilter === "ALL" || user.status === statusFilter;
     return matchesRole && matchesStatus;
   });
+
+  const rowsPerPage = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * rowsPerPage;
+  const visibleRows = filteredRows.slice(startIndex, startIndex + rowsPerPage);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6">
@@ -745,7 +770,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <tr>
                   <td className="px-6 py-10 text-center text-sm text-[var(--ink-500)]" colSpan={7}>
                     {userRows.length === 0
@@ -754,7 +779,7 @@ export default function AdminUsersPage() {
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((user) => {
+                visibleRows.map((user) => {
                   const status = statusClasses(user.status);
 
                   return (
@@ -862,31 +887,38 @@ export default function AdminUsersPage() {
           </table>
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 sm:flex-row">
-          <p className="text-sm text-[var(--ink-600)]">Trang 1 / 150</p>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled
-              leftIcon={<ChevronLeft size={16} />}
-              className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
-            >
-              Trước
-            </Button>
-            <Pagination currentPage={1} totalPages={150} />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              rightIcon={<ChevronRight size={16} />}
-              className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
-            >
-              Tiếp
-            </Button>
+        {totalPages > 1 ? (
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--line-soft)] bg-[var(--bg-soft)] p-5 sm:flex-row">
+            <p className="text-sm text-[var(--ink-600)]">
+              Trang {safeCurrentPage} / {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={safeCurrentPage <= 1}
+                leftIcon={<ChevronLeft size={16} />}
+                className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Trước
+              </Button>
+              <Pagination currentPage={safeCurrentPage} totalPages={totalPages} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                rightIcon={<ChevronRight size={16} />}
+                disabled={safeCurrentPage >= totalPages}
+                className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              >
+                Tiếp
+              </Button>
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
