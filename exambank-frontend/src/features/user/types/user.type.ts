@@ -1,18 +1,19 @@
-// User-related types and interfaces
+import type { ReactNode } from "react";
 
-// From Comment.tsx
 export interface UserComment {
   id: number;
   author: string;
   avatar: string;
-  rating: number; // 1-5
-  time: string; // e.g., "2 giờ trước"
+  rating: number;
+  time: string;
   content: string;
   likes: number;
-  image?: string; // Optional, URL ảnh
+  image?: string;
+  canDelete?: boolean;
 }
 
-// From ExamBankPage.tsx
+export type Comment = UserComment;
+
 export interface EducationLevel {
   id: string;
   name: string;
@@ -21,16 +22,14 @@ export interface EducationLevel {
 
 export type Subject = string;
 
-// From UserHomePage.tsx
-import type { ReactNode } from "react";
-
 export interface Recommendation {
   title: string;
   description: string;
-  icon: ReactNode; // ✅ chuẩn
+  icon?: ReactNode;
   tag: string;
-  color: string;
+  color: "error" | "primary" | "secondary";
   stats: string;
+  documentId?: number;
 }
 
 export interface Ranking {
@@ -40,7 +39,6 @@ export interface Ranking {
   avatar: string;
 }
 
-// From makeexam/Examreview.tsx
 export interface TopicData {
   name: string;
   percentage: number;
@@ -55,39 +53,30 @@ export interface LeaderboardUser {
 }
 
 export interface QuestionItemProps {
-  status: 'correct' | 'incorrect';
+  status: "correct" | "incorrect";
   title: string;
   desc: string;
   time: string;
 }
 
-// From submit-exam/Mysubmit.tsx
 export interface Submission {
   id: number;
   title: string;
   university: string;
   year: string;
   subject: string;
-  type: string; // e.g., "Final Exam"
-  status: 'Approved' | 'Pending' | 'Rejected';
-  reason?: string; // Optional
+  type: string;
+  status: "Approved" | "Pending" | "Rejected";
+  reason?: string;
   date: string;
 }
 
-// From submit-exam/SubmitExamPage.tsx
 export interface SelectedFile {
   name: string;
-  size: string; // e.g., "1.2 MB"
+  size: string;
 }
 
-
- // Đề thi
- // src/features/exam/types.ts
-
-export type QuestionType = 
-  | "multiple_choice" 
-  | "true_false" 
-  | "fill_blank";
+export type QuestionType = "multiple_choice" | "true_false" | "fill_blank";
 
 export interface BaseQuestion {
   id: string;
@@ -99,7 +88,7 @@ export interface BaseQuestion {
 export interface MultipleChoiceQuestion extends BaseQuestion {
   type: "multiple_choice";
   options: string[];
-  correctAnswer: number; // index
+  correctAnswer: number;
 }
 
 export interface TrueFalseQuestion extends BaseQuestion {
@@ -112,16 +101,79 @@ export interface FillBlankQuestion extends BaseQuestion {
   correctAnswer: string;
 }
 
-export type Question = 
-  | MultipleChoiceQuestion
-  | TrueFalseQuestion
-  | FillBlankQuestion;
+export type Question = MultipleChoiceQuestion | TrueFalseQuestion | FillBlankQuestion;
 
 export interface Exam {
   id: string;
   title: string;
   description: string;
-  duration: number; // phút
+  duration: number;
   questions: Question[];
   createdAt: string;
+}
+
+export interface ExamListItem {
+  id: number;
+  title: string;
+  subjectId?: number | null;
+  subjectName?: string;
+  durationMinutes?: number | null;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface DocumentSummary {
+  id: number;
+  title: string;
+  school?: string;
+  subject?: string;
+  semesterYear?: string;
+  type?: string;
+  lecturer?: string;
+  fileUrl?: string;
+  averageRating?: number;
+  downloadCount?: number;
+  status?: string;
+  createdAt?: string;
+  moderatorNote?: string;
+}
+
+export interface DocumentRatingStats {
+  average: number;
+  count: number;
+}
+
+export interface UploadDocumentPayload {
+  title: string;
+  school?: string;
+  subject?: string;
+  semesterYear?: string;
+  type?: string;
+  lecturer?: string;
+}
+
+export type AccountStatus = "ACTIVE" | "INACTIVE" | "BANNED";
+
+export interface UserProfile {
+  id: number;
+  name: string;
+  email: string;
+  username: string;
+  roles: string[];
+  status: AccountStatus;
+  xp: number;
+  coinBalance: number;
+  streak: number;
+  createdAt?: string;
+}
+
+export interface UpdateUserProfilePayload {
+  name: string;
+  email: string;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }

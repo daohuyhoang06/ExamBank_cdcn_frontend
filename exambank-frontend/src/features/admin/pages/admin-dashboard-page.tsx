@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/Card/card";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
 import { setAuthToken } from "@/lib/api-client";
 import { getAdminUserCardMetrics } from "@/features/admin/services/admin-users.service";
-import { authStorageKeys } from "@/features/auth/services/auth.service";
+import { clearStoredAuthUser } from "@/features/auth/services/auth.service";
 
 type DashboardStat = {
   title: string;
@@ -188,7 +188,7 @@ export default function AdminDashboardPage() {
 
         if (isAxiosError(error) && error.response?.status === 401) {
           setAuthToken(null);
-          localStorage.removeItem(authStorageKeys.USER_KEY);
+          clearStoredAuthUser();
           navigate("/login", { replace: true });
           return;
         }

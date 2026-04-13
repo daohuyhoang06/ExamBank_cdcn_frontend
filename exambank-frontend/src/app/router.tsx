@@ -15,15 +15,15 @@ import { StudentLayout } from "@/layouts/student/StudentLayout";
 import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
 import Mysubmit from "@/features/user/pages/submit-exam/Mysubmit";
-import Examreview from "@/features/user/pages/makeexam/Examreview";
-// Import trang Comment bạn vừa tạo
-import Comment from "@/features/user/pages/Comment"; 
-import Exampage from "@/features/user/pages/makeexam/Exampage";
+import Examreview from "@/features/user/pages/makeexam/page/Examreview";
+import Comment from "@/features/user/pages/Comment";
+import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
 import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
 import ModeratorComposerPage from "@/features/moderator/pages/moderator-composer-page";
+import ModeratorComposerFormPage from "@/features/moderator/pages/moderator-composer-form-page";
 import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
 import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
 
@@ -70,6 +70,7 @@ export const router = createBrowserRouter([
       { path: "queue", element: <ModeratorQueuePage /> },
       { path: "grading", element: <ModeratorGradingPage /> },
       { path: "composer", element: <ModeratorComposerPage /> },
+      { path: "composer/form", element: <ModeratorComposerFormPage /> },
       { path: "editorial", element: <ModeratorEditorialPage /> },
       { path: "submit-review", element: <ModeratorSubmitReviewPage /> },
     ],
@@ -100,6 +101,10 @@ export const router = createBrowserRouter([
     },
       {
         path: "comment", // URL: /user/comment
+        element: <Comment />,
+      },
+      {
+        path: "comment/:documentId", // URL: /user/comment/:documentId
         element: <Comment />,
       },
       {

@@ -11,6 +11,8 @@ const AUTH_REGISTER_PATH = import.meta.env.VITE_AUTH_REGISTER_PATH ?? "/api/auth
 const LEGACY_LOGIN_PATH = "/auth/login";
 const LEGACY_REGISTER_PATH = "/auth/register";
 const USER_KEY = "exambank_user";
+const SESSION_USER_KEY = `${USER_KEY}_session`;
+const PERSISTENT_USER_KEY = `${USER_KEY}_persistent`;
 
 type ApiAuthResponse = {
   token?: string;
@@ -81,24 +83,97 @@ async function postWithFallback<TBody>(primaryPath: string, fallbackPath: string
   }
 }
 
-function saveUser(user: AuthSuccess["user"]) {
+function clearStoredAuthUserInternal() {
+  try {
+    sessionStorage.removeItem(SESSION_USER_KEY);
+  } catch {
+    // Ignore storage access issues in restricted browser modes.
+  }
+
+  try {
+    localStorage.removeItem(PERSISTENT_USER_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch {
+    // Ignore storage access issues in restricted browser modes.
+  }
+}
+
+function saveUser(user: AuthSuccess["user"], persist: boolean) {
   if (!user) {
     return;
   }
 
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  const serialized = JSON.stringify(user);
+
+  // Always keep user info in tab-scoped session storage first.
+  try {
+    sessionStorage.setItem(SESSION_USER_KEY, serialized);
+  } catch {
+    // Ignore if session storage is unavailable; persistent fallback below.
+  }
+
+  if (!persist) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(PERSISTENT_USER_KEY, serialized);
+  } catch {
+    localStorage.setItem(USER_KEY, serialized);
+  }
+}
+
+export function getStoredAuthUser(): AuthSuccess["user"] | null {
+  const parseUser = (rawUser: string | null) => {
+    if (!rawUser) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(rawUser) as AuthSuccess["user"];
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const sessionUser = parseUser(sessionStorage.getItem(SESSION_USER_KEY));
+    if (sessionUser) {
+      return sessionUser;
+    }
+  } catch {
+    // Ignore storage access issues in restricted browser modes.
+  }
+
+  try {
+    return (
+      parseUser(localStorage.getItem(PERSISTENT_USER_KEY)) ??
+      parseUser(localStorage.getItem(USER_KEY))
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function clearStoredAuthUser() {
+  clearStoredAuthUserInternal();
 }
 
 export const authService = {
   async login(payload: LoginPayload): Promise<AuthSuccess> {
     const response = await postWithFallback(AUTH_LOGIN_PATH, LEGACY_LOGIN_PATH, payload);
     const result = normalizeAuthResponse(response.data);
+    const persistSession = Boolean(payload.rememberMe);
+    const normalizedToken = result.token?.trim();
 
-    if (result.token) {
-      setAuthToken(result.token);
+    if (!normalizedToken) {
+      setAuthToken(null);
+      clearStoredAuthUserInternal();
+      throw new Error("Dang nhap that bai: phan hoi khong chua access token hop le.");
     }
 
-    saveUser(result.user);
+    setAuthToken(normalizedToken, persistSession);
+    saveUser(result.user, persistSession);
     return result;
   },
 
@@ -118,8 +193,15 @@ export const authService = {
     const response = await postWithFallback(AUTH_REGISTER_PATH, LEGACY_REGISTER_PATH, registerBody);
     return normalizeAuthResponse(response.data);
   },
+
+  logout() {
+    setAuthToken(null);
+    clearStoredAuthUserInternal();
+  },
 };
 
 export const authStorageKeys = {
   USER_KEY,
+  SESSION_USER_KEY,
+  PERSISTENT_USER_KEY,
 };

@@ -1,4 +1,4 @@
-import { apiClient, TOKEN_KEY } from "@/lib/api-client";
+import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 import { isAxiosError } from "axios";
 import type {
   AdminCreateUserPayload,
@@ -55,7 +55,7 @@ function extractUsers(payload: unknown): AdminUserRecord[] {
 }
 
 async function getUsersResponse() {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getStoredAuthToken();
   const requestConfig = {
     params: {
       t: Date.now(),
@@ -79,7 +79,7 @@ async function getUsersResponse() {
 }
 
 async function createUserResponse(payload: AdminCreateUserPayload) {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getStoredAuthToken();
   const requestConfig = {
     headers: token
       ? {

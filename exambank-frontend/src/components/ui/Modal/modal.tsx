@@ -4,10 +4,12 @@ export type ModalProps = {
   open: boolean;
   onClose: () => void;
   title?: string;
+  description?: string;
+  titleClassName?: string;
   children: React.ReactNode;
 };
 
-export const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
+export const Modal: React.FC<ModalProps> = ({ open, onClose, title, description, titleClassName, children }) => {
   const titleId = useId();
 
   useEffect(() => {
@@ -42,8 +44,18 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) 
         aria-labelledby={title ? titleId : undefined}
       >
         {title ? (
-          <div id={titleId} className="mb-1 pr-10 font-[var(--font-label)] text-3xl font-black tracking-tight text-[var(--brand-700)]">
-            {title}
+          <div className="mb-3 pr-10">
+            <div
+              id={titleId}
+              className={`font-[var(--font-label)] text-3xl font-black tracking-tight text-[var(--brand-700)] ${titleClassName ?? ""}`}
+            >
+              {title}
+            </div>
+            {description ? (
+              <p className="mt-1 text-sm font-medium text-[var(--ink-600)]">
+                {description}
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="mb-6">{children}</div>
