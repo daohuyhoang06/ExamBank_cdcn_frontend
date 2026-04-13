@@ -1,7 +1,9 @@
+
 ﻿import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 
 const MODERATOR_DOCUMENTS_PATH = "/api/moderator/documents";
 const DOCUMENTS_PATH = "/api/documents";
+
 
 type ApiEnvelope = {
   data?: unknown;
@@ -10,6 +12,7 @@ type ApiEnvelope = {
   content?: unknown;
   items?: unknown;
 };
+
 
 type DocumentStatus = "PENDING" | "APPROVED" | "REJECTED" | "PENDING_REVIEW" | "TRANSFORMED" | string;
 
@@ -392,7 +395,6 @@ export async function approveModeratorQueueItem(record: ModeratorQueueRecord, mo
     ...buildAuthConfig(),
     params: trimmedNote ? { moderatorNote: trimmedNote } : undefined,
   });
-
   return response.data;
 }
 

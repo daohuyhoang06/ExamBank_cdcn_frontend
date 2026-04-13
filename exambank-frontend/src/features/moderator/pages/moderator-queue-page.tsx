@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
 import {
@@ -66,6 +67,67 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
         return message;
       }
     }
+    
+    if (typeof error.message === "string" && error.message.trim().length > 0) {
+      return error.message;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function clampDifficulty(value: number) {
+  if (!Number.isFinite(value)) {
+    return 5;
+  }
+
+  return Math.max(0, Math.min(10, Math.round(value)));
+}
+
+function pickPreviewImageBySubject(subject: string) {
+  const normalized = normalizeText(subject);
+
+  if (normalized.includes("toan")) {
+    return "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=700&q=60";
+  }
+
+  if (normalized.includes("vat ly") || normalized.includes("ly")) {
+    return "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=700&q=60";
+  }
+
+  if (normalized.includes("hoa")) {
+    return "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&w=700&q=60";
+  }
+
+  return "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=700&q=60";
+}
+
+function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
+  if (isAxiosError(error)) {
+    const payload = error.response?.data;
+
+    if (typeof payload === "string" && payload.trim().length > 0) {
+      return payload;
+    }
+
+    if (payload && typeof payload === "object") {
+      const message = (payload as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim().length > 0) {
+        return message;
+      }
+    }
 
     if (typeof error.message === "string" && error.message.trim().length > 0) {
       return error.message;
@@ -95,6 +157,7 @@ export default function ModeratorQueuePage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActionRunning, setIsActionRunning] = useState(false);
   const [isMetadataSaving, setIsMetadataSaving] = useState(false);
+
   const [errorMessage, setErrorMessage] = useState("");
 
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -108,6 +171,7 @@ export default function ModeratorQueuePage() {
   const [metadataCategory, setMetadataCategory] = useState("Đề thi học kỳ");
   const [metadataLecturer, setMetadataLecturer] = useState("");
   const [metadataModeratorNote, setMetadataModeratorNote] = useState("");
+
 
   const refreshQueue = useCallback(async (refreshingState = false) => {
     if (refreshingState) {
@@ -132,6 +196,8 @@ export default function ModeratorQueuePage() {
       setQueueItems([]);
       setSelectedId(null);
       setErrorMessage(extractApiErrorMessage(error, "Không thể tải danh sách tài liệu chờ duyệt."));
+
+    
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -372,6 +438,7 @@ export default function ModeratorQueuePage() {
                 onClick={() => void refreshQueue(true)}
                 disabled={isRefreshing || isLoading}
                 className="h-8 rounded-lg border border-[#d5dfec] bg-white"
+
               >
                 {isRefreshing ? (
                   <span className="inline-flex items-center gap-2">
