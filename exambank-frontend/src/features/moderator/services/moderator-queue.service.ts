@@ -1,8 +1,6 @@
+﻿import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 
-import { apiClient, getStoredAuthToken } from "@/lib/api-client";
-
-const MODERATOR_DOCUMENTS_PATH = "/api/moderator/documents";
-const DOCUMENTS_PATH = "/api/documents";
+const MODERATOR_DOCUMENTS_PATH = "/api/v1/moderator/documents";
 
 
 type ApiEnvelope = {
@@ -67,6 +65,11 @@ export type ModeratorMetadataPayload = {
   lecturer?: string;
 };
 
+export type ModeratorDocumentPreview = {
+  fileUrl: string | null;
+  fileType: string | null;
+};
+
 function toObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -91,6 +94,98 @@ function toStringOrNull(value: unknown): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function toMonthNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = Math.trunc(value);
+    return normalized >= 1 && normalized <= 12 ? normalized : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed >= 1 && parsed <= 12 ? parsed : null;
+  }
+
+  const monthByName: Record<string, number> = {
+    JANUARY: 1,
+    FEBRUARY: 2,
+    MARCH: 3,
+    APRIL: 4,
+    MAY: 5,
+    JUNE: 6,
+    JULY: 7,
+    AUGUST: 8,
+    SEPTEMBER: 9,
+    OCTOBER: 10,
+    NOVEMBER: 11,
+    DECEMBER: 12,
+  };
+
+  return monthByName[normalized] ?? null;
+}
+
+function parseApiDateString(value: string): Date | null {
+  const raw = value.trim();
+  if (!raw) {
+    return null;
+  }
+
+  if (/^\d{10,13}$/.test(raw)) {
+    const parsedNumber = Number(raw);
+    if (!Number.isFinite(parsedNumber)) {
+      return null;
+    }
+
+    const millis = raw.length <= 10 ? parsedNumber * 1000 : parsedNumber;
+    const parsed = new Date(millis);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const withoutZoneName = raw.replace(/\[[^\]]+\]$/, "");
+  const normalized = withoutZoneName.includes(" ") ? withoutZoneName.replace(" ", "T") : withoutZoneName;
+  const isoMatch =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(normalized);
+
+  if (isoMatch) {
+    const [, year, month, day, hour, minute, secondRaw, fractionRaw, zoneRaw] = isoMatch;
+    const second = secondRaw ?? "00";
+    const millisecond = (fractionRaw ?? "").slice(0, 3).padEnd(3, "0");
+
+    if (zoneRaw) {
+      const zone =
+        zoneRaw === "Z" || zoneRaw.includes(":")
+          ? zoneRaw
+          : `${zoneRaw.slice(0, 3)}:${zoneRaw.slice(3)}`;
+
+      const isoWithZone = `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}${zone}`;
+      const parsed = new Date(isoWithZone);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(millisecond)
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
 function unwrapPayload(value: unknown): unknown {
@@ -138,12 +233,12 @@ function extractArray(value: unknown): unknown[] {
 
 function parseApiDateTime(value: unknown): Date | null {
   if (typeof value === "string") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    return parseApiDateString(value);
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    const parsed = new Date(value);
+    const millis = value < 1_000_000_000_000 ? value * 1000 : value;
+    const parsed = new Date(millis);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
@@ -167,7 +262,7 @@ function parseApiDateTime(value: unknown): Date | null {
   }
 
   const year = toNumber(objectValue.year);
-  const month = toNumber(objectValue.monthValue ?? objectValue.month);
+  const month = toMonthNumber(objectValue.monthValue ?? objectValue.month);
   const day = toNumber(objectValue.dayOfMonth ?? objectValue.day);
 
   if (year === null || month === null || day === null) {
@@ -196,16 +291,17 @@ function formatDateTime(value: unknown): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   }).format(parsed);
 }
 
-function toDateTimestamp(value: unknown): number {
-  const parsed = parseApiDateTime(value);
-  return parsed ? parsed.getTime() : 0;
+function resolveQueueTimestamp(document: DocumentApiRecord): unknown {
+  return document.submittedAt ?? document.createdAt ?? document.publishedAt;
 }
 
-function mapFileType(value: string | null): "PDF" | "DOCX" | "Ảnh" {
-  const normalized = (value ?? "").toLowerCase();
+function mapFileType(value: string | null, fileUrl?: string | null): "PDF" | "DOCX" | "Ảnh" {
+  const normalized = `${value ?? ""} ${fileUrl ?? ""}`.toLowerCase();
   if (normalized.includes("doc")) {
     return "DOCX";
   }
@@ -218,6 +314,10 @@ function mapFileType(value: string | null): "PDF" | "DOCX" | "Ảnh" {
     normalized.includes("image")
   ) {
     return "Ảnh";
+  }
+
+  if (normalized.includes("pdf")) {
+    return "PDF";
   }
 
   return "PDF";
@@ -259,7 +359,7 @@ function normalizeDocument(value: unknown): DocumentApiRecord | null {
     title,
     school: toStringOrNull(objectValue.school),
     subject: toStringOrNull(objectValue.subject),
-    semesterYear: toStringOrNull(objectValue.semesterYear),
+    semesterYear: toStringOrNull(objectValue.semesterYear ?? objectValue.semester),
     type: toStringOrNull(objectValue.type),
     lecturer: toStringOrNull(objectValue.lecturer),
     fileUrl: toStringOrNull(objectValue.fileUrl),
@@ -276,32 +376,41 @@ function normalizeDocument(value: unknown): DocumentApiRecord | null {
 
 function buildAuthConfig() {
   const token = getStoredAuthToken();
-  return token
+  const normalizedToken = token?.replace(/^Bearer\s+/i, "").trim();
+  return normalizedToken
     ? {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${normalizedToken}`,
         },
       }
     : undefined;
 }
 
 async function listModeratorDocuments(): Promise<DocumentApiRecord[]> {
-  const response = await apiClient.get(MODERATOR_DOCUMENTS_PATH, buildAuthConfig());
+  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/queue`, buildAuthConfig());
 
   return extractArray(response.data)
     .map(normalizeDocument)
     .filter((item): item is DocumentApiRecord => item !== null);
 }
 
-async function listAllDocuments(): Promise<DocumentApiRecord[]> {
-  const response = await apiClient.get(DOCUMENTS_PATH, {
-    ...buildAuthConfig(),
-    params: { page: 0, size: 200 },
-  });
+async function enrichDocumentsWithPreview(documents: DocumentApiRecord[]): Promise<DocumentApiRecord[]> {
+  const enriched = await Promise.all(
+    documents.map(async (document) => {
+      try {
+        const preview = await getModeratorDocumentPreview(document.id);
+        return {
+          ...document,
+          fileUrl: preview.fileUrl ?? document.fileUrl,
+          fileType: preview.fileType ?? document.fileType,
+        };
+      } catch {
+        return document;
+      }
+    })
+  );
 
-  return extractArray(response.data)
-    .map(normalizeDocument)
-    .filter((item): item is DocumentApiRecord => item !== null);
+  return enriched;
 }
 
 function toQueueRecord(document: DocumentApiRecord): ModeratorQueueRecord {
@@ -318,12 +427,12 @@ function toQueueRecord(document: DocumentApiRecord): ModeratorQueueRecord {
     subject,
     school,
     uploader: document.uploadedByName ?? "Người dùng",
-    uploadedAt: formatDateTime(document.submittedAt ?? document.createdAt),
+    uploadedAt: formatDateTime(resolveQueueTimestamp(document)),
     status: document.status,
     moderatorNote: document.moderatorNote,
     level: inferLevel(semesterYear, school),
     pages: 1,
-    fileType: mapFileType(document.fileType),
+    fileType: mapFileType(document.fileType, document.fileUrl),
     category,
     semesterYear,
     lecturer: document.lecturer ?? "",
@@ -336,36 +445,10 @@ function toQueueRecord(document: DocumentApiRecord): ModeratorQueueRecord {
 }
 
 export async function listModeratorQueueItems(): Promise<ModeratorQueueRecord[]> {
-  const [moderatorResult, allDocumentsResult] = await Promise.allSettled([
-    listModeratorDocuments(),
-    listAllDocuments(),
-  ]);
+  const documents = await listModeratorDocuments();
+  const documentsWithPreview = await enrichDocumentsWithPreview(documents);
 
-  if (moderatorResult.status === "rejected" && allDocumentsResult.status === "rejected") {
-    throw moderatorResult.reason;
-  }
-
-  const merged = new Map<number, DocumentApiRecord>();
-
-  if (allDocumentsResult.status === "fulfilled") {
-    for (const item of allDocumentsResult.value) {
-      merged.set(item.id, item);
-    }
-  }
-
-  if (moderatorResult.status === "fulfilled") {
-    for (const item of moderatorResult.value) {
-      merged.set(item.id, item);
-    }
-  }
-
-  return Array.from(merged.values())
-    .sort((first, second) => {
-      const secondTime = toDateTimestamp(second.submittedAt ?? second.createdAt ?? second.publishedAt);
-      const firstTime = toDateTimestamp(first.submittedAt ?? first.createdAt ?? first.publishedAt);
-      return secondTime - firstTime;
-    })
-    .map(toQueueRecord);
+  return documentsWithPreview.map(toQueueRecord);
 }
 
 export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord, payload: ModeratorMetadataPayload) {
@@ -374,27 +457,28 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
     throw new Error("Vui lòng nhập tiêu đề.");
   }
 
-  const response = await apiClient.put(`/api/moderator/documents/${record.documentId}/metadata`, undefined, {
-    ...buildAuthConfig(),
-    params: {
+  const response = await apiClient.put(
+    `${MODERATOR_DOCUMENTS_PATH}/${record.documentId}`,
+    {
       title,
       ...(payload.school?.trim() ? { school: payload.school.trim() } : {}),
       ...(payload.subject?.trim() ? { subject: payload.subject.trim() } : {}),
-      ...(payload.semesterYear?.trim() ? { semesterYear: payload.semesterYear.trim() } : {}),
+      ...(payload.semesterYear?.trim() ? { semester: payload.semesterYear.trim() } : {}),
       ...(payload.type?.trim() ? { type: payload.type.trim() } : {}),
       ...(payload.lecturer?.trim() ? { lecturer: payload.lecturer.trim() } : {}),
     },
-  });
+    buildAuthConfig()
+  );
 
   return response.data;
 }
 
-export async function approveModeratorQueueItem(record: ModeratorQueueRecord, moderatorNote?: string) {
-  const trimmedNote = moderatorNote?.trim();
-  const response = await apiClient.put(`/api/moderator/documents/${record.documentId}/approve`, undefined, {
-    ...buildAuthConfig(),
-    params: trimmedNote ? { moderatorNote: trimmedNote } : undefined,
-  });
+export async function approveModeratorQueueItem(record: ModeratorQueueRecord) {
+  const response = await apiClient.put(
+    `${MODERATOR_DOCUMENTS_PATH}/${record.documentId}/approve`,
+    undefined,
+    buildAuthConfig()
+  );
   return response.data;
 }
 
@@ -405,13 +489,35 @@ export async function rejectModeratorQueueItem(record: ModeratorQueueRecord, rej
   }
 
   const response = await apiClient.put(
-    `/api/moderator/documents/${record.documentId}/reject`,
-    {
-      moderatorNote: finalReason,
-      rejectionReason: finalReason,
-    },
+    `${MODERATOR_DOCUMENTS_PATH}/${record.documentId}/reject`,
+    { note: finalReason },
     buildAuthConfig()
   );
 
   return response.data;
 }
+
+export async function getModeratorDocumentPreview(documentId: number): Promise<ModeratorDocumentPreview> {
+  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
+    ...buildAuthConfig(),
+    params: {
+      docId1: documentId,
+      docId2: documentId,
+    },
+  });
+
+  const payload = toObject(unwrapPayload(response.data));
+  const left = payload ? toObject(payload.left) : null;
+  const target = left ?? payload;
+
+  if (!target) {
+    return { fileUrl: null, fileType: null };
+  }
+
+  return {
+    fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
+    fileType: toStringOrNull(target.fileType),
+  };
+}
+
+

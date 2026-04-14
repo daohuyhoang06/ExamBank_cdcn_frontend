@@ -19,6 +19,14 @@ export type AdminCreateUserPayload = {
   status: AdminUserStatusCode;
 };
 
+export type AdminUpdateUserPayload = {
+  email: string;
+  name: string;
+  password?: string;
+  roleCode: AdminUserRoleCode;
+  status: AdminUserStatusCode;
+};
+
 export type AdminUserCardMetrics = {
   totalUsers: number;
   activeUsers: number;

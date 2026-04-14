@@ -54,6 +54,7 @@ export const router = createBrowserRouter([
     element: <AdminShell />,
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+      { path: "profile", element: <AdminProfileDetailPage /> },
       { path: "dashboard", element: <AdminDashboardPage /> },
       { path: "users", element: <AdminUsersPage /> },
       { path: "content", element: <AdminContentPage /> },
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
     element: <ModeratorShell />,
     children: [
       { index: true, element: <Navigate to="/moderator/queue" replace /> },
+      { path: "profile", element: <AdminProfileDetailPage /> },
       { path: "queue", element: <ModeratorQueuePage /> },
       { path: "grading", element: <ModeratorGradingPage /> },
       { path: "composer", element: <ModeratorComposerPage /> },
