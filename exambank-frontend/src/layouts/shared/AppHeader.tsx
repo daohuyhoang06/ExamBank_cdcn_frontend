@@ -112,7 +112,13 @@ export function AppHeader({
       return;
     }
 
-    navigate("/profile");
+    if (location.pathname.startsWith("/moderator")) {
+      navigate("/moderator/profile");
+      setIsAvatarMenuOpen(false);
+      return;
+    }
+
+    navigate("/user/profile");
     setIsAvatarMenuOpen(false);
   }
 

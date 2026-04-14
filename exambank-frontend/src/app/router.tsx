@@ -46,13 +46,14 @@ export const router = createBrowserRouter([
   // --- NHÓM ROUTES CHO ADMIN ---
   {
     path: "/profile",
-    element: <Navigate to="/admin/profile" replace />,
+    element: <Navigate to="/user/profile" replace />,
   },
   {
     path: "/admin",
     element: <AdminShell />,
     children: [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+      { path: "profile", element: <AdminProfileDetailPage /> },
       { path: "dashboard", element: <AdminDashboardPage /> },
       { path: "users", element: <AdminUsersPage /> },
       { path: "content", element: <AdminContentPage /> },
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
     element: <ModeratorShell />,
     children: [
       { index: true, element: <Navigate to="/moderator/queue" replace /> },
+      { path: "profile", element: <AdminProfileDetailPage /> },
       { path: "queue", element: <ModeratorQueuePage /> },
       { path: "grading", element: <ModeratorGradingPage /> },
       { path: "composer", element: <ModeratorComposerPage /> },

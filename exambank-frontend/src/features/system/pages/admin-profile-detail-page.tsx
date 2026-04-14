@@ -12,19 +12,22 @@ import {
   ShieldCheck,
   UserCircle2,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/Button/button";
 import { Card } from "@/components/ui/Card/card";
 import { Input } from "@/components/ui/Input/input";
 import { Table, type TableColumn } from "@/components/ui/Table/table";
 import { ChangePasswordModal } from "@/features/auth/pages/change-password-modal";
+import { getStoredAuthUser } from "@/features/auth/services/auth.service";
+import { userService } from "@/features/user/services/user.service";
+import type { UserProfile } from "@/features/user/types/user.type";
 
 const initialAdminProfile = {
   fullName: "Nguyễn Văn Quản Trị",
   adminId: "ADM-8821094",
   email: "quantri@scholarly.vn",
-  role: "Super Administrator",
-  organization: "Scholarly Control Center",
+  role: "Quản trị viên",
+  organization: "Admin Control Center",
   phone: "+84 987 123 456",
   accountStatus: "Hoạt động",
   createdAt: "15/01/2023",
@@ -33,6 +36,104 @@ const initialAdminProfile = {
   device: "MacBook Pro (Chrome)",
   ipAddress: "192.168.1.45",
   lastPasswordChangedAt: "12/03/2026 09:10",
+};
+
+type AdminProfile = typeof initialAdminProfile;
+
+const formatDate = (value?: string): string => {
+  if (!value) {
+    return "N/A";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatRoleLabel = (roles: string[]): string => {
+  if (roles.includes("ADMIN")) {
+    return "Quản trị viên";
+  }
+
+  if (roles.includes("MODERATOR")) {
+    return "Điều phối viên";
+  }
+
+  if (roles.includes("USER")) {
+    return "Người dùng";
+  }
+
+  return roles[0] ?? "Người dùng";
+};
+
+const formatAccountStatus = (status: UserProfile["status"]): string => {
+  if (status === "INACTIVE") {
+    return "Tạm ngưng";
+  }
+
+  if (status === "BANNED") {
+    return "Bị khóa";
+  }
+
+  return "Hoạt động";
+};
+
+const mapProfileToViewModel = (profile: UserProfile): AdminProfile => ({
+  fullName: profile.name,
+  adminId: `ADM-${String(profile.id).padStart(7, "0")}`,
+  email: profile.email,
+  role: formatRoleLabel(profile.roles),
+  organization: profile.roles.includes("ADMIN")
+    ? "Admin Control Center"
+    : profile.roles.includes("MODERATOR")
+      ? "Moderator Control Center"
+      : "Scholarly Control Center",
+  phone: "Chưa cập nhật",
+  accountStatus: formatAccountStatus(profile.status),
+  createdAt: formatDate(profile.createdAt),
+  address: "Chưa có dữ liệu",
+  latestLogin: "Chưa có dữ liệu",
+  device: "Chưa có dữ liệu",
+  ipAddress: "Chưa có dữ liệu",
+  lastPasswordChangedAt: "Chưa có dữ liệu",
+});
+
+const buildInitialProfile = (): AdminProfile => {
+  const storedUser = getStoredAuthUser();
+
+  if (!storedUser) {
+    return initialAdminProfile;
+  }
+
+  const roleList = storedUser.roles ?? (storedUser.role ? [storedUser.role] : []);
+  const resolvedRole = roleList.includes("ADMIN")
+    ? "Quản trị viên"
+    : roleList.includes("MODERATOR")
+      ? "Điều phối viên"
+      : roleList[0] ?? "Người dùng";
+
+  return {
+    ...initialAdminProfile,
+    fullName: storedUser.fullName ?? storedUser.email ?? initialAdminProfile.fullName,
+    email: storedUser.email ?? initialAdminProfile.email,
+    role: resolvedRole,
+    adminId:
+      typeof storedUser.id === "number" || typeof storedUser.id === "string"
+        ? `ADM-${String(storedUser.id).padStart(7, "0")}`
+        : initialAdminProfile.adminId,
+    organization: roleList.includes("ADMIN")
+      ? "Admin Control Center"
+      : roleList.includes("MODERATOR")
+        ? "Moderator Control Center"
+        : initialAdminProfile.organization,
+  };
 };
 
 type SessionItem = {
@@ -155,9 +256,12 @@ export default function AdminProfileDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [timeFilter, setTimeFilter] = useState<ActivityLog["period"] | "Tất cả">("Tất cả");
   const [actionFilter, setActionFilter] = useState<ActivityLog["category"] | "Tất cả">("Tất cả");
-  const [profileForm, setProfileForm] = useState(initialAdminProfile);
+  const [profileForm, setProfileForm] = useState(buildInitialProfile);
+  const [profileBaseline, setProfileBaseline] = useState(buildInitialProfile);
   const [selectedAvatarName, setSelectedAvatarName] = useState("");
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredLogs = useMemo(() => {
@@ -173,12 +277,51 @@ export default function AdminProfileDetailPage() {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchProfile = async () => {
+      setIsLoadingProfile(true);
+      setProfileError(null);
+
+      try {
+        const profile = await userService.getMyProfile();
+        if (!isActive) {
+          return;
+        }
+
+        const mappedProfile = mapProfileToViewModel(profile);
+        setProfileForm(mappedProfile);
+        setProfileBaseline(mappedProfile);
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        setProfileForm(profileBaseline);
+        setProfileError(null);
+      } finally {
+        if (isActive) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    void fetchProfile();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const handleCancelEdit = () => {
-    setProfileForm(initialAdminProfile);
+    setProfileForm(profileBaseline);
+    setSelectedAvatarName("");
     setIsEditing(false);
   };
 
   const handleSaveProfile = () => {
+    setProfileBaseline(profileForm);
     setIsEditing(false);
   };
 
@@ -306,13 +449,25 @@ export default function AdminProfileDetailPage() {
         subtitle="Dữ liệu cá nhân của quản trị viên"
         bodyClassName="mt-6"
       >
+        {profileError ? (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {profileError}
+          </div>
+        ) : null}
+
+        {isLoadingProfile ? (
+          <div className="mb-4 rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-soft)] px-4 py-3 text-sm text-[var(--ink-600)]">
+            Đang tải dữ liệu hồ sơ...
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
             label="Họ và tên"
             value={profileForm.fullName}
             onChange={(event) => handleFieldChange("fullName", event.target.value)}
             inputClassName="h-11"
-            readOnly={!isEditing}
+            readOnly={!isEditing || isLoadingProfile}
           />
           <Input label="Vai trò" value={profileForm.role} inputClassName="h-11" readOnly />
           <Input
@@ -320,14 +475,14 @@ export default function AdminProfileDetailPage() {
             value={profileForm.email}
             onChange={(event) => handleFieldChange("email", event.target.value)}
             inputClassName="h-11"
-            readOnly={!isEditing}
+            readOnly={!isEditing || isLoadingProfile}
           />
           <Input
             label="Số điện thoại"
             value={profileForm.phone}
             onChange={(event) => handleFieldChange("phone", event.target.value)}
             inputClassName="h-11"
-            readOnly={!isEditing}
+            readOnly={!isEditing || isLoadingProfile}
           />
           <div className="flex flex-col gap-2">
             <label className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]">
@@ -337,7 +492,7 @@ export default function AdminProfileDetailPage() {
               value={profileForm.accountStatus}
               onChange={(event) => handleFieldChange("accountStatus", event.target.value)}
               className="h-14 rounded-[var(--radius-field)] border border-transparent bg-[var(--bg-soft)] px-3.5 text-base text-[var(--ink-900)] outline-none transition duration-200 focus:border-[var(--brand-500)] focus:bg-white focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!isEditing}
+              disabled={!isEditing || isLoadingProfile}
             >
               <option>Hoạt động</option>
               <option>Bị khóa</option>
@@ -349,7 +504,7 @@ export default function AdminProfileDetailPage() {
             value={profileForm.createdAt}
             onChange={(event) => handleFieldChange("createdAt", event.target.value)}
             inputClassName="h-11"
-            readOnly={!isEditing}
+            readOnly={!isEditing || isLoadingProfile}
           />
           <Input label="Đơn vị" value={profileForm.organization} inputClassName="h-11" readOnly />
           <Input label="IP hiện tại" value={profileForm.ipAddress} inputClassName="h-11" readOnly />

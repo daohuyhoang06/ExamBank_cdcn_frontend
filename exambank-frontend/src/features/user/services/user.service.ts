@@ -20,6 +20,7 @@ import type {
   UserComment,
   UserProfile,
 } from "../types/user.type";
+import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 
 const api = apiClient;
 
@@ -170,6 +171,33 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   streak: user.streak ?? 0,
   createdAt: user.createdAt,
 });
+
+const mapStoredAuthUserToProfile = (): UserProfile | null => {
+  const storedUser = getStoredAuthUser();
+  if (!storedUser) {
+    return null;
+  }
+
+  const resolvedId = typeof storedUser.id === "number" ? storedUser.id : Number.parseInt(String(storedUser.id ?? "0"), 10) || 0;
+  const resolvedRoles = storedUser.roles?.length
+    ? storedUser.roles
+    : storedUser.role
+      ? [storedUser.role]
+      : ["USER"];
+
+  return {
+    id: resolvedId,
+    name: storedUser.fullName?.trim() || storedUser.email || "Người dùng",
+    email: storedUser.email || "",
+    username: storedUser.email ? deriveUsername(storedUser.email, resolvedId) : `user_${resolvedId}`,
+    roles: resolvedRoles,
+    status: "ACTIVE",
+    xp: 0,
+    coinBalance: 0,
+    streak: 0,
+    createdAt: undefined,
+  };
+};
 
 const toRelativeTime = (isoDate?: string): string => {
   if (!isoDate) {
@@ -467,8 +495,17 @@ export const userService = {
   },
 
   getMyProfile: async (): Promise<UserProfile> => {
-    const { data } = await api.get<BackendUser>("/api/v1/users/me");
-    return mapBackendUserToProfile(data);
+    try {
+      const { data } = await api.get<BackendUser>("/api/v1/users/me");
+      return mapBackendUserToProfile(data);
+    } catch {
+      const fallbackProfile = mapStoredAuthUserToProfile();
+      if (fallbackProfile) {
+        return fallbackProfile;
+      }
+
+      throw new Error("Khong the tai thong tin ho so.");
+    }
   },
 
   updateMyProfile: async (payload: UpdateUserProfilePayload): Promise<UserProfile> => {
