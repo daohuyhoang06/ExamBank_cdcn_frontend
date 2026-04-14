@@ -4,23 +4,16 @@ import { isAxiosError } from "axios";
 import {
   ArrowLeft,
   ArrowRight,
-  Ban,
   BookOpen,
   CheckCircle2,
-  Copy,
   Eye,
   FilePenLine,
   HelpCircle,
-  History,
-  Info,
   Plus,
   RefreshCcw,
-  Send,
   Star,
   Trash2,
-  Undo2,
   Upload,
-  XCircle,
   Zap,
 } from "lucide-react";
 import { ComposerJsonImportModal } from "@/features/moderator/components/composer-json-import-modal";
@@ -41,14 +34,9 @@ import type {
   ComposerQuestionPayload,
 } from "@/features/moderator/types/moderator-composer.type";
 
-type OverviewExamStatus =
-  | "Bản nháp"
-  | "Chờ phê duyệt"
-  | "Đã duyệt"
-  | "Đã xuất bản"
-  | "Bị từ chối";
+type OverviewExamStatus = "DRAFT" | "PUBLISHED";
 
-type OverviewFilterStatus = "Tất cả trạng thái" | OverviewExamStatus;
+type OverviewFilterStatus = "ALL" | OverviewExamStatus;
 type OverviewFilterSubject = string;
 
 type OverviewExamRow = {
@@ -149,40 +137,16 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
 }
 
 function statusBadgeClassName(status: OverviewExamStatus) {
-  if (status === "Đã xuất bản") {
+  if (status === "PUBLISHED") {
     return "bg-blue-100 text-blue-700";
-  }
-
-  if (status === "Chờ phê duyệt") {
-    return "bg-amber-100 text-amber-700";
-  }
-
-  if (status === "Đã duyệt") {
-    return "bg-emerald-100 text-emerald-700";
-  }
-
-  if (status === "Bị từ chối") {
-    return "bg-rose-100 text-rose-700";
   }
 
   return "bg-slate-100 text-slate-600";
 }
 
 function statusDotClassName(status: OverviewExamStatus) {
-  if (status === "Đã xuất bản") {
+  if (status === "PUBLISHED") {
     return "bg-blue-500";
-  }
-
-  if (status === "Chờ phê duyệt") {
-    return "bg-amber-500";
-  }
-
-  if (status === "Đã duyệt") {
-    return "bg-emerald-500";
-  }
-
-  if (status === "Bị từ chối") {
-    return "bg-rose-500";
   }
 
   return "bg-slate-400";
@@ -244,22 +208,19 @@ function formatCompactNumber(value: number) {
   return new Intl.NumberFormat("vi-VN").format(value);
 }
 
+function formatOverviewStatus(status: OverviewExamStatus) {
+  return status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp";
+}
+
 function mapExamStatusToOverview(exam: ComposerExamRecord): OverviewExamStatus {
   const normalized = (exam.status ?? "").toUpperCase();
 
   if (normalized === "PUBLISHED") {
-    return "Đã xuất bản";
+    return "PUBLISHED";
   }
 
-  if (normalized === "REJECTED") {
-    return "Bị từ chối";
-  }
-
-  if (normalized === "PENDING_REVIEW") {
-    return exam.approvedBy ? "Đã duyệt" : "Chờ phê duyệt";
-  }
-
-  return "Bản nháp";
+  // Any non-published status is still editable by moderator.
+  return "DRAFT";
 }
 
 function collectApiErrorMessagesFromData(value: unknown, depth = 0): string[] {
@@ -522,7 +483,7 @@ function buildExamUpdatePayload(
 
 export default function ModeratorComposerPage() {
   const navigate = useNavigate();
-  const [overviewStatus, setOverviewStatus] = useState<OverviewFilterStatus>("Tất cả trạng thái");
+  const [overviewStatus, setOverviewStatus] = useState<OverviewFilterStatus>("ALL");
   const [overviewSubject, setOverviewSubject] = useState<OverviewFilterSubject>("Tất cả môn học");
   const [overviewExamRows, setOverviewExamRows] = useState<OverviewExamRow[]>([]);
   const [flashNotice, setFlashNotice] = useState(() => {
@@ -577,7 +538,7 @@ export default function ModeratorComposerPage() {
 
   const filteredOverviewRows = useMemo(() => {
     return overviewExamRows.filter((item) => {
-      const byStatus = overviewStatus === "Tất cả trạng thái" || item.status === overviewStatus;
+      const byStatus = overviewStatus === "ALL" || item.status === overviewStatus;
       const bySubject = overviewSubject === "Tất cả môn học" || item.subject === overviewSubject;
 
       return byStatus && bySubject;
@@ -606,40 +567,39 @@ export default function ModeratorComposerPage() {
   }, [totalPages]);
 
   const overviewStatItems = useMemo<OverviewStatItem[]>(() => {
-    const pendingCount = overviewExamRows.filter((item) => item.status === "Chờ phê duyệt").length;
-    const approvedCount = overviewExamRows.filter((item) => item.status === "Đã duyệt").length;
-    const publishedCount = overviewExamRows.filter((item) => item.status === "Đã xuất bản").length;
-    const rejectedCount = overviewExamRows.filter((item) => item.status === "Bị từ chối").length;
+    const draftCount = overviewExamRows.filter((item) => item.status === "DRAFT").length;
+    const publishedCount = overviewExamRows.filter((item) => item.status === "PUBLISHED").length;
+    const totalExams = overviewExamRows.length;
     const totalQuestions = overviewExamRows.reduce((sum, item) => sum + item.questionCount, 0);
 
     return [
       {
-        title: "Chờ phê duyệt",
-        value: formatCompactNumber(pendingCount),
-        badge: approvedCount > 0 ? `${formatCompactNumber(approvedCount)} đã duyệt` : "Đang chờ xử lý",
+        title: "Bản nháp",
+        value: formatCompactNumber(draftCount),
+        badge: "Có thể chỉnh sửa",
         tone: "warning",
-        icon: Send,
+        icon: FilePenLine,
       },
       {
         title: "Đã xuất bản",
         value: formatCompactNumber(publishedCount),
-        badge: "Đang hoạt động",
+        badge: "Đang hiển thị cho user",
         tone: "success",
         icon: CheckCircle2,
       },
       {
-        title: "Bị từ chối",
-        value: formatCompactNumber(rejectedCount),
-        badge: "Cần xử lý",
-        tone: "danger",
-        icon: XCircle,
+        title: "Tổng đề thi",
+        value: formatCompactNumber(totalExams),
+        badge: "",
+        tone: "primary",
+        icon: BookOpen,
       },
       {
         title: "Tổng câu hỏi",
         value: formatCompactNumber(totalQuestions),
         badge: "",
         tone: "primary",
-        icon: BookOpen,
+        icon: Plus,
       },
     ];
   }, [overviewExamRows]);
@@ -705,13 +665,14 @@ export default function ModeratorComposerPage() {
   const iconActionClassName =
     "inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-45";
 
-  function openComposerForm(examId?: number) {
+  function openComposerForm(examId?: number, viewOnly = false) {
     if (!examId) {
       navigate("/moderator/composer/form");
       return;
     }
 
-    navigate(`/moderator/composer/form?examId=${examId}`);
+    const viewQuery = viewOnly ? "&view=1" : "";
+    navigate(`/moderator/composer/form?examId=${examId}${viewQuery}`);
   }
 
   async function updateExamWithPatch(
@@ -739,7 +700,7 @@ export default function ModeratorComposerPage() {
 
   async function publishOverviewExam(examId: number) {
     const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || targetExam.status !== "Đã duyệt") {
+    if (!targetExam || targetExam.status !== "DRAFT") {
       return;
     }
 
@@ -760,55 +721,15 @@ export default function ModeratorComposerPage() {
     );
   }
 
-  async function submitOverviewExam(examId: number) {
+  async function deleteOverviewExam(examId: number) {
     const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || (targetExam.status !== "Bản nháp" && targetExam.status !== "Bị từ chối")) {
+    if (!targetExam) {
       return;
     }
 
-    const shouldSubmit = window.confirm(`Gửi đề "${targetExam.title}" sang trạng thái chờ phê duyệt?`);
-    if (!shouldSubmit) {
-      return;
-    }
-
-    await updateExamWithPatch(
-      targetExam,
-      {
-        status: "PENDING_REVIEW",
-        approvedBy: null,
-      },
-      "Đã gửi đề sang hàng chờ phê duyệt."
+    const shouldDelete = window.confirm(
+      `Xóa đề "${targetExam.title}"? Hành động này không thể hoàn tác.`
     );
-  }
-
-  async function withdrawOverviewExam(examId: number) {
-    const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || targetExam.status !== "Chờ phê duyệt") {
-      return;
-    }
-
-    const shouldWithdraw = window.confirm(`Thu hồi đề "${targetExam.title}" về trạng thái bản nháp?`);
-    if (!shouldWithdraw) {
-      return;
-    }
-
-    await updateExamWithPatch(
-      targetExam,
-      {
-        status: "DRAFT",
-        approvedBy: null,
-      },
-      "Đã thu hồi đề về bản nháp."
-    );
-  }
-
-  async function deleteDraftExam(examId: number) {
-    const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || targetExam.status !== "Bản nháp") {
-      return;
-    }
-
-    const shouldDelete = window.confirm(`Xóa đề bản nháp "${targetExam.title}"? Hành động này không thể hoàn tác.`);
     if (!shouldDelete) {
       return;
     }
@@ -816,7 +737,7 @@ export default function ModeratorComposerPage() {
     setBusyExamId(examId);
     try {
       await deleteComposerExam(examId);
-      setFlashNotice("Đã xóa đề bản nháp.");
+      setFlashNotice("Đã xóa đề thi.");
       await refreshOverviewData();
     } catch (error) {
       window.alert(extractApiErrorMessage(error, "Xóa đề thi thất bại."));
@@ -1079,7 +1000,7 @@ export default function ModeratorComposerPage() {
         <div className="space-y-1">
           <h1 className="font-[var(--font-display)] text-4xl font-black tracking-tight text-[var(--ink-900)]">Quản lý Đề thi</h1>
           <p className="text-sm font-medium text-[var(--ink-600)] md:text-base">
-            Theo dõi, phê duyệt và quản lý hệ thống đề thi toàn quốc.
+            Theo dõi, xuất bản và quản lý hệ thống đề thi toàn quốc.
           </p>
         </div>
 
@@ -1132,12 +1053,9 @@ export default function ModeratorComposerPage() {
             onChange={(event) => setOverviewStatus(event.target.value as OverviewFilterStatus)}
             className="h-9 rounded-lg border border-transparent bg-white px-3 text-sm font-medium text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-500)]"
           >
-            <option>Tất cả trạng thái</option>
-            <option>Bản nháp</option>
-            <option>Chờ phê duyệt</option>
-            <option>Đã duyệt</option>
-            <option>Đã xuất bản</option>
-            <option>Bị từ chối</option>
+            <option value="ALL">Tất cả trạng thái</option>
+            <option value="DRAFT">Bản nháp</option>
+            <option value="PUBLISHED">Đã xuất bản</option>
           </select>
 
           <select
@@ -1230,7 +1148,7 @@ export default function ModeratorComposerPage() {
                       <td className="px-4 py-4 align-top">
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadgeClassName(item.status)}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusDotClassName(item.status)}`} />
-                          {item.status}
+                          {formatOverviewStatus(item.status)}
                         </span>
                       </td>
 
@@ -1243,43 +1161,7 @@ export default function ModeratorComposerPage() {
 
                       <td className="px-6 py-4 align-top">
                         <div className="flex items-center justify-end gap-1">
-                          {item.status === "Đã xuất bản" ? (
-                            <>
-                              <button type="button" className={iconActionClassName} title="Xem" disabled={isBusy}>
-                                <Eye size={14} />
-                              </button>
-                              <button type="button" className={iconActionClassName} title="Nhân bản" disabled={isBusy}>
-                                <Copy size={14} />
-                              </button>
-                              <button type="button" className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-slate-300" title="Không thể sửa đề đã xuất bản" disabled>
-                                <Ban size={14} />
-                              </button>
-                            </>
-                          ) : null}
-
-                          {item.status === "Chờ phê duyệt" ? (
-                            <>
-                              <button type="button" className={iconActionClassName} title="Xem" disabled={isBusy}>
-                                <Eye size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                className={iconActionClassName}
-                                title="Thu hồi"
-                                disabled={isBusy}
-                                onClick={() => {
-                                  void withdrawOverviewExam(item.examId);
-                                }}
-                              >
-                                <Undo2 size={14} />
-                              </button>
-                              <button type="button" className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-slate-300" title="Không thể sửa khi đang chờ duyệt" disabled>
-                                <Ban size={14} />
-                              </button>
-                            </>
-                          ) : null}
-
-                          {item.status === "Bản nháp" ? (
+                          {item.status === "DRAFT" ? (
                             <>
                               <button
                                 type="button"
@@ -1292,14 +1174,14 @@ export default function ModeratorComposerPage() {
                               </button>
                               <button
                                 type="button"
-                                className={iconActionClassName}
-                                title="Gửi duyệt"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Xuất bản cho người dùng"
                                 disabled={isBusy}
                                 onClick={() => {
-                                  void submitOverviewExam(item.examId);
+                                  void publishOverviewExam(item.examId);
                                 }}
                               >
-                                <Send size={14} />
+                                <Upload size={14} />
                               </button>
                               <button
                                 type="button"
@@ -1307,7 +1189,7 @@ export default function ModeratorComposerPage() {
                                 title="Xóa"
                                 disabled={isBusy}
                                 onClick={() => {
-                                  void deleteDraftExam(item.examId);
+                                  void deleteOverviewExam(item.examId);
                                 }}
                               >
                                 <Trash2 size={14} />
@@ -1315,49 +1197,27 @@ export default function ModeratorComposerPage() {
                             </>
                           ) : null}
 
-                          {item.status === "Bị từ chối" ? (
+                          {item.status === "PUBLISHED" ? (
                             <>
-                              <button type="button" className={iconActionClassName} title="Xem lý do" disabled={isBusy}>
-                                <Info size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openComposerForm(item.examId)}
-                                className={iconActionClassName}
-                                title="Sửa lại"
-                                disabled={isBusy}
-                              >
-                                <History size={14} />
-                              </button>
                               <button
                                 type="button"
                                 className={iconActionClassName}
-                                title="Gửi duyệt lại"
+                                title="Xem"
                                 disabled={isBusy}
-                                onClick={() => {
-                                  void submitOverviewExam(item.examId);
-                                }}
+                                onClick={() => openComposerForm(item.examId, true)}
                               >
-                                <RefreshCcw size={14} />
-                              </button>
-                            </>
-                          ) : null}
-
-                          {item.status === "Đã duyệt" ? (
-                            <>
-                              <button type="button" className={iconActionClassName} title="Xem" disabled={isBusy}>
                                 <Eye size={14} />
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  void publishOverviewExam(item.examId);
-                                }}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                title="Xuất bản cho người dùng"
+                                className={iconActionClassName}
+                                title="Xóa"
                                 disabled={isBusy}
+                                onClick={() => {
+                                  void deleteOverviewExam(item.examId);
+                                }}
                               >
-                                <Upload size={14} />
+                                <Trash2 size={14} />
                               </button>
                             </>
                           ) : null}
@@ -1434,7 +1294,7 @@ export default function ModeratorComposerPage() {
           <div className="relative z-10 max-w-xl space-y-3">
             <h2 className="font-[var(--font-display)] text-3xl font-black leading-tight">Bạn cần hỗ trợ xử lý đề thi?</h2>
             <p className="text-sm leading-relaxed text-white/85">
-              Liên hệ trực tiếp với Admin hệ thống hoặc xem qua tài liệu hướng dẫn Moderator để biết thêm chi tiết về quy trình phê duyệt.
+              Kiểm tra nội dung trước khi xuất bản để đảm bảo người dùng chỉ thấy các đề hoàn chỉnh và đúng chuẩn.
             </p>
             <button
               type="button"
@@ -1454,7 +1314,7 @@ export default function ModeratorComposerPage() {
                 <Zap size={13} />
               </span>
               <p>
-                <span className="font-bold text-[var(--ink-900)]">Duyệt nhanh:</span> Sử dụng phím tắt{" "}
+                <span className="font-bold text-[var(--ink-900)]">Xem nhanh:</span> Sử dụng phím tắt{" "}
                 <kbd className="rounded border border-[var(--line-soft)] bg-[var(--bg-soft)] px-1.5 py-0.5 text-[10px] font-bold">Space</kbd> để mở nhanh trình xem trước đề thi.
               </p>
             </li>
@@ -1463,7 +1323,7 @@ export default function ModeratorComposerPage() {
                 <Star size={13} />
               </span>
               <p>
-                <span className="font-bold text-[var(--ink-900)]">Đề thi VIP:</span> Các đề thi có nhãn Premium cần được kiểm duyệt kỹ về bản quyền hình ảnh.
+                <span className="font-bold text-[var(--ink-900)]">Đề đã xuất bản:</span> Sau khi xuất bản, chỉ nên xem lại hoặc xóa; không chỉnh sửa trực tiếp để tránh sai lệch dữ liệu.
               </p>
             </li>
           </ul>

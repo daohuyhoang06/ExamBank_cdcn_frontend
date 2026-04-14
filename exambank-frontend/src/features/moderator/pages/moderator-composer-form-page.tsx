@@ -349,6 +349,7 @@ function buildQuestionPayload(
 export default function ModeratorComposerFormPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isViewOnlyFromQuery = useMemo(() => searchParams.get("view") === "1", [searchParams]);
   const editingExamIdFromQuery = useMemo(() => {
     const rawExamId = searchParams.get("examId");
     if (!rawExamId) {
@@ -378,8 +379,10 @@ export default function ModeratorComposerFormPage() {
   const [loadError, setLoadError] = useState("");
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishedReadonly, setIsPublishedReadonly] = useState(false);
 
   const shouldShowDraftNotice = Boolean(draftNotice) && !isDraftNoticeHiddenByScroll;
+  const isFormLocked = isLoadingForm || isSaving || isPublishedReadonly;
 
   const activeSubjectRecord = useMemo(() => {
     return findSubjectByName(availableSubjects, subject);
@@ -432,6 +435,7 @@ export default function ModeratorComposerFormPage() {
         DEFAULT_SUBJECT;
 
       if (!editingExamIdFromQuery) {
+        setIsPublishedReadonly(false);
         setSubject((currentSubject) => {
           return currentSubject.trim().length === 0 ? fallbackSubject : currentSubject;
         });
@@ -440,6 +444,8 @@ export default function ModeratorComposerFormPage() {
       }
 
       const exam = await getComposerExamById(editingExamIdFromQuery);
+      const publishedByStatus = String(exam.status ?? "").toUpperCase() === "PUBLISHED";
+      const nextReadonly = isViewOnlyFromQuery || publishedByStatus;
       const subjectFromExam =
         fetchedSubjects.find((item) => item.id === exam.subjectId)?.name ?? fallbackSubject;
       const linkedQuestions = await listComposerExamQuestions(exam.id);
@@ -462,9 +468,14 @@ export default function ModeratorComposerFormPage() {
       setDurationMinutes(normalizedDuration);
       setQuestions(mappedQuestions);
       setActiveExamId(exam.id);
+      setIsPublishedReadonly(nextReadonly);
       setSaveError("");
       setFormErrors({});
-      setDraftNotice(`Đang chỉnh sửa đề đã lưu trên hệ thống (ID: ${exam.id}).`);
+      setDraftNotice(
+        nextReadonly
+          ? `Đề #${exam.id} đang ở chế độ chỉ xem vì đã xuất bản.`
+          : `Đang chỉnh sửa đề đã lưu trên hệ thống (ID: ${exam.id}).`
+      );
       setNewQuestionForms(buildQuestionForms(subjectFromExam));
       setSavedSnapshot({
         examId: exam.id,
@@ -480,7 +491,7 @@ export default function ModeratorComposerFormPage() {
     } finally {
       setIsLoadingForm(false);
     }
-  }, [editingExamIdFromQuery]);
+  }, [editingExamIdFromQuery, isViewOnlyFromQuery]);
 
   useEffect(() => {
     void loadInitialData();
@@ -549,6 +560,11 @@ export default function ModeratorComposerFormPage() {
   }
 
   async function saveDraft() {
+    if (isPublishedReadonly) {
+      setSaveError("Đề đã xuất bản không thể chỉnh sửa. Bạn chỉ có thể xem hoặc xóa ở trang quản lý.");
+      return null;
+    }
+
     const normalizedTitle = examTitle.trim() || "Đề chưa đặt tên";
     const normalizedSubject = subject.trim();
 
@@ -860,7 +876,7 @@ export default function ModeratorComposerFormPage() {
               onClick={() => {
                 void saveDraftAndBackToOverview();
               }}
-              disabled={isSaving || isLoadingForm}
+              disabled={isFormLocked}
             >
               <Save size={14} /> {isSaving ? "Đang lưu..." : "Lưu bản nháp"}
             </button>
@@ -915,7 +931,7 @@ export default function ModeratorComposerFormPage() {
               type="text"
               value={examTitle}
               onChange={(event) => setExamTitle(event.target.value)}
-              disabled={isLoadingForm || isSaving}
+              disabled={isFormLocked}
             />
           </div>
 
@@ -928,7 +944,7 @@ export default function ModeratorComposerFormPage() {
                 className="w-full appearance-none rounded-xl border border-transparent bg-white px-4 py-3 font-medium text-[var(--ink-900)] outline-none transition focus:border-[var(--brand-500)] focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)]"
                 value={subject}
                 onChange={(event) => handleSubjectChange(event.target.value)}
-                disabled={isLoadingForm || isSaving}
+                disabled={isFormLocked}
               >
                 {availableSubjects.length === 0 ? (
                   <option>{subject}</option>
@@ -950,7 +966,7 @@ export default function ModeratorComposerFormPage() {
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(Number(event.target.value) || 0)}
               min={1}
-              disabled={isLoadingForm || isSaving}
+              disabled={isFormLocked}
             />
           </div>
         </div>
@@ -1000,7 +1016,7 @@ export default function ModeratorComposerFormPage() {
                         className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
                         value={currentForm.subjectLine}
                         onChange={(event) => updateCreateForm(config.type, { subjectLine: event.target.value })}
-                        disabled={isLoadingForm || isSaving}
+                        disabled={isFormLocked}
                       />
                     </label>
 
@@ -1013,7 +1029,7 @@ export default function ModeratorComposerFormPage() {
                         min="0"
                         value={currentForm.points}
                         onChange={(event) => updateCreateForm(config.type, { points: event.target.value })}
-                        disabled={isLoadingForm || isSaving}
+                        disabled={isFormLocked}
                       />
                     </label>
 
@@ -1024,7 +1040,7 @@ export default function ModeratorComposerFormPage() {
                         placeholder="Ví dụ: Đạo hàm, Giải tích"
                         value={currentForm.tags}
                         onChange={(event) => updateCreateForm(config.type, { tags: event.target.value })}
-                        disabled={isLoadingForm || isSaving}
+                        disabled={isFormLocked}
                       />
                     </label>
                   </div>
@@ -1035,7 +1051,7 @@ export default function ModeratorComposerFormPage() {
                       className="h-24 w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
                       value={currentForm.content}
                       onChange={(event) => updateCreateForm(config.type, { content: event.target.value })}
-                      disabled={isLoadingForm || isSaving}
+                      disabled={isFormLocked}
                     />
                   </label>
 
@@ -1053,7 +1069,7 @@ export default function ModeratorComposerFormPage() {
                               value={option}
                               onChange={(event) => updateNewQuestionOption(config.type, index, event.target.value)}
                               placeholder={`Nhập phương án ${optionLabel(index)}`}
-                              disabled={isLoadingForm || isSaving}
+                              disabled={isFormLocked}
                             />
                           </label>
                         ))}
@@ -1065,7 +1081,7 @@ export default function ModeratorComposerFormPage() {
                           className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
                           value={currentForm.correctOption}
                           onChange={(event) => updateCreateForm(config.type, { correctOption: event.target.value })}
-                          disabled={isLoadingForm || isSaving}
+                          disabled={isFormLocked}
                         >
                           <option value="0">A</option>
                           <option value="1">B</option>
@@ -1088,7 +1104,7 @@ export default function ModeratorComposerFormPage() {
                               : "border-[var(--line-soft)] bg-[var(--bg-soft)] text-[var(--ink-600)]"
                           }`}
                           onClick={() => updateCreateForm(config.type, { trueAnswer: "true" })}
-                          disabled={isLoadingForm || isSaving}
+                          disabled={isFormLocked}
                         >
                           ĐÚNG
                         </button>
@@ -1100,7 +1116,7 @@ export default function ModeratorComposerFormPage() {
                               : "border-[var(--line-soft)] bg-[var(--bg-soft)] text-[var(--ink-600)]"
                           }`}
                           onClick={() => updateCreateForm(config.type, { trueAnswer: "false" })}
-                          disabled={isLoadingForm || isSaving}
+                          disabled={isFormLocked}
                         >
                           SAI
                         </button>
@@ -1115,7 +1131,7 @@ export default function ModeratorComposerFormPage() {
                         className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm font-semibold text-[var(--brand-700)] outline-none transition focus:border-[var(--brand-500)]"
                         value={currentForm.answer}
                         onChange={(event) => updateCreateForm(config.type, { answer: event.target.value })}
-                        disabled={isLoadingForm || isSaving}
+                        disabled={isFormLocked}
                       />
                     </label>
                   ) : null}
@@ -1129,7 +1145,7 @@ export default function ModeratorComposerFormPage() {
                       type="button"
                       className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-600)] px-4 py-2 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
                       onClick={() => createQuestion(config.type)}
-                      disabled={isLoadingForm || isSaving}
+                      disabled={isFormLocked}
                     >
                       <Plus size={14} /> Thêm câu hỏi
                     </button>
@@ -1137,7 +1153,7 @@ export default function ModeratorComposerFormPage() {
                       type="button"
                       className="rounded-lg border border-[var(--line-soft)] bg-white px-4 py-2 text-sm font-bold text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-70"
                       onClick={() => resetCreateForm(config.type)}
-                      disabled={isLoadingForm || isSaving}
+                      disabled={isFormLocked}
                     >
                       Làm mới form
                     </button>
@@ -1174,7 +1190,7 @@ export default function ModeratorComposerFormPage() {
                               className="rounded-lg p-2 text-[var(--ink-500)] transition-colors hover:bg-[var(--brand-100)] hover:text-[var(--brand-700)]"
                               onClick={() => duplicateQuestion(question.id)}
                               title="Nhân bản"
-                              disabled={isLoadingForm || isSaving}
+                              disabled={isFormLocked}
                             >
                               <Copy size={16} />
                             </button>
@@ -1183,7 +1199,7 @@ export default function ModeratorComposerFormPage() {
                               className="rounded-lg p-2 text-[var(--ink-500)] transition-colors hover:bg-rose-100 hover:text-rose-700"
                               onClick={() => removeQuestion(question.id)}
                               title="Xóa"
-                              disabled={isLoadingForm || isSaving}
+                              disabled={isFormLocked}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -1260,7 +1276,7 @@ export default function ModeratorComposerFormPage() {
                                 className="w-full rounded-xl border border-[var(--brand-100)] bg-[var(--bg-soft)] px-5 py-3 text-2xl font-bold text-[var(--brand-700)] outline-none transition focus:border-[var(--brand-500)]"
                                 value={question.answer ?? ""}
                                 onChange={(event) => updateQuestion(question.id, { answer: event.target.value })}
-                                disabled={isLoadingForm || isSaving}
+                                disabled={isFormLocked}
                               />
                               <p className="px-1 text-[10px] text-[var(--ink-500)]">
                                 Hệ thống sẽ chấp nhận các đáp án khớp chính xác với chuỗi văn bản trên.
@@ -1277,7 +1293,7 @@ export default function ModeratorComposerFormPage() {
                                   placeholder="Gắn thẻ chủ đề..."
                                   value={question.tags}
                                   onChange={(event) => updateQuestion(question.id, { tags: event.target.value })}
-                                  disabled={isLoadingForm || isSaving}
+                                  disabled={isFormLocked}
                                 />
                               </div>
                             </div>
@@ -1296,7 +1312,7 @@ export default function ModeratorComposerFormPage() {
                                     points: Number.isFinite(nextPoints) ? nextPoints : 0,
                                   });
                                 }}
-                                disabled={isLoadingForm || isSaving}
+                                disabled={isFormLocked}
                               />
                             </div>
 
@@ -1305,7 +1321,7 @@ export default function ModeratorComposerFormPage() {
                                 type="button"
                                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-40"
                                 onClick={() => moveWithinType(question.id, "up")}
-                                disabled={sectionIndex === 0 || isLoadingForm || isSaving}
+                                disabled={sectionIndex === 0 || isFormLocked}
                                 title="Đưa lên"
                               >
                                 <ArrowUp size={14} />
@@ -1314,7 +1330,7 @@ export default function ModeratorComposerFormPage() {
                                 type="button"
                                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--line-soft)] bg-white text-[var(--ink-600)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-40"
                                 onClick={() => moveWithinType(question.id, "down")}
-                                disabled={sectionIndex === items.length - 1 || isLoadingForm || isSaving}
+                                disabled={sectionIndex === items.length - 1 || isFormLocked}
                                 title="Đưa xuống"
                               >
                                 <ArrowDown size={14} />
@@ -1334,3 +1350,4 @@ export default function ModeratorComposerFormPage() {
     </div>
   );
 }
+

@@ -2,6 +2,8 @@
 import type { ModeratorQueueRecord } from "@/features/moderator/services/moderator-queue.service";
 import defaultQueueThumbnail from "@/assets/default-queue-thumbnail.svg";
 
+const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+
 type ModeratorQueueItemCardProps = {
   item: ModeratorQueueRecord;
   active: boolean;
@@ -54,11 +56,59 @@ function badgeBaseClassName() {
   return "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em]";
 }
 
+function toMinioPublicUrl(fileUrl: string | null | undefined) {
+  if (!fileUrl) {
+    return null;
+  }
+
+  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+    return fileUrl;
+  }
+
+  if (!fileUrl.startsWith("storage://")) {
+    return fileUrl;
+  }
+
+  const pathWithoutScheme = fileUrl.slice("storage://".length);
+  const firstSlash = pathWithoutScheme.indexOf("/");
+  if (firstSlash <= 0) {
+    return null;
+  }
+
+  const bucket = pathWithoutScheme.slice(0, firstSlash);
+  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+  const encodedObjectKey = objectKey
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+}
+
+function canUseImagePreview(item: ModeratorQueueRecord) {
+  if (item.fileType === "Ảnh") {
+    return true;
+  }
+
+  const normalizedUrl = (item.fileUrl ?? "").toLowerCase();
+  return (
+    normalizedUrl.endsWith(".png") ||
+    normalizedUrl.endsWith(".jpg") ||
+    normalizedUrl.endsWith(".jpeg") ||
+    normalizedUrl.endsWith(".webp") ||
+    normalizedUrl.endsWith(".gif")
+  );
+}
+
 export function ModeratorQueueItemCard({
   item,
   active,
   onSelect,
 }: ModeratorQueueItemCardProps) {
+  const imageThumbnail = canUseImagePreview(item) ? toMinioPublicUrl(item.fileUrl) : null;
+  const thumbnailSrc = imageThumbnail ?? defaultQueueThumbnail;
+
   return (
     <button
       type="button"
@@ -73,10 +123,14 @@ export function ModeratorQueueItemCard({
       <div className="flex gap-3">
         <div className="relative flex h-[100px] w-[82px] shrink-0 items-center justify-center rounded-[16px] bg-[#f5f7fb] ring-1 ring-[#edf1f6]">
           <img
-            src={defaultQueueThumbnail}
-            alt="Ảnh mặc định tài liệu"
+            src={thumbnailSrc}
+            alt={`Ảnh tài liệu ${item.title}`}
             className="h-[96px] w-[76px] rounded-[12px] object-cover"
             loading="lazy"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = defaultQueueThumbnail;
+            }}
           />
         </div>
 
@@ -127,4 +181,3 @@ export function ModeratorQueueItemCard({
     </button>
   );
 }
-
