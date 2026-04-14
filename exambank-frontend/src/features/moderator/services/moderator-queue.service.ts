@@ -70,6 +70,13 @@ export type ModeratorDocumentPreview = {
   fileType: string | null;
 };
 
+export type ModeratorQueueMetrics = {
+  totalDocuments: number;
+  pendingDocuments: number;
+  approvedDocuments: number;
+  rejectedDocuments: number;
+};
+
 function toObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -449,6 +456,31 @@ export async function listModeratorQueueItems(): Promise<ModeratorQueueRecord[]>
   const documentsWithPreview = await enrichDocumentsWithPreview(documents);
 
   return documentsWithPreview.map(toQueueRecord);
+}
+
+export async function getModeratorQueueMetrics(): Promise<ModeratorQueueMetrics> {
+  const documents = await listModeratorDocuments();
+
+  const pendingDocuments = documents.filter((item) => {
+    const normalizedStatus = (item.status ?? "").toUpperCase();
+    return normalizedStatus === "PENDING" || normalizedStatus === "PENDING_REVIEW";
+  }).length;
+
+  const approvedDocuments = documents.filter((item) => {
+    const normalizedStatus = (item.status ?? "").toUpperCase();
+    return normalizedStatus === "APPROVED" || normalizedStatus === "TRANSFORMED";
+  }).length;
+
+  const rejectedDocuments = documents.filter(
+    (item) => (item.status ?? "").toUpperCase() === "REJECTED"
+  ).length;
+
+  return {
+    totalDocuments: documents.length,
+    pendingDocuments,
+    approvedDocuments,
+    rejectedDocuments,
+  };
 }
 
 export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord, payload: ModeratorMetadataPayload) {

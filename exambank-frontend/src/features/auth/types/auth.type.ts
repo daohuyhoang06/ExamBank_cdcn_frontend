@@ -17,6 +17,7 @@ export type AuthUser = {
   email?: string;
   role?: string;
   roles?: string[];
+  avatarUrl?: string;
 };
 
 export type AuthSuccess = {

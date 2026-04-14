@@ -904,7 +904,11 @@ export default function AdminUsersPage() {
               >
                 Trước
               </Button>
-              <Pagination currentPage={safeCurrentPage} totalPages={totalPages} />
+              <Pagination
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                onPageChange={(page) => setCurrentPage(Math.max(1, Math.min(totalPages, page)))}
+              />
               <Button
                 type="button"
                 variant="ghost"

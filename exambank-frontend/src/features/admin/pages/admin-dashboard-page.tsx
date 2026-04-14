@@ -21,6 +21,8 @@ import { StatCard } from "@/components/ui/StatCard/stat-card";
 import { setAuthToken } from "@/lib/api-client";
 import { getAdminUserCardMetrics } from "@/features/admin/services/admin-users.service";
 import { clearStoredAuthUser } from "@/features/auth/services/auth.service";
+import { listComposerExams } from "@/features/moderator/services/moderator-composer.service";
+import { getModeratorQueueMetrics } from "@/features/moderator/services/moderator-queue.service";
 
 type DashboardStat = {
   title: string;
@@ -120,6 +122,30 @@ const initialUserCard: DashboardStat = {
   metaTwo: "Mới hôm nay +0",
 };
 
+const initialContentCard: DashboardStat = {
+  ...dashboardStats[1],
+  value: "0",
+  metaOne: "Đang chờ duyệt 0",
+  metaTwo: "Đã duyệt 0",
+};
+
+const initialExamCard: DashboardStat = {
+  ...dashboardStats[2],
+  value: "0",
+  metaOne: "Đã phát hành 0",
+  metaTwo: "Bản nháp 0",
+};
+
+const PUBLISHED_EXAM_STATUSES = new Set(["PUBLISHED"]);
+
+function isSameDay(input: Date, ref: Date) {
+  return (
+    input.getFullYear() === ref.getFullYear() &&
+    input.getMonth() === ref.getMonth() &&
+    input.getDate() === ref.getDate()
+  );
+}
+
 function metricClasses(accent: DashboardStat["accent"]) {
   if (accent === "orange") {
     return {
@@ -159,6 +185,8 @@ function metricClasses(accent: DashboardStat["accent"]) {
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const [userCard, setUserCard] = useState<DashboardStat>(initialUserCard);
+  const [contentCard, setContentCard] = useState<DashboardStat>(initialContentCard);
+  const [examCard, setExamCard] = useState<DashboardStat>(initialExamCard);
 
   useEffect(() => {
     let isMounted = true;
@@ -167,19 +195,53 @@ export default function AdminDashboardPage() {
       return new Intl.NumberFormat("vi-VN").format(value);
     }
 
-    async function loadUserCard() {
+    async function loadDashboardCards() {
       try {
-        const metrics = await getAdminUserCardMetrics();
+        const [userMetrics, contentMetrics, exams] = await Promise.all([
+          getAdminUserCardMetrics(),
+          getModeratorQueueMetrics(),
+          listComposerExams(),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
+        const publishedExams = exams.filter((item) =>
+          PUBLISHED_EXAM_STATUSES.has((item.status ?? "").toUpperCase())
+        ).length;
+        const draftExams = exams.length - publishedExams;
+        const now = new Date();
+        const createdToday = exams.filter((item) => {
+          if (!item.createdAt) {
+            return false;
+          }
+
+          const createdAtDate = new Date(item.createdAt);
+          return !Number.isNaN(createdAtDate.getTime()) && isSameDay(createdAtDate, now);
+        }).length;
+
         setUserCard({
           ...dashboardStats[0],
-          value: formatNumber(metrics.totalUsers),
-          metaOne: `Đang hoạt động ${formatNumber(metrics.activeUsers)}`,
-          metaTwo: `Mới hôm nay +${formatNumber(metrics.newUsersToday)}`,
+          value: formatNumber(userMetrics.totalUsers),
+          metaOne: `Đang hoạt động ${formatNumber(userMetrics.activeUsers)}`,
+          metaTwo: `Mới hôm nay +${formatNumber(userMetrics.newUsersToday)}`,
+        });
+
+        setContentCard({
+          ...dashboardStats[1],
+          value: formatNumber(contentMetrics.totalDocuments),
+          metaOne: `Đang chờ duyệt ${formatNumber(contentMetrics.pendingDocuments)}`,
+          metaTwo: `Đã duyệt ${formatNumber(contentMetrics.approvedDocuments)}`,
+          badge: contentMetrics.pendingDocuments > 0 ? "Cần xử lý" : "Ổn định",
+        });
+
+        setExamCard({
+          ...dashboardStats[2],
+          value: formatNumber(exams.length),
+          metaOne: `Đã phát hành ${formatNumber(publishedExams)}`,
+          metaTwo: `Tạo hôm nay ${formatNumber(createdToday)}`,
+          badge: draftExams > 0 ? "Cần duyệt" : "Ổn định",
         });
       } catch (error) {
         if (!isMounted) {
@@ -194,10 +256,12 @@ export default function AdminDashboardPage() {
         }
 
         setUserCard(initialUserCard);
+        setContentCard(initialContentCard);
+        setExamCard(initialExamCard);
       }
     }
 
-    void loadUserCard();
+    void loadDashboardCards();
 
     return () => {
       isMounted = false;
@@ -205,7 +269,7 @@ export default function AdminDashboardPage() {
   }, [navigate]);
 
   const maxValue = Math.max(...weeklyCredits.map((item) => Math.max(item.topUp, item.used)));
-  const cards = [userCard, ...dashboardStats.slice(1)];
+  const cards = [userCard, contentCard, examCard, dashboardStats[3]];
 
   return (
     <div className="space-y-8">

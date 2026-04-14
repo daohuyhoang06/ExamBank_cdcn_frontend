@@ -8,7 +8,7 @@ import type { SidebarNavItem } from "@/layouts/shared/AppSidebar";
 
 export const moderatorSidebarItems: SidebarNavItem[] = [
   {
-    label: "Hàng chờ kiểm duyệt",
+    label: "Kiểm duyệt nội dung",
     path: "/moderator/queue",
     icon: ClipboardCheck,
   },

@@ -39,6 +39,7 @@ const initialAdminProfile = {
 };
 
 type AdminProfile = typeof initialAdminProfile;
+const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
 
 const formatDate = (value?: string): string => {
   if (!value) {
@@ -57,13 +58,85 @@ const formatDate = (value?: string): string => {
   }).format(date);
 };
 
+const toNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toPublicAssetUrl = (value: string | null | undefined): string | null => {
+  const normalized = toNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("blob:")
+  ) {
+    return normalized;
+  }
+
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    const encodedObjectKey = objectKey
+      .split("/")
+      .filter((segment) => segment.length > 0)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+
+    return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+  }
+
+  if (normalized.startsWith("/")) {
+    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+  }
+
+  return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+};
+
+const buildFallbackAvatarUrl = (seed: string): string => {
+  const finalSeed = seed.trim() || "scholarly-user";
+  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(finalSeed)}`;
+};
+
+const getAvatarFromStoredPreferences = (userId: string | number | null | undefined): string | null => {
+  if (typeof window === "undefined" || userId === undefined || userId === null) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(`user-profile-ui:${userId}`);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { avatarUrl?: string };
+    return toPublicAssetUrl(parsed.avatarUrl);
+  } catch {
+    return null;
+  }
+};
+
 const formatRoleLabel = (roles: string[]): string => {
   if (roles.includes("ADMIN")) {
     return "Quản trị viên";
   }
 
   if (roles.includes("MODERATOR")) {
-    return "Điều phối viên";
+    return "Cộng tác viên";
   }
 
   if (roles.includes("USER")) {
@@ -116,7 +189,7 @@ const buildInitialProfile = (): AdminProfile => {
   const resolvedRole = roleList.includes("ADMIN")
     ? "Quản trị viên"
     : roleList.includes("MODERATOR")
-      ? "Điều phối viên"
+      ? "Cộng tác viên"
       : roleList[0] ?? "Người dùng";
 
   return {
@@ -253,16 +326,33 @@ function logStatusClasses(status: ActivityLog["status"]) {
 }
 
 export default function AdminProfileDetailPage() {
+  const storedAuthUser = useMemo(() => getStoredAuthUser(), []);
   const [isEditing, setIsEditing] = useState(false);
   const [timeFilter, setTimeFilter] = useState<ActivityLog["period"] | "Tất cả">("Tất cả");
   const [actionFilter, setActionFilter] = useState<ActivityLog["category"] | "Tất cả">("Tất cả");
   const [profileForm, setProfileForm] = useState(buildInitialProfile);
   const [profileBaseline, setProfileBaseline] = useState(buildInitialProfile);
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => {
+    const authAvatar = toPublicAssetUrl((storedAuthUser as { avatarUrl?: string } | null)?.avatarUrl);
+    if (authAvatar) {
+      return authAvatar;
+    }
+
+    const preferenceAvatar = getAvatarFromStoredPreferences(storedAuthUser?.id);
+    if (preferenceAvatar) {
+      return preferenceAvatar;
+    }
+
+    return buildFallbackAvatarUrl(storedAuthUser?.fullName ?? storedAuthUser?.email ?? "scholarly-user");
+  });
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [selectedAvatarName, setSelectedAvatarName] = useState("");
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
 
   const filteredLogs = useMemo(() => {
     return activityLogs.filter((log) => {
@@ -272,6 +362,12 @@ export default function AdminProfileDetailPage() {
       return matchTime && matchAction;
     });
   }, [timeFilter, actionFilter]);
+
+  const fallbackAvatarUrl = useMemo(
+    () => buildFallbackAvatarUrl(profileForm.fullName || profileForm.email || "scholarly-user"),
+    [profileForm.email, profileForm.fullName]
+  );
+  const effectiveAvatarUrl = avatarPreviewUrl ?? avatarUrl ?? fallbackAvatarUrl;
 
   const handleFieldChange = (field: keyof typeof initialAdminProfile, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
@@ -293,12 +389,19 @@ export default function AdminProfileDetailPage() {
         const mappedProfile = mapProfileToViewModel(profile);
         setProfileForm(mappedProfile);
         setProfileBaseline(mappedProfile);
+        const profileAvatar = toPublicAssetUrl(profile.avatarUrl);
+        const storedPreferenceAvatar = getAvatarFromStoredPreferences(profile.id);
+        setAvatarUrl(
+          profileAvatar ??
+            storedPreferenceAvatar ??
+            buildFallbackAvatarUrl(profile.name || profile.email || mappedProfile.fullName)
+        );
       } catch {
         if (!isActive) {
           return;
         }
 
-        setProfileForm(profileBaseline);
+        setProfileForm(buildInitialProfile());
         setProfileError(null);
       } finally {
         if (isActive) {
@@ -314,13 +417,36 @@ export default function AdminProfileDetailPage() {
     };
   }, []);
 
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [effectiveAvatarUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+        avatarObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCancelEdit = () => {
     setProfileForm(profileBaseline);
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = null;
+    }
+    setAvatarPreviewUrl(null);
     setSelectedAvatarName("");
     setIsEditing(false);
   };
 
   const handleSaveProfile = () => {
+    if (avatarPreviewUrl) {
+      setAvatarUrl(avatarPreviewUrl);
+      avatarObjectUrlRef.current = null;
+      setAvatarPreviewUrl(null);
+    }
     setProfileBaseline(profileForm);
     setIsEditing(false);
   };
@@ -331,7 +457,18 @@ export default function AdminProfileDetailPage() {
 
   const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
-    setSelectedAvatarName(selectedFile?.name ?? "");
+    if (!selectedFile) {
+      return;
+    }
+
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+    }
+
+    const nextObjectUrl = URL.createObjectURL(selectedFile);
+    avatarObjectUrlRef.current = nextObjectUrl;
+    setAvatarPreviewUrl(nextObjectUrl);
+    setSelectedAvatarName(selectedFile.name);
   };
 
 
@@ -375,8 +512,18 @@ export default function AdminProfileDetailPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-5">
             <div className="w-24 shrink-0 space-y-2 lg:w-28">
-              <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
-                <Shield size={34} />
+              <div className="relative inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
+                {avatarLoadFailed ? (
+                  <Shield size={34} />
+                ) : (
+                  <img
+                    src={effectiveAvatarUrl}
+                    alt={`Avatar ${profileForm.fullName}`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    onError={() => setAvatarLoadFailed(true)}
+                  />
+                )}
                 <span className="absolute -bottom-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white ring-4 ring-white">
                   <CheckCircle2 size={16} />
                 </span>

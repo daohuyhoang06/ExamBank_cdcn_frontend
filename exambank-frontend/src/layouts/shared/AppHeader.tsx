@@ -126,7 +126,7 @@ export function AppHeader({
     setAuthToken(null);
     clearStoredAuthUser();
     setIsAvatarMenuOpen(false);
-    navigate("/login");
+    navigate("/", { replace: true });
   }
 
   function handleNotificationItemClick(item: NotificationItem) {

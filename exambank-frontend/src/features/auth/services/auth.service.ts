@@ -53,6 +53,11 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
         name?: string;
         role?: string;
         roles?: string[];
+        avatarUrl?: string;
+        avatar?: string;
+        imageUrl?: string;
+        photoUrl?: string;
+        profileImageUrl?: string;
       }
     | undefined;
 
@@ -66,6 +71,12 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
           role: rawUser.role,
           roles: rawUser.roles,
           fullName: rawUser.fullName ?? rawUser.name,
+          avatarUrl:
+            rawUser.avatarUrl ??
+            rawUser.avatar ??
+            rawUser.imageUrl ??
+            rawUser.photoUrl ??
+            rawUser.profileImageUrl,
         }
       : undefined,
     message: raw.message,

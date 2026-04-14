@@ -159,6 +159,7 @@ export interface UserProfile {
   name: string;
   email: string;
   username: string;
+  avatarUrl?: string;
   roles: string[];
   status: AccountStatus;
   xp: number;

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const examCards = [
@@ -20,6 +21,68 @@ const examCards = [
     img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80',
   },
 ];
+
+function AnimatedCounter({
+  target,
+  format,
+  durationMs = 1800,
+  repeatDelayMs = 1400,
+}: {
+  target: number;
+  format: (value: number, target: number) => string;
+  durationMs?: number;
+  repeatDelayMs?: number;
+}) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    let rafId = 0;
+    let startedAt = 0;
+    let restartTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const tick = (now: number) => {
+      if (!startedAt) {
+        startedAt = now;
+      }
+
+      const progress = Math.min((now - startedAt) / durationMs, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * easedProgress));
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      restartTimer = setTimeout(() => {
+        startedAt = 0;
+        setValue(0);
+        rafId = requestAnimationFrame(tick);
+      }, repeatDelayMs);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (restartTimer) {
+        clearTimeout(restartTimer);
+      }
+    };
+  }, [durationMs, repeatDelayMs, target]);
+
+  return <>{format(value, target)}</>;
+}
+
+const formatThousands = (value: number, target: number) => {
+  if (value >= target) {
+    return `${Math.round(target / 1000)}K+`;
+  }
+
+  return `${(value / 1000).toFixed(1)}K+`;
+};
+
+const formatPercent = (value: number, target: number) => `${Math.min(value, target)}%`;
 
 export default function LandingPage() {
   return (
@@ -142,18 +205,24 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-[#0b3a78] py-10 text-white">
+      <section className="bg-[#0b3a78] py-12 text-white">
         <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-8 px-4 text-center sm:grid-cols-3 sm:px-6">
           <div>
-            <p className="text-5xl font-black leading-none">10K+</p>
+            <p className="text-[clamp(4.8rem,13vw,8.8rem)] font-black leading-none tracking-[-0.05em] text-white tabular-nums motion-safe:animate-[pulse_2.2s_ease-in-out_infinite]">
+              <AnimatedCounter target={10000} format={formatThousands} />
+            </p>
             <p className="mt-2 text-sm text-[#d6e5ff]">HỌC GIẢ HOẠT ĐỘNG</p>
           </div>
           <div>
-            <p className="text-5xl font-black leading-none">5K+</p>
+            <p className="text-[clamp(4.8rem,13vw,8.8rem)] font-black leading-none tracking-[-0.05em] text-white tabular-nums motion-safe:animate-[pulse_2.2s_ease-in-out_infinite]">
+              <AnimatedCounter target={5000} format={formatThousands} />
+            </p>
             <p className="mt-2 text-sm text-[#d6e5ff]">ĐỀ THI ĐÓNG GÓP</p>
           </div>
           <div>
-            <p className="text-5xl font-black leading-none">98%</p>
+            <p className="text-[clamp(4.8rem,13vw,8.8rem)] font-black leading-none tracking-[-0.05em] text-white tabular-nums motion-safe:animate-[pulse_2.2s_ease-in-out_infinite]">
+              <AnimatedCounter target={98} format={formatPercent} />
+            </p>
             <p className="mt-2 text-sm text-[#d6e5ff]">TỶ LỆ THÀNH CÔNG</p>
           </div>
         </div>

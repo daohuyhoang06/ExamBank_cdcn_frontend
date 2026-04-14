@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Building2, Headset, LogOut } from "lucide-react";
+import { Building2, Headset } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 export type SidebarNavItem = {
@@ -66,13 +66,6 @@ export function AppSidebar({ items, subtitle, showAdminExtras = false }: Props) 
                 Support Portal
               </p>
             </div>
-            <button
-              type="button"
-              className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--ink-600)] transition hover:bg-white"
-            >
-              <LogOut size={15} />
-              Log Out
-            </button>
           </>
         ) : null}
       </nav>

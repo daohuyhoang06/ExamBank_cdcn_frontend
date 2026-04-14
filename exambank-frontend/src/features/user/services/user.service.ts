@@ -123,6 +123,11 @@ type BackendUser = {
   name: string;
   primaryRole?: string;
   roles?: string[];
+  avatarUrl?: string;
+  avatar?: string;
+  imageUrl?: string;
+  photoUrl?: string;
+  profileImageUrl?: string;
   xp?: number;
   coinBalance?: number;
   streak?: number;
@@ -149,6 +154,25 @@ const deriveUsername = (email: string, id: number): string => {
   return `user_${id}`;
 };
 
+const toNonEmptyString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const resolveBackendAvatarUrl = (user: BackendUser): string | undefined => {
+  return (
+    toNonEmptyString(user.avatarUrl) ??
+    toNonEmptyString(user.avatar) ??
+    toNonEmptyString(user.imageUrl) ??
+    toNonEmptyString(user.photoUrl) ??
+    toNonEmptyString(user.profileImageUrl)
+  );
+};
+
 const normalizeRoles = (user: BackendUser): string[] => {
   const roleSet = new Set<string>();
   for (const role of user.roles ?? []) {
@@ -170,6 +194,7 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   name: user.name,
   email: user.email,
   username: deriveUsername(user.email, user.id),
+  avatarUrl: resolveBackendAvatarUrl(user),
   roles: normalizeRoles(user),
   status: toAccountStatus(user.status),
   xp: user.xp ?? 0,
@@ -196,6 +221,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     name: storedUser.fullName?.trim() || storedUser.email || "Người dùng",
     email: storedUser.email || "",
     username: storedUser.email ? deriveUsername(storedUser.email, resolvedId) : `user_${resolvedId}`,
+    avatarUrl: toNonEmptyString((storedUser as { avatarUrl?: string }).avatarUrl),
     roles: resolvedRoles,
     status: "ACTIVE",
     xp: 0,
