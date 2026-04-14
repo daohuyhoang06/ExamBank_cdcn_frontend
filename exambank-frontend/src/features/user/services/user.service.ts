@@ -7,12 +7,16 @@ import type {
   EducationLevel,
   Exam,
   ExamListItem,
+  ExamSessionResult,
+  ExamSessionStatusResponse,
   LeaderboardUser,
   Question,
   Ranking,
-  Recommendation,
+  SaveAnswerItem,
   SelectedFile,
+  StartExamSessionResponse,
   Subject,
+  SubmitReason,
   Submission,
   TopicData,
   UpdateUserProfilePayload,
@@ -42,14 +46,7 @@ const DEFAULT_SUBJECTS: Subject[] = [
   "Địa lý",
   "Tin học",
 ];
-
-type SpringPage<T> = {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
-};
+const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
 
 type BackendDocument = {
   id: number;
@@ -73,7 +70,7 @@ type BackendReview = {
   id: number;
   userId: number;
   userName?: string;
-  ratingValue: number;
+  rating?: number;
   comment?: string;
   createdAt: string;
   canDelete?: boolean;
@@ -117,6 +114,45 @@ type BackendExamQuestion = {
   difficulty?: number | null;
 };
 
+type BackendStartExamSession = {
+  sessionId: number;
+  status: string;
+  startTime?: string;
+  timeLimitMinutes?: number;
+  expiresAt?: string;
+};
+
+type BackendExamSessionStatus = {
+  sessionId: number;
+  status: string;
+  submittedAt?: string;
+  totalScore?: number;
+};
+
+type BackendQuestionResult = {
+  questionId: number;
+  isCorrect?: boolean;
+  scoreEarned?: number;
+};
+
+type BackendExamSessionResult = {
+  sessionId: number;
+  totalScore?: number;
+  submitReason?: SubmitReason;
+  startTime?: string;
+  submittedAt?: string;
+  timeLimitMinutes?: number;
+  questionResults?: BackendQuestionResult[];
+};
+
+type BackendExamLeaderboardItem = {
+  rank?: number;
+  userId?: number;
+  userName?: string;
+  totalScore?: number;
+  currentUser?: boolean;
+};
+
 type BackendUser = {
   id: number;
   email: string;
@@ -132,6 +168,55 @@ type BackendUser = {
 
 const isPublishedExamStatus = (status?: string): boolean => {
   return (status ?? "").trim().toUpperCase() === "PUBLISHED";
+};
+
+const toExamSessionStatus = (status?: string): ExamSessionStatusResponse["status"] => {
+  const normalized = (status ?? "").trim().toUpperCase();
+  if (normalized === "IN_PROGRESS" || normalized === "SUBMITTED" || normalized === "GRADING" || normalized === "COMPLETED" || normalized === "ABANDONED") {
+    return normalized;
+  }
+  return "IN_PROGRESS";
+};
+
+const mapSessionStatus = (data: BackendExamSessionStatus): ExamSessionStatusResponse => ({
+  sessionId: data.sessionId,
+  status: toExamSessionStatus(data.status),
+  submittedAt: data.submittedAt,
+  totalScore: data.totalScore,
+});
+
+const mapStartSession = (data: BackendStartExamSession): StartExamSessionResponse => ({
+  sessionId: data.sessionId,
+  status: toExamSessionStatus(data.status),
+  startTime: data.startTime,
+  timeLimitMinutes: data.timeLimitMinutes,
+  expiresAt: data.expiresAt,
+});
+
+const mapSessionResult = (data: BackendExamSessionResult): ExamSessionResult => ({
+  sessionId: data.sessionId,
+  totalScore: data.totalScore,
+  submitReason: data.submitReason,
+  startTime: data.startTime,
+  submittedAt: data.submittedAt,
+  timeLimitMinutes: data.timeLimitMinutes,
+  questionResults: (data.questionResults ?? []).map((item) => ({
+    questionId: item.questionId,
+    isCorrect: item.isCorrect,
+    scoreEarned: item.scoreEarned,
+  })),
+});
+
+const mapExamLeaderboardUsers = (items: BackendExamLeaderboardItem[]): LeaderboardUser[] => {
+  return [...items]
+    .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, 10)
+    .map((item, index) => ({
+      rank: item.rank ?? index + 1,
+      name: item.userName ?? `User ${item.userId ?? index + 1}`,
+      score: Math.round(item.totalScore ?? 0),
+      isUser: Boolean(item.currentUser),
+    }));
 };
 
 const toAccountStatus = (status?: string): AccountStatus => {
@@ -251,7 +336,7 @@ const parseOptions = (rawOptions?: string | null): string[] => {
   const cleanOptionText = (value: string): string =>
     value
       .trim()
-      .replace(/^[A-Da-d]\s*[\).:\-]\s*/, "")
+      .replace(/^[A-Da-d]\s*[).:-]\s*/, "")
       .trim();
 
   const finalize = (source: string[]): string[] => {
@@ -323,7 +408,7 @@ const parseOptions = (rawOptions?: string | null): string[] => {
   }
 
   const splitByLabel = normalized
-    .split(/(?:^|\n)\s*[A-Da-d]\s*[\).:\-]\s*/g)
+    .split(/(?:^|\n)\s*[A-Da-d]\s*[).:-]\s*/g)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
   if (splitByLabel.length >= 2) {
@@ -397,21 +482,173 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   moderatorNote: doc.moderatorNote,
 });
 
-const mapDocumentsToRecommendations = (docs: DocumentSummary[]): Recommendation[] => {
-  return docs.slice(0, 3).map((doc, index) => {
-    const rating = doc.averageRating ?? 0;
+const getSubmissionStorageKey = (): string => {
+  const storedUser = getStoredAuthUser();
+  const userId = storedUser?.id;
+  if (userId !== undefined && userId !== null && String(userId).trim().length > 0) {
+    return `${SUBMISSION_STORAGE_KEY_PREFIX}:${String(userId).trim()}`;
+  }
+
+  const email = storedUser?.email?.trim().toLowerCase();
+  if (email) {
+    return `${SUBMISSION_STORAGE_KEY_PREFIX}:${email}`;
+  }
+
+  return `${SUBMISSION_STORAGE_KEY_PREFIX}:guest`;
+};
+
+const toStoredBackendDocument = (doc: DocumentSummary): BackendDocument => ({
+  id: doc.id,
+  title: doc.title,
+  school: doc.school,
+  subject: doc.subject,
+  semesterYear: doc.semesterYear,
+  semester: doc.semesterYear,
+  type: doc.type,
+  lecturer: doc.lecturer,
+  fileUrl: doc.fileUrl,
+  averageRating: doc.averageRating,
+  downloadCount: doc.downloadCount,
+  status: doc.status,
+  createdAt: doc.createdAt,
+  moderatorNote: doc.moderatorNote,
+});
+
+const normalizeStoredDocument = (value: unknown): BackendDocument | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const item = value as Partial<BackendDocument>;
+  if (typeof item.id !== "number" || typeof item.title !== "string" || item.title.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    id: item.id,
+    title: item.title,
+    school: item.school,
+    subject: item.subject,
+    semesterYear: item.semesterYear ?? item.semester,
+    semester: item.semester ?? item.semesterYear,
+    type: item.type,
+    lecturer: item.lecturer,
+    fileUrl: item.fileUrl,
+    previewUrl: item.previewUrl,
+    averageRating: item.averageRating,
+    downloadCount: item.downloadCount,
+    status: item.status,
+    createdAt: item.createdAt,
+    moderatorNote: item.moderatorNote,
+  };
+};
+
+const loadStoredSubmissions = (): BackendDocument[] => {
+  try {
+    const raw = localStorage.getItem(getSubmissionStorageKey());
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map(normalizeStoredDocument)
+      .filter((item): item is BackendDocument => item !== null);
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredSubmissions = (documents: BackendDocument[]): void => {
+  try {
+    localStorage.setItem(getSubmissionStorageKey(), JSON.stringify(documents));
+  } catch {
+    // Skip persistence when storage is unavailable.
+  }
+};
+
+const upsertStoredSubmission = (summary: DocumentSummary): void => {
+  const nextDocument = {
+    ...toStoredBackendDocument(summary),
+    status: summary.status ?? "PENDING_REVIEW",
+    createdAt: summary.createdAt ?? new Date().toISOString(),
+  };
+
+  const existing = loadStoredSubmissions();
+  const remaining = existing.filter((item) => item.id !== nextDocument.id);
+  const next = [nextDocument, ...remaining].sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime;
+    }
+    return right.id - left.id;
+  });
+
+  saveStoredSubmissions(next);
+};
+
+const syncStoredSubmissionsWithApproved = (approvedSummaries: DocumentSummary[]): BackendDocument[] => {
+  const approvedById = new Map(approvedSummaries.map((item) => [item.id, item]));
+  const synced = loadStoredSubmissions().map((item) => {
+    const approved = approvedById.get(item.id);
+    if (!approved) {
+      return item;
+    }
+
     return {
-      title: doc.title,
-      description:
-        doc.lecturer || doc.school
-          ? `${doc.lecturer ?? "Giảng viên chưa cập nhật"} • ${doc.school ?? "Trường chưa cập nhật"}`
-          : "Đề thi được đề xuất theo mức độ phù hợp với bạn.",
-      tag: rating >= 4.5 ? "Nổi bật" : "Khuyến nghị",
-      color: index % 2 === 0 ? "primary" : "secondary",
-      stats: `${doc.downloadCount ?? 0} lượt tải • ${doc.subject ?? "Đa môn"}`,
-      documentId: doc.id,
+      ...item,
+      ...toStoredBackendDocument(approved),
+      status: "APPROVED",
+      moderatorNote: approved.moderatorNote,
     };
   });
+
+  saveStoredSubmissions(synced);
+  return synced;
+};
+
+const normalizeSortByValue = (value: string): string => {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "MOST_DOWNLOADED") {
+    return "MOST_DOWNLOADED";
+  }
+  if (normalized === "HIGHEST_RATED" || normalized === "HIGHEST_RATING") {
+    return "HIGHEST_RATING";
+  }
+  return "NEWEST";
+};
+
+const normalizeDocumentQueryParams = (
+  params?: Record<string, string | number | undefined>,
+): Record<string, string | number> | undefined => {
+  if (!params) {
+    return undefined;
+  }
+
+  const normalized: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (key === "status") {
+      continue;
+    }
+
+    if (key === "sort" || key === "sortBy") {
+      normalized.sortBy = normalizeSortByValue(String(value));
+      continue;
+    }
+
+    normalized[key] = value;
+  }
+
+  return normalized;
 };
 
 const mapLeaderBoards = (items: BackendLeaderBoard[]): Ranking[] => {
@@ -504,17 +741,21 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
 
 export const userService = {
   getComments: async (documentId: number): Promise<UserComment[]> => {
-    const { data } = await api.get<BackendReview[]>(`/api/documents/${documentId}/reviews`);
-    return data.map((item) => ({
-      id: item.id,
-      author: item.userName ?? `User ${item.userId}`,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.userId}`,
-      rating: item.ratingValue,
-      time: toRelativeTime(item.createdAt),
-      content: item.comment ?? "",
-      likes: 0,
-      canDelete: item.canDelete,
-    }));
+    try {
+      const { data } = await api.get<BackendReview[]>(`/api/v1/documents/${documentId}/reviews`);
+      return data.map((item) => ({
+        id: item.id,
+        author: item.userName ?? `User ${item.userId}`,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.userId}`,
+        rating: item.rating ?? 0,
+        time: toRelativeTime(item.createdAt),
+        content: item.comment ?? "",
+        likes: 0,
+        canDelete: item.canDelete,
+      }));
+    } catch {
+      return [];
+    }
   },
 
   getEducationLevels: async (): Promise<EducationLevel[]> => {
@@ -537,21 +778,6 @@ export const userService = {
       return ["Tất cả môn học", ...unique];
     } catch {
       return ["Tất cả môn học", ...DEFAULT_SUBJECTS];
-    }
-  },
-
-  getRecommendations: async (): Promise<Recommendation[]> => {
-    try {
-      const { data } = await api.get<SpringPage<BackendDocument>>("/api/documents", {
-        params: {
-          status: "APPROVED",
-          sort: "highest_rated",
-          size: 6,
-        },
-      });
-      return mapDocumentsToRecommendations(data.content.map(mapDocumentToSummary));
-    } catch {
-      return [];
     }
   },
 
@@ -588,8 +814,32 @@ export const userService = {
 
   getSubmissions: async (): Promise<Submission[]> => {
     try {
-      const { data } = await api.get<BackendDocument[]>("/api/v1/documents");
-      return data.map(mapDocumentToSummary).map(mapDocumentToSubmission);
+      let approvedDocuments: DocumentSummary[] = [];
+      try {
+        const { data } = await api.get<BackendDocument[]>("/api/v1/documents", {
+          params: {
+            sortBy: "NEWEST",
+            size: 200,
+          },
+        });
+        approvedDocuments = data.map(mapDocumentToSummary);
+      } catch {
+        approvedDocuments = [];
+      }
+
+      const syncedSubmissions = syncStoredSubmissionsWithApproved(approvedDocuments)
+        .sort((left, right) => {
+          const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+          const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+          if (leftTime !== rightTime) {
+            return rightTime - leftTime;
+          }
+          return right.id - left.id;
+        })
+        .map(mapDocumentToSummary)
+        .map(mapDocumentToSubmission);
+
+      return syncedSubmissions;
     } catch {
       return [];
     }
@@ -644,27 +894,41 @@ export const userService = {
   },
 
   getDocuments: async (params?: Record<string, string | number | undefined>): Promise<DocumentSummary[]> => {
-    const { data } = await api.get<SpringPage<BackendDocument>>("/api/documents", {
-      params,
+    const { data } = await api.get<BackendDocument[]>("/api/v1/documents", {
+      params: normalizeDocumentQueryParams(params),
     });
-    return data.content.map(mapDocumentToSummary);
+    return data.map(mapDocumentToSummary);
   },
 
   getDocumentById: async (documentId: number): Promise<DocumentSummary> => {
-    const { data } = await api.get<BackendDocument>(`/api/documents/${documentId}`);
+    const { data } = await api.get<BackendDocument>(`/api/v1/documents/${documentId}`);
     return mapDocumentToSummary(data);
   },
 
+  getDocumentPreviewBlob: async (documentId: number): Promise<Blob> => {
+    const { data } = await api.get<Blob>(`/api/v1/documents/${documentId}/preview`, {
+      responseType: "blob",
+    });
+    return data;
+  },
+
   getDocumentRatingStats: async (documentId: number): Promise<DocumentRatingStats> => {
-    const { data } = await api.get<{ average: number; count: number }>(`/api/documents/${documentId}/reviews/stats`);
-    return {
-      average: data.average ?? 0,
-      count: data.count ?? 0,
-    };
+    try {
+      const { data } = await api.get<{ average: number; count: number }>(`/api/v1/documents/${documentId}/reviews/stats`);
+      return {
+        average: data.average ?? 0,
+        count: data.count ?? 0,
+      };
+    } catch {
+      return {
+        average: 0,
+        count: 0,
+      };
+    }
   },
 
   createOrUpdateReview: async (documentId: number, rating: number, comment: string): Promise<void> => {
-    await api.post(`/api/documents/${documentId}/reviews`, {
+    await api.post(`/api/v1/documents/${documentId}/reviews`, {
       rating,
       comment,
     });
@@ -686,7 +950,9 @@ export const userService = {
     formData.append("file", file);
 
     const { data } = await api.post<BackendDocument>("/api/v1/documents", formData);
-    return mapDocumentToSummary(data);
+    const summary = mapDocumentToSummary(data);
+    upsertStoredSubmission(summary);
+    return summary;
   },
 };
 
@@ -734,5 +1000,38 @@ export const examService = {
     } catch {
       return [];
     }
+  },
+
+  startExamSession: async (examId: number): Promise<StartExamSessionResponse> => {
+    const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`);
+    return mapStartSession(data);
+  },
+
+  saveExamAnswers: async (sessionId: number, answers: SaveAnswerItem[]): Promise<void> => {
+    await api.put(`/api/exam-sessions/${sessionId}/answers`, {
+      answers,
+    });
+  },
+
+  submitExamSession: async (sessionId: number, submitReason: SubmitReason = "MANUAL"): Promise<ExamSessionStatusResponse> => {
+    const { data } = await api.post<BackendExamSessionStatus>(`/api/exam-sessions/${sessionId}/submit`, {
+      submitReason,
+    });
+    return mapSessionStatus(data);
+  },
+
+  getExamSessionStatus: async (sessionId: number): Promise<ExamSessionStatusResponse> => {
+    const { data } = await api.get<BackendExamSessionStatus>(`/api/exam-sessions/${sessionId}/status`);
+    return mapSessionStatus(data);
+  },
+
+  getExamSessionResult: async (sessionId: number): Promise<ExamSessionResult> => {
+    const { data } = await api.get<BackendExamSessionResult>(`/api/exam-sessions/${sessionId}/result`);
+    return mapSessionResult(data);
+  },
+
+  getExamLeaderboard: async (sessionId: number): Promise<LeaderboardUser[]> => {
+    const { data } = await api.get<BackendExamLeaderboardItem[]>(`/api/exam-sessions/${sessionId}/leaderboard`);
+    return mapExamLeaderboardUsers(data);
   },
 };

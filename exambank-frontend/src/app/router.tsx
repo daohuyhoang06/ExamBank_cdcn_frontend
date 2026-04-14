@@ -11,6 +11,7 @@ import AdminQuestionBankPage from "@/features/admin/pages/admin-question-bank-pa
 import AdminFinancialPage from "@/features/admin/pages/admin-financial-page";
 import AdminSystemPage from "@/features/admin/pages/admin-system-page";
 import UserHomePage from "@/features/user/pages/UserHomePage";
+import OnlineExamPage from "@/features/user/pages/OnlineExamPage";
 import { StudentLayout } from "@/layouts/student/StudentLayout";
 import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
@@ -114,6 +115,10 @@ export const router = createBrowserRouter([
       {
         path: "profile",
         element: <UserProfileSettingsPage />,
+      },
+      {
+        path: "online-exam",
+        element: <OnlineExamPage />,
       },
     ],
   },

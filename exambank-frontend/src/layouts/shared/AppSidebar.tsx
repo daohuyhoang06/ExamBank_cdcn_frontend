@@ -17,6 +17,35 @@ type Props = {
 export function AppSidebar({ items, subtitle, showAdminExtras = false }: Props) {
   const location = useLocation();
 
+  const normalizePath = (path: string): string => {
+    if (!path) {
+      return "/";
+    }
+    const normalized = path.replace(/\/+$/, "");
+    return normalized.length > 0 ? normalized : "/";
+  };
+
+  const currentPath = normalizePath(location.pathname);
+  const matchedItemPaths = items
+    .map((item) => {
+      const targetPath = normalizePath(item.path);
+      const depth = targetPath.split("/").filter(Boolean).length;
+      const isTopLevelRoot = depth === 1;
+      const matches = isTopLevelRoot
+        ? currentPath === targetPath
+        : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
+
+      return {
+        path: item.path,
+        targetPath,
+        matches,
+      };
+    })
+    .filter((entry) => entry.matches)
+    .sort((left, right) => right.targetPath.length - left.targetPath.length);
+
+  const activeItemPath = matchedItemPaths[0]?.path;
+
   return (
     <aside className="hidden w-64 border-r border-[var(--line-soft)] bg-[#f2f5fa] md:flex md:flex-col">
       <div className="px-6 py-5">
@@ -37,22 +66,23 @@ export function AppSidebar({ items, subtitle, showAdminExtras = false }: Props) 
 
       <nav className="flex flex-1 flex-col gap-1 p-4">
         {items.map((item) => {
-          const isActive =
-            location.pathname === item.path ||
-            location.pathname.startsWith(`${item.path}/`);
+          const isActive = activeItemPath === item.path;
           const Icon = item.icon;
 
           return (
             <Link
               key={item.path}
               to={item.path}
-              className={`mr-3 inline-flex items-center gap-3 px-4 py-3 text-sm font-medium transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] ${
+              className={`group mr-3 inline-flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] ${
                 isActive
-                  ? "rounded-r-full bg-white text-[var(--brand-700)] shadow-[0_8px_16px_rgba(16,21,38,0.07)]"
-                  : "rounded-xl text-[var(--ink-700)] hover:translate-x-1 hover:bg-white"
+                  ? "translate-x-1 -translate-y-0.5 rounded-r-full bg-white text-[var(--brand-700)] ring-1 ring-[var(--brand-100)] shadow-[0_12px_22px_rgba(16,21,38,0.10)]"
+                  : "rounded-xl text-[var(--ink-700)] hover:translate-x-1 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_18px_rgba(16,21,38,0.09)]"
               }`}
             >
-              <Icon size={16} />
+              <Icon
+                size={16}
+                className={`transition-transform duration-200 ${isActive ? "scale-105" : "group-hover:scale-105"}`}
+              />
               {item.label}
             </Link>
           );
