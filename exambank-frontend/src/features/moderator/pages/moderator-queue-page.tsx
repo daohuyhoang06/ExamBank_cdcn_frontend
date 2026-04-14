@@ -2,9 +2,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
 import {
+  ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Download,
   Eye,
+  Maximize2,
   Loader2,
   Save,
   Search,
@@ -15,15 +18,18 @@ import { Input } from "@/components/ui/Input/input";
 import { Modal } from "@/components/ui/Modal/modal";
 import {
   ModeratorQueueItemCard,
-  statusLabel,
 } from "@/features/moderator/components/moderator-queue-item-card";
 import {
   approveModeratorQueueItem,
+  getModeratorDocumentPreview,
   listModeratorQueueItems,
   rejectModeratorQueueItem,
   updateModeratorQueueMetadata,
   type ModeratorQueueRecord,
 } from "@/features/moderator/services/moderator-queue.service";
+
+const PAGE_SIZE = 5;
+const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
 
 const quickReasons = [
   {
@@ -40,6 +46,94 @@ const quickReasons = [
   },
 ];
 
+function buildPaginationItems(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | "ellipsis-left" | "ellipsis-right"> = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    items.push("ellipsis-left");
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
+  }
+
+  if (end < totalPages - 1) {
+    items.push("ellipsis-right");
+  }
+
+  items.push(totalPages);
+  return items;
+}
+
+function toMinioPublicUrl(fileUrl: string | null | undefined) {
+  if (!fileUrl) {
+    return null;
+  }
+
+  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+    return fileUrl;
+  }
+
+  if (!fileUrl.startsWith("storage://")) {
+    return fileUrl;
+  }
+
+  const pathWithoutScheme = fileUrl.slice("storage://".length);
+  const firstSlash = pathWithoutScheme.indexOf("/");
+  if (firstSlash <= 0) {
+    return null;
+  }
+
+  const bucket = pathWithoutScheme.slice(0, firstSlash);
+  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+  const encodedObjectKey = objectKey
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+}
+
+function detectPreviewKind(fileType: string | null | undefined, previewUrl: string | null) {
+  const normalizedType = (fileType ?? "").toLowerCase();
+  const normalizedUrl = (previewUrl ?? "").toLowerCase();
+
+  if (normalizedType.includes("pdf") || normalizedUrl.endsWith(".pdf")) {
+    return "pdf";
+  }
+
+  if (
+    normalizedType.includes("image") ||
+    normalizedType.includes("ảnh") ||
+    normalizedType.includes("anh") ||
+    normalizedUrl.endsWith(".png") ||
+    normalizedUrl.endsWith(".jpg") ||
+    normalizedUrl.endsWith(".jpeg") ||
+    normalizedUrl.endsWith(".webp") ||
+    normalizedUrl.endsWith(".gif")
+  ) {
+    return "image";
+  }
+
+  if (
+    normalizedType.includes("word") ||
+    normalizedType.includes("docx") ||
+    normalizedUrl.endsWith(".doc") ||
+    normalizedUrl.endsWith(".docx")
+  ) {
+    return "office";
+  }
+
+  return "other";
+}
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -48,8 +142,43 @@ function normalizeText(value: string) {
     .toLowerCase();
 }
 
+function normalizeStatusKey(status: string) {
+  return normalizeText(status).toUpperCase();
+}
+
+type StatusFilterValue = "ALL" | "PENDING" | "APPROVED" | "REJECTED";
+
+const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilterValue; label: string }> = [
+  { value: "ALL", label: "Trạng thái" },
+  { value: "PENDING", label: "Chờ duyệt" },
+  { value: "APPROVED", label: "Đã duyệt" },
+  { value: "REJECTED", label: "Từ chối" },
+];
+
+function matchesStatusFilter(status: string, filter: StatusFilterValue) {
+  if (filter === "ALL") {
+    return true;
+  }
+
+  const normalized = normalizeStatusKey(status);
+
+  if (filter === "PENDING") {
+    return normalized === "PENDING" || normalized === "PENDING_REVIEW";
+  }
+
+  if (filter === "APPROVED") {
+    return normalized === "APPROVED" || normalized === "TRANSFORMED";
+  }
+
+  if (filter === "REJECTED") {
+    return normalized === "REJECTED";
+  }
+
+  return false;
+}
+
 function canModerate(status: string) {
-  const normalized = normalizeText(status).toUpperCase();
+  const normalized = normalizeStatusKey(status);
   return normalized === "PENDING" || normalized === "PENDING_REVIEW";
 }
 
@@ -83,14 +212,12 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
 export default function ModeratorQueuePage() {
   const [subject, setSubject] = useState("Tất cả");
   const [level, setLevel] = useState("Tất cả");
-  const [schoolKeyword, setSchoolKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [globalKeyword, setGlobalKeyword] = useState("");
 
   const [queueItems, setQueueItems] = useState<ModeratorQueueRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const currentPage = 1;
-  const totalPages = 1;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -110,6 +237,10 @@ export default function ModeratorQueuePage() {
   const [metadataCategory, setMetadataCategory] = useState("Đề thi học kỳ");
   const [metadataLecturer, setMetadataLecturer] = useState("");
   const [metadataModeratorNote, setMetadataModeratorNote] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileType, setPreviewFileType] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
 
 
   const refreshQueue = useCallback(async (refreshingState = false) => {
@@ -124,16 +255,7 @@ export default function ModeratorQueuePage() {
     try {
       const records = await listModeratorQueueItems();
       setQueueItems(records);
-      setSelectedId((current) => {
-        if (current && records.some((item) => item.id === current)) {
-          return current;
-        }
-
-        return records[0]?.id ?? null;
-      });
     } catch (error) {
-      setQueueItems([]);
-      setSelectedId(null);
       setErrorMessage(extractApiErrorMessage(error, "Không thể tải danh sách tài liệu chờ duyệt."));
 
     
@@ -154,30 +276,53 @@ export default function ModeratorQueuePage() {
 
   const filteredQueue = useMemo(() => {
     const normalizedGlobalKeyword = normalizeText(globalKeyword);
-    const normalizedSchoolKeyword = normalizeText(schoolKeyword);
 
     return queueItems.filter((item) => {
       const bySubject = subject === "Tất cả" || item.subject === subject;
       const byLevel = level === "Tất cả" || item.level === level;
-      const bySchool =
-        normalizedSchoolKeyword.length === 0 ||
-        normalizeText(item.school).includes(normalizedSchoolKeyword);
+      const byStatus = matchesStatusFilter(item.status, statusFilter);
       const byKeyword =
         normalizedGlobalKeyword.length === 0 ||
         normalizeText(item.title).includes(normalizedGlobalKeyword) ||
         normalizeText(item.uploader).includes(normalizedGlobalKeyword);
 
-      return bySubject && byLevel && bySchool && byKeyword;
+      return bySubject && byLevel && byStatus && byKeyword;
     });
-  }, [globalKeyword, level, queueItems, schoolKeyword, subject]);
+  }, [globalKeyword, level, queueItems, statusFilter, subject]);
+
+  const totalPages = useMemo(() => {
+    if (filteredQueue.length === 0) {
+      return 1;
+    }
+    return Math.ceil(filteredQueue.length / PAGE_SIZE);
+  }, [filteredQueue.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [subject, level, statusFilter, globalKeyword]);
+
+  const paginatedQueue = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredQueue.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, filteredQueue]);
+
+  const paginationItems = useMemo(() => {
+    return buildPaginationItems(currentPage, totalPages);
+  }, [currentPage, totalPages]);
 
   const selected = useMemo(() => {
-    if (filteredQueue.length === 0) {
+    if (paginatedQueue.length === 0) {
       return null;
     }
 
-    return filteredQueue.find((item) => item.id === selectedId) ?? filteredQueue[0];
-  }, [filteredQueue, selectedId]);
+    return paginatedQueue.find((item) => item.id === selectedId) ?? paginatedQueue[0];
+  }, [paginatedQueue, selectedId]);
 
   const pendingCount = useMemo(
     () => filteredQueue.filter((item) => canModerate(item.status)).length,
@@ -216,6 +361,53 @@ export default function ModeratorQueuePage() {
     setMetadataCategory(selected.category || "Đề thi học kỳ");
     setMetadataLecturer(selected.lecturer || "");
     setMetadataModeratorNote(selected.moderatorNote ?? "");
+  }, [selected]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview(documentId: number, fallbackFileUrl: string | null) {
+      setIsPreviewLoading(true);
+      setPreviewError("");
+
+      try {
+        const preview = await getModeratorDocumentPreview(documentId);
+        if (cancelled) {
+          return;
+        }
+
+        setPreviewUrl(toMinioPublicUrl(preview.fileUrl ?? fallbackFileUrl));
+        setPreviewFileType(preview.fileType);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setPreviewUrl(toMinioPublicUrl(fallbackFileUrl));
+        setPreviewFileType(null);
+        setPreviewError(extractApiErrorMessage(error, "Không thể tải preview tài liệu."));
+      } finally {
+        if (!cancelled) {
+          setIsPreviewLoading(false);
+        }
+      }
+    }
+
+    if (!selected) {
+      setPreviewUrl(null);
+      setPreviewFileType(null);
+      setPreviewError("");
+      setIsPreviewLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void loadPreview(selected.documentId, selected.fileUrl);
+
+    return () => {
+      cancelled = true;
+    };
   }, [selected]);
 
   async function handleSaveMetadata() {
@@ -271,7 +463,7 @@ export default function ModeratorQueuePage() {
     setIsActionRunning(true);
 
     try {
-      await approveModeratorQueueItem(selected, metadataModeratorNote);
+      await approveModeratorQueueItem(selected);
       await refreshQueue(true);
     } catch (error) {
       window.alert(extractApiErrorMessage(error, "Duyệt tài liệu thất bại."));
@@ -295,10 +487,10 @@ export default function ModeratorQueuePage() {
 
     try {
       await rejectModeratorQueueItem(selected, finalReason);
+      await refreshQueue(true);
       setRejectOpen(false);
       setQuickReason("");
       setRejectReason("");
-      await refreshQueue(true);
     } catch (error) {
       window.alert(extractApiErrorMessage(error, "Từ chối tài liệu thất bại."));
     } finally {
@@ -307,21 +499,27 @@ export default function ModeratorQueuePage() {
   }
 
   function downloadOriginalFile() {
-    if (!selected?.fileUrl) {
+    const rawUrl = previewUrl ?? toMinioPublicUrl(selected?.fileUrl);
+    if (!rawUrl) {
       return;
     }
 
-    window.open(selected.fileUrl, "_blank", "noopener,noreferrer");
+    window.open(rawUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function openDocumentInNewTab() {
+    downloadOriginalFile();
   }
 
   const selectedStatus = selected?.status ?? "";
   const canRunActions = Boolean(selected) && !isActionRunning && !isRefreshing && canModerate(selectedStatus);
+  const previewKind = useMemo(() => detectPreviewKind(previewFileType ?? selected?.fileType ?? null, previewUrl), [previewFileType, previewUrl, selected?.fileType]);
 
   return (
     <div className="relative min-h-[78vh] overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-gradient-to-br from-[#f7f9fb] via-[#f4f7fb] to-[#eef4ff] shadow-[0_16px_40px_rgba(16,21,38,0.08)]">
       <div className="flex min-h-[78vh] flex-col xl:flex-row">
-        <section className="w-full border-r border-[#d9e2ef] bg-[linear-gradient(180deg,#f3f6fb_0%,#eef2f9_100%)] xl:w-[480px] 2xl:w-[520px]">
-          <div className="space-y-4 p-5">
+        <section className="flex min-h-[78vh] w-full flex-col overflow-hidden border-r border-[#d9e2ef] bg-[linear-gradient(180deg,#f3f6fb_0%,#eef2f9_100%)] xl:w-[480px] 2xl:w-[520px]">
+          <div className="shrink-0 space-y-4 p-5">
             <div className="flex items-center justify-between">
               <h2 className="font-[var(--font-display)] text-lg font-bold text-[#1a4b84]">Hàng chờ duyệt tài liệu</h2>
               <span className="rounded-full bg-[#1a4b84] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
@@ -346,7 +544,7 @@ export default function ModeratorQueuePage() {
               >
                 {subjectOptions.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {item === "Tất cả" ? "Môn học" : item}
                   </option>
                 ))}
               </select>
@@ -355,19 +553,23 @@ export default function ModeratorQueuePage() {
                 onChange={(event) => setLevel(event.target.value)}
                 className="h-10 flex-1 rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none"
               >
-                <option>Tất cả</option>
-                <option>THPT</option>
-                <option>THCS</option>
+                <option value="Tất cả">Bậc học</option>
+                <option value="THPT">THPT</option>
+                <option value="THCS">THCS</option>
               </select>
             </div>
 
-            <Input
-              value={schoolKeyword}
-              onChange={(event) => setSchoolKeyword(event.target.value)}
-              placeholder="Lọc theo trường"
-              inputClassName="h-10 text-sm"
-              inputWrapperClassName="border border-[#d5dfec] bg-white shadow-sm"
-            />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilterValue)}
+              className="h-10 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none"
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
             <div className="flex items-center justify-between gap-2">
               {errorMessage ? <p className="text-xs font-semibold text-rose-600">{errorMessage}</p> : <span />}
@@ -390,17 +592,17 @@ export default function ModeratorQueuePage() {
             </div>
           </div>
 
-          <div className="max-h-[58vh] space-y-3 overflow-y-auto px-4 pb-6">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4">
             {isLoading ? (
               <div className="flex h-40 items-center justify-center text-sm font-semibold text-slate-500">
                 <Loader2 size={16} className="mr-2 animate-spin" /> Đang tải dữ liệu...
               </div>
-            ) : filteredQueue.length === 0 ? (
+            ) : paginatedQueue.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/80 p-4 text-sm text-slate-500">
                 Không có tài liệu nào theo bộ lọc hiện tại.
               </div>
             ) : (
-              filteredQueue.map((item) => {
+              paginatedQueue.map((item) => {
                 const active = item.id === selected?.id;
 
                 return (
@@ -414,10 +616,67 @@ export default function ModeratorQueuePage() {
               })
             )}
           </div>
+
+          <div className="shrink-0 flex items-center justify-between border-t border-[#d9e2ef] bg-[var(--bg-soft)]/25 px-4 py-3">
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
+                currentPage <= 1 || filteredQueue.length === 0
+                  ? "cursor-not-allowed text-slate-400"
+                  : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
+              }`}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage <= 1 || filteredQueue.length === 0}
+            >
+              <ArrowLeft size={14} /> Trước
+            </button>
+
+            <div className="flex items-center gap-1.5">
+              {paginationItems.map((item) => {
+                if (typeof item !== "number") {
+                  return (
+                    <span key={item} className="px-1 text-sm text-[var(--ink-500)]">
+                      ...
+                    </span>
+                  );
+                }
+
+                const isCurrent = item === currentPage;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-semibold transition ${
+                      isCurrent
+                        ? "bg-[var(--brand-700)] font-bold text-white"
+                        : "text-[var(--ink-700)] hover:bg-[var(--bg-soft)]"
+                    }`}
+                    onClick={() => setCurrentPage(item)}
+                    disabled={isCurrent}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
+                currentPage >= totalPages || filteredQueue.length === 0
+                  ? "cursor-not-allowed text-slate-400"
+                  : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
+              }`}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage >= totalPages || filteredQueue.length === 0}
+            >
+              Tiếp theo <ArrowRight size={14} />
+            </button>
+          </div>
         </section>
 
-        <section className="relative flex min-w-0 flex-1 flex-col bg-[#f8fafc]">
-          <div className="h-[42%] min-h-[18rem] bg-[linear-gradient(180deg,#e8edf6_0%,#dde6f3_100%)] p-5 pb-3">
+        <section className="relative flex min-h-[78vh] min-w-0 flex-1 flex-col bg-[#f8fafc]">
+          <div className="h-[60vh] min-h-[24rem] max-h-[46rem] bg-[linear-gradient(180deg,#e8edf6_0%,#dde6f3_100%)] p-5 pb-3">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Eye size={16} className="shrink-0 text-[#1a4b84]" />
@@ -427,56 +686,89 @@ export default function ModeratorQueuePage() {
               <div className="flex shrink-0 gap-2">
                 <Button
                   variant="secondary"
-                  size="sm"
-                  className="h-9 rounded-lg border border-[#d5dfec] bg-white"
-                  leftIcon={<Download size={13} />}
-                  disabled={!selected?.fileUrl}
-                  onClick={downloadOriginalFile}
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border border-[#d5dfec] bg-white"
+                  disabled={!previewUrl && !selected?.fileUrl}
+                  onClick={openDocumentInNewTab}
+                  title="Phóng to đề"
+                  aria-label="Phóng to đề"
                 >
-                  Tải file gốc
+                  <Maximize2 size={15} />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border border-[#d5dfec] bg-white"
+                  disabled={!previewUrl && !selected?.fileUrl}
+                  onClick={downloadOriginalFile}
+                  title="Tải file gốc"
+                  aria-label="Tải file gốc"
+                >
+                  <Download size={15} />
                 </Button>
               </div>
             </div>
 
-            <div className="mx-auto h-[calc(100%-2.5rem)] max-w-4xl overflow-hidden rounded-2xl border border-[#dae3ef] bg-white p-6 shadow-xl">
-              <div className="h-full overflow-y-auto pr-2">
-                <div className="space-y-3 text-center">
-                  <h3 className="font-[var(--font-display)] text-xl font-black uppercase text-[#1e3556]">Xem nhanh tài liệu</h3>
-                  <p className="font-[var(--font-display)] text-lg font-bold uppercase">{selected?.school ?? "--"}</p>
-                  <p className="text-sm font-bold uppercase">{selected?.title ?? "Chưa có tài liệu"}</p>
-                  <p className="text-sm italic text-slate-600">Môn học: {selected?.subject ?? "--"}</p>
-                  <p className="text-sm italic text-slate-600">
-                    Trạng thái: <span className="font-semibold">{selected ? statusLabel(selected.status) : "--"}</span>
-                  </p>
+            <div className="mx-auto h-[calc(100%-2.5rem)] max-w-4xl overflow-hidden rounded-2xl border border-[#dae3ef] bg-white p-4 shadow-xl">
+              {!selected ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                  Chọn một tài liệu để xem chi tiết.
                 </div>
-
-                <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-500">
-                  Nội dung preview sẽ hiển thị từ endpoint xem trước tài liệu khi backend cung cấp.
+              ) : isPreviewLoading ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm font-semibold text-slate-500">
+                  <Loader2 size={16} className="mr-2 animate-spin" /> Đang tải preview...
                 </div>
-              </div>
+              ) : previewUrl && previewKind === "image" ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50">
+                  <div className="h-full w-full overflow-auto p-2">
+                    <img
+                      src={previewUrl}
+                      alt={selected.title}
+                      className="block w-full max-w-none rounded-lg"
+                    />
+                  </div>
+                </div>
+              ) : previewUrl && previewKind === "pdf" ? (
+                <iframe
+                  src={`${previewUrl}#toolbar=0&navpanes=0&view=FitH`}
+                  title={`preview-${selected.documentId}`}
+                  className="h-full w-full rounded-xl border border-slate-200 bg-white"
+                />
+              ) : previewUrl ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+                  <p className="text-sm font-semibold text-slate-700">Không thể xem trực tiếp định dạng này trong trang.</p>
+                  <Button variant="secondary" size="sm" onClick={downloadOriginalFile}>
+                    Mở tài liệu ở tab mới
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+                  <p className="text-sm font-semibold text-slate-700">Không tìm thấy URL preview cho tài liệu này.</p>
+                  {previewError ? <p className="text-xs text-rose-600">{previewError}</p> : null}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="h-[58%] overflow-y-auto rounded-t-3xl bg-white p-6 pb-28 shadow-[0_-12px_40px_rgba(0,0,0,0.03)] xl:pr-28">
+          <div className="rounded-t-3xl bg-white p-6 pb-28 shadow-[0_-12px_40px_rgba(0,0,0,0.03)] xl:pr-28">
             <div className="mx-auto max-w-5xl space-y-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-[#d5e3ff] p-2.5 text-[#1a4b84]">
                     <Eye size={18} />
                   </div>
                   <div>
                     <h3 className="text-lg font-bold leading-tight text-[#202739]">Duyệt và chỉnh metadata</h3>
-                    <p className="text-xs font-medium text-[#7d869c]">Cập nhật thông tin tài liệu trước khi duyệt hoặc từ chối</p>
                   </div>
                 </div>
 
                 <Button
-                  variant="secondary"
+                  variant="primary"
                   size="sm"
                   leftIcon={isMetadataSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   onClick={() => void handleSaveMetadata()}
                   disabled={!selected || isMetadataSaving || isRefreshing || isActionRunning}
-                  className="border border-[#d5dfec] bg-white"
+                  className="ml-auto h-9 min-w-[132px] rounded-lg border-0 px-4 text-white xl:-mr-24"
                 >
                   Lưu metadata
                 </Button>
@@ -571,10 +863,6 @@ export default function ModeratorQueuePage() {
             </Button>
           </div>
         </section>
-      </div>
-
-      <div className="absolute bottom-3 left-5 text-xs text-slate-500">
-        Trang {currentPage}/{totalPages} • {filteredQueue.length} tài liệu hiển thị
       </div>
 
       <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Lý do từ chối">

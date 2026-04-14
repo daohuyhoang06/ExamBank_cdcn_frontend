@@ -56,9 +56,11 @@ type BackendDocument = {
   school?: string;
   subject?: string;
   semesterYear?: string;
+  semester?: string;
   type?: string;
   lecturer?: string;
   fileUrl?: string;
+  previewUrl?: string;
   averageRating?: number;
   downloadCount?: number;
   status?: string;
@@ -125,6 +127,10 @@ type BackendUser = {
   streak?: number;
   status?: string;
   createdAt?: string;
+};
+
+const isPublishedExamStatus = (status?: string): boolean => {
+  return (status ?? "").trim().toUpperCase() === "PUBLISHED";
 };
 
 const toAccountStatus = (status?: string): AccountStatus => {
@@ -263,10 +269,10 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   title: doc.title,
   school: doc.school,
   subject: doc.subject,
-  semesterYear: doc.semesterYear,
+  semesterYear: doc.semesterYear ?? doc.semester,
   type: doc.type,
   lecturer: doc.lecturer,
-  fileUrl: doc.fileUrl,
+  fileUrl: doc.fileUrl ?? doc.previewUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
   status: doc.status,
@@ -455,7 +461,7 @@ export const userService = {
 
   getSubmissions: async (): Promise<Submission[]> => {
     try {
-      const { data } = await api.get<BackendDocument[]>("/api/documents/my");
+      const { data } = await api.get<BackendDocument[]>("/api/v1/documents");
       return data.map(mapDocumentToSummary).map(mapDocumentToSubmission);
     } catch {
       return [];
@@ -532,19 +538,20 @@ export const userService = {
 
   uploadDocument: async (payload: UploadDocumentPayload, file: File): Promise<DocumentSummary> => {
     const formData = new FormData();
-    formData.append("title", payload.title);
-    if (payload.school) formData.append("school", payload.school);
-    if (payload.subject) formData.append("subject", payload.subject);
-    if (payload.semesterYear) formData.append("semesterYear", payload.semesterYear);
-    if (payload.type) formData.append("type", payload.type);
-    if (payload.lecturer) formData.append("lecturer", payload.lecturer);
+
+    const uploadRequest = {
+      title: payload.title,
+      school: payload.school,
+      subject: payload.subject,
+      semester: payload.semesterYear,
+      type: payload.type,
+      lecturer: payload.lecturer,
+    };
+
+    formData.append("document", new Blob([JSON.stringify(uploadRequest)], { type: "application/json" }));
     formData.append("file", file);
 
-    const { data } = await api.post<BackendDocument>("/api/documents/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const { data } = await api.post<BackendDocument>("/api/v1/documents", formData);
     return mapDocumentToSummary(data);
   },
 };
@@ -557,19 +564,19 @@ export const examService = {
         return null;
       }
 
-      const [examResponse, questionsResponse] = await Promise.all([
-        api.get<BackendExam>(`/api/exams/${examId}`),
-        api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`),
-      ]);
+      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`);
+      if (!isPublishedExamStatus(examData.status)) {
+        return null;
+      }
 
-      const examData = examResponse.data;
+      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`);
       return {
         id: String(examData.id),
         title: examData.title,
         description: `Đề thi số #${examData.id}`,
         duration: examData.durationMinutes ?? 30,
         createdAt: examData.createdAt ?? new Date().toISOString(),
-        questions: questionsResponse.data.map(mapQuestion),
+        questions: questionData.map(mapQuestion),
       };
     } catch {
       return null;
@@ -579,15 +586,17 @@ export const examService = {
   getAllExams: async (): Promise<ExamListItem[]> => {
     try {
       const { data } = await api.get<BackendExam[]>("/api/exams");
-      return data.map((item) => ({
-        id: item.id,
-        title: item.title,
-        subjectId: item.subjectId,
-        subjectName: item.subjectName ?? item.subject,
-        durationMinutes: item.durationMinutes,
-        status: item.status,
-        createdAt: item.createdAt,
-      }));
+      return data
+        .filter((item) => isPublishedExamStatus(item.status))
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          subjectId: item.subjectId,
+          subjectName: item.subjectName ?? item.subject,
+          durationMinutes: item.durationMinutes,
+          status: item.status,
+          createdAt: item.createdAt,
+        }));
     } catch {
       return [];
     }

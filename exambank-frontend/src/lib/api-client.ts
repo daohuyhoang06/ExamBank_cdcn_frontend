@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosHeaders } from "axios";
 
 const TOKEN_KEY = "exambank_access_token";
 const SESSION_TOKEN_KEY = `${TOKEN_KEY}_session`;
@@ -6,10 +6,20 @@ const PERSISTENT_TOKEN_KEY = `${TOKEN_KEY}_persistent`;
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
+
+function toBearerHeader(token: string | null | undefined) {
+  if (!token) {
+    return null;
+  }
+
+  const normalized = token.replace(/^Bearer\s+/i, "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return `Bearer ${normalized}`;
+}
 
 function clearStoredAuthToken() {
   try {
@@ -69,22 +79,50 @@ export function getStoredAuthToken() {
 }
 
 export function setAuthToken(token: string | null, persist = false) {
-  if (!token) {
+  const bearerHeader = toBearerHeader(token);
+
+  if (!bearerHeader) {
     delete apiClient.defaults.headers.common.Authorization;
     clearStoredAuthToken();
     return;
   }
 
-  apiClient.defaults.headers.common.Authorization = `Bearer ${token}`;
-  storeAuthToken(token, persist);
+  apiClient.defaults.headers.common.Authorization = bearerHeader;
+  storeAuthToken(bearerHeader.replace(/^Bearer\s+/i, ""), persist);
 }
 
 export function initializeAuthToken() {
   const existingToken = getStoredAuthToken();
-  if (existingToken) {
-    apiClient.defaults.headers.common.Authorization = `Bearer ${existingToken}`;
+  const bearerHeader = toBearerHeader(existingToken);
+  if (bearerHeader) {
+    apiClient.defaults.headers.common.Authorization = bearerHeader;
   }
 }
+
+apiClient.interceptors.request.use((config) => {
+  const bearerHeader = toBearerHeader(getStoredAuthToken());
+  if (!bearerHeader) {
+    return config;
+  }
+
+  if (config.headers instanceof AxiosHeaders) {
+    if (!config.headers.has("Authorization")) {
+      config.headers.set("Authorization", bearerHeader);
+    }
+    return config;
+  }
+
+  const headers = (config.headers ?? {}) as Record<string, unknown>;
+  const hasAuthorizationHeader = typeof headers.Authorization === "string" || typeof headers.authorization === "string";
+  if (!hasAuthorizationHeader) {
+    config.headers = new AxiosHeaders({
+      ...headers,
+      Authorization: bearerHeader,
+    });
+  }
+
+  return config;
+});
 
 initializeAuthToken();
 
