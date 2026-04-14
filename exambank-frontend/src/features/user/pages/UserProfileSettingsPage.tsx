@@ -12,6 +12,7 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { authService } from "@/features/auth/services/auth.service";
 import { userService } from "../services/user.service";
 import type { UserProfile } from "../types/user.type";
@@ -65,7 +66,7 @@ const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
   notifyPush: true,
   notifyMentor: false,
   profileVisibility: "public",
-  avatarUrl: DEFAULT_AVATAR,
+  avatarUrl: profile.avatarUrl || DEFAULT_AVATAR,
 });
 
 const readStoredPreferences = (profile: UserProfile): UiPreferences => {
@@ -85,7 +86,7 @@ const readStoredPreferences = (profile: UserProfile): UiPreferences => {
       ...buildDefaultPreferences(profile),
       ...parsed,
       username: parsed.username?.trim() || profile.username,
-      avatarUrl: parsed.avatarUrl?.trim() || DEFAULT_AVATAR,
+      avatarUrl: profile.avatarUrl || parsed.avatarUrl?.trim() || DEFAULT_AVATAR,
       profileVisibility: parsed.profileVisibility === "private" ? "private" : "public",
     };
   } catch {
@@ -119,6 +120,8 @@ export default function UserProfileSettingsPage() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(DEFAULT_AVATAR);
 
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -133,6 +136,15 @@ export default function UserProfileSettingsPage() {
     setName(nextProfile.name);
     setEmail(nextProfile.email);
     setPreferences(stored);
+    setAvatarPreviewUrl(nextProfile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
+    syncStoredAuthUser({
+      id: nextProfile.id,
+      email: nextProfile.email,
+      role: nextProfile.roles[0],
+      roles: nextProfile.roles,
+      fullName: nextProfile.name,
+      avatarUrl: nextProfile.avatarUrl,
+    });
   };
 
   const persistPreferences = (): void => {
@@ -202,10 +214,14 @@ export default function UserProfileSettingsPage() {
     setSavingProfile(true);
     setNotice(null);
     try {
-      const updated = await saveProfileToBackend();
+      let updated = await saveProfileToBackend();
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
       hydrateFromProfile(updated);
+      setSelectedAvatarFile(null);
       persistPreferences();
-      setNotice({ type: "success", message: "Da cap nhat thong tin ca nhan thanh cong." });
+      setNotice({ type: "success", message: "Da cap nhat thong tin ca nhan va anh dai dien thanh cong." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -248,13 +264,17 @@ export default function UserProfileSettingsPage() {
     setSavingAll(true);
     setNotice(null);
     try {
-      const updated = await saveProfileToBackend();
+      let updated = await saveProfileToBackend();
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
       hydrateFromProfile(updated);
+      setSelectedAvatarFile(null);
       persistPreferences();
       setNotice({
         type: "info",
         message:
-          "Da luu thong tin ho so len backend. Cac tuy chon ngon ngu/thong bao/hien thi duoc luu cuc bo do backend chua co API tuong ung.",
+          "Da luu thong tin ho so va anh dai dien len backend. Cac tuy chon ngon ngu/thong bao/hien thi duoc luu cuc bo do backend chua co API tuong ung.",
       });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -296,6 +316,8 @@ export default function UserProfileSettingsPage() {
     setName(profile.name);
     setEmail(profile.email);
     setPreferences(stored);
+    setAvatarPreviewUrl(profile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
+    setSelectedAvatarFile(null);
     setPasswordForm({ currentPassword: "", nextPassword: "", confirmPassword: "" });
     setNotice(null);
   };
@@ -313,7 +335,9 @@ export default function UserProfileSettingsPage() {
 
     const objectUrl = URL.createObjectURL(file);
     setPreferences((prev) => ({ ...prev, avatarUrl: objectUrl }));
-    setNotice({ type: "info", message: "Anh dai dien da duoc cap nhat tam thoi. Bam Luu tat ca thay doi de ghi nho." });
+    setAvatarPreviewUrl(objectUrl);
+    setSelectedAvatarFile(file);
+    setNotice({ type: "info", message: "Anh dai dien da duoc cap nhat tam thoi. Bam Luu tat ca thay doi de luu len MinIO." });
   };
 
   if (loading) {
@@ -424,7 +448,7 @@ export default function UserProfileSettingsPage() {
         <aside className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 text-center">
           <div className="mx-auto w-fit">
             <div className="relative mx-auto h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-lg">
-              <img src={preferences.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+              <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => avatarFileInputRef.current?.click()}

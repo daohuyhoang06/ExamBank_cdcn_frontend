@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 import type {
   AccountStatus,
   ChangePasswordPayload,
@@ -119,6 +119,7 @@ type BackendUser = {
   id: number;
   email: string;
   name: string;
+  avatarUrl?: string;
   primaryRole?: string;
   roles?: string[];
   xp?: number;
@@ -164,6 +165,7 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   name: user.name,
   email: user.email,
   username: deriveUsername(user.email, user.id),
+  avatarUrl: user.avatarUrl,
   roles: normalizeRoles(user),
   status: toAccountStatus(user.status),
   xp: user.xp ?? 0,
@@ -190,6 +192,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     name: storedUser.fullName?.trim() || storedUser.email || "Người dùng",
     email: storedUser.email || "",
     username: storedUser.email ? deriveUsername(storedUser.email, resolvedId) : `user_${resolvedId}`,
+    avatarUrl: storedUser.avatarUrl,
     roles: resolvedRoles,
     status: "ACTIVE",
     xp: 0,
@@ -498,13 +501,16 @@ export const userService = {
     try {
       const { data } = await api.get<BackendUser>("/api/v1/users/me");
       return mapBackendUserToProfile(data);
-    } catch {
-      const fallbackProfile = mapStoredAuthUserToProfile();
-      if (fallbackProfile) {
-        return fallbackProfile;
+    } catch (error) {
+      const hasToken = Boolean(getStoredAuthToken());
+      if (!hasToken) {
+        const fallbackProfile = mapStoredAuthUserToProfile();
+        if (fallbackProfile) {
+          return fallbackProfile;
+        }
       }
 
-      throw new Error("Khong the tai thong tin ho so.");
+      throw error instanceof Error ? error : new Error("Khong the tai thong tin ho so.");
     }
   },
 
@@ -513,7 +519,7 @@ export const userService = {
     const { data } = await api.put<BackendUser>("/api/v1/users/me", {
       email: payload.email,
       name: payload.name,
-      status: current.status ?? "ACTIVE",
+      status: payload.status ?? current.status ?? "ACTIVE",
     });
     return mapBackendUserToProfile(data);
   },
@@ -537,6 +543,15 @@ export const userService = {
       name: current.name,
       status,
     });
+    return mapBackendUserToProfile(data);
+  },
+
+  uploadMyAvatar: async (file: File): Promise<UserProfile> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const { data } = await api.put<BackendUser>("/api/v1/users/me/avatar", formData);
+
     return mapBackendUserToProfile(data);
   },
 
@@ -577,11 +592,7 @@ export const userService = {
     if (payload.lecturer) formData.append("lecturer", payload.lecturer);
     formData.append("file", file);
 
-    const { data } = await api.post<BackendDocument>("/api/documents/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const { data } = await api.post<BackendDocument>("/api/documents/upload", formData);
     return mapDocumentToSummary(data);
   },
 };

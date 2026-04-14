@@ -159,6 +159,7 @@ export interface UserProfile {
   name: string;
   email: string;
   username: string;
+  avatarUrl?: string;
   roles: string[];
   status: AccountStatus;
   xp: number;
@@ -170,6 +171,7 @@ export interface UserProfile {
 export interface UpdateUserProfilePayload {
   name: string;
   email: string;
+  status?: AccountStatus;
 }
 
 export interface ChangePasswordPayload {

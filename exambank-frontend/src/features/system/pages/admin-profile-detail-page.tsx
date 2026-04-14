@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/Card/card";
 import { Input } from "@/components/ui/Input/input";
 import { Table, type TableColumn } from "@/components/ui/Table/table";
 import { ChangePasswordModal } from "@/features/auth/pages/change-password-modal";
+import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 import { userService } from "@/features/user/services/user.service";
 import type { UserProfile } from "@/features/user/types/user.type";
@@ -36,6 +37,7 @@ const initialAdminProfile = {
   device: "MacBook Pro (Chrome)",
   ipAddress: "192.168.1.45",
   lastPasswordChangedAt: "12/03/2026 09:10",
+  avatarUrl: "",
 };
 
 type AdminProfile = typeof initialAdminProfile;
@@ -103,7 +105,28 @@ const mapProfileToViewModel = (profile: UserProfile): AdminProfile => ({
   device: "Chưa có dữ liệu",
   ipAddress: "Chưa có dữ liệu",
   lastPasswordChangedAt: "Chưa có dữ liệu",
+  avatarUrl: profile.avatarUrl ?? "",
 });
+
+const extractErrorMessage = (error: unknown): string => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: unknown }).response === "object"
+  ) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    if (response?.data?.message) {
+      return response.data.message;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Đã xảy ra lỗi không xác định.";
+};
 
 const buildInitialProfile = (): AdminProfile => {
   const storedUser = getStoredAuthUser();
@@ -254,11 +277,14 @@ function logStatusClasses(status: ActivityLog["status"]) {
 
 export default function AdminProfileDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [timeFilter, setTimeFilter] = useState<ActivityLog["period"] | "Tất cả">("Tất cả");
   const [actionFilter, setActionFilter] = useState<ActivityLog["category"] | "Tất cả">("Tất cả");
   const [profileForm, setProfileForm] = useState(buildInitialProfile);
   const [profileBaseline, setProfileBaseline] = useState(buildInitialProfile);
   const [selectedAvatarName, setSelectedAvatarName] = useState("");
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -293,13 +319,13 @@ export default function AdminProfileDetailPage() {
         const mappedProfile = mapProfileToViewModel(profile);
         setProfileForm(mappedProfile);
         setProfileBaseline(mappedProfile);
-      } catch {
+        setAvatarPreviewUrl(mappedProfile.avatarUrl);
+      } catch (error) {
         if (!isActive) {
           return;
         }
 
-        setProfileForm(profileBaseline);
-        setProfileError(null);
+        setProfileError(extractErrorMessage(error));
       } finally {
         if (isActive) {
           setIsLoadingProfile(false);
@@ -317,12 +343,56 @@ export default function AdminProfileDetailPage() {
   const handleCancelEdit = () => {
     setProfileForm(profileBaseline);
     setSelectedAvatarName("");
+    setSelectedAvatarFile(null);
+    setAvatarPreviewUrl(profileBaseline.avatarUrl);
     setIsEditing(false);
   };
 
-  const handleSaveProfile = () => {
-    setProfileBaseline(profileForm);
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      let updated = await userService.updateMyProfile({
+        name: profileForm.fullName.trim(),
+        email: profileForm.email.trim(),
+        status:
+          profileForm.accountStatus === "Bị khóa"
+            ? "BANNED"
+            : profileForm.accountStatus === "Tạm ngưng"
+              ? "INACTIVE"
+              : "ACTIVE",
+      });
+
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
+
+      // Always refresh from backend after save so UI state uses canonical profile data.
+      updated = await userService.getMyProfile();
+
+      const mappedProfile = mapProfileToViewModel(updated);
+      const resolvedAvatarUrl = updated.avatarUrl?.trim() || avatarPreviewUrl || profileBaseline.avatarUrl;
+      mappedProfile.avatarUrl = resolvedAvatarUrl;
+      setProfileForm(mappedProfile);
+      setProfileBaseline(mappedProfile);
+      setAvatarPreviewUrl(resolvedAvatarUrl);
+      setSelectedAvatarName("");
+      setSelectedAvatarFile(null);
+      syncStoredAuthUser({
+        id: updated.id,
+        email: updated.email,
+        role: updated.roles[0],
+        roles: updated.roles,
+        fullName: updated.name,
+        avatarUrl: resolvedAvatarUrl,
+      });
+      setIsEditing(false);
+    } catch (error) {
+      setProfileError(extractErrorMessage(error));
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleChooseAvatar = () => {
@@ -332,6 +402,10 @@ export default function AdminProfileDetailPage() {
   const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     setSelectedAvatarName(selectedFile?.name ?? "");
+    setSelectedAvatarFile(selectedFile ?? null);
+    if (selectedFile) {
+      setAvatarPreviewUrl(URL.createObjectURL(selectedFile));
+    }
   };
 
 
@@ -375,8 +449,12 @@ export default function AdminProfileDetailPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-5">
             <div className="w-24 shrink-0 space-y-2 lg:w-28">
-              <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
-                <Shield size={34} />
+              <div className="relative inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
+                {avatarPreviewUrl ? (
+                  <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <Shield size={34} />
+                )}
                 <span className="absolute -bottom-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white ring-4 ring-white">
                   <CheckCircle2 size={16} />
                 </span>
@@ -433,8 +511,8 @@ export default function AdminProfileDetailPage() {
                 <Button type="button" variant="ghost" size="md" onClick={handleCancelEdit}>
                   Hủy
                 </Button>
-                <Button type="button" variant="primary" size="md" onClick={handleSaveProfile}>
-                  Lưu
+                <Button type="button" variant="primary" size="md" onClick={() => void handleSaveProfile()} disabled={isSavingProfile}>
+                  {isSavingProfile ? "Đang lưu..." : "Lưu"}
                 </Button>
               </>
             )}

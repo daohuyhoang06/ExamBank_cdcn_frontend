@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosHeaders } from "axios";
 
 const TOKEN_KEY = "exambank_access_token";
 const SESSION_TOKEN_KEY = `${TOKEN_KEY}_session`;
@@ -6,9 +6,36 @@ const PERSISTENT_TOKEN_KEY = `${TOKEN_KEY}_persistent`;
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+});
+
+apiClient.interceptors.request.use((config) => {
+  const token = getStoredAuthToken();
+
+  if (token) {
+    if (config.headers instanceof AxiosHeaders) {
+      if (!config.headers.has("Authorization")) {
+        config.headers.set("Authorization", `Bearer ${token}`);
+      }
+    } else {
+      const headers = (config.headers ?? {}) as Record<string, string>;
+      if (!headers.Authorization && !headers.authorization) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      config.headers = headers;
+    }
+  }
+
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (config.headers instanceof AxiosHeaders) {
+      config.headers.delete("Content-Type");
+    } else if (config.headers) {
+      const headers = config.headers as Record<string, unknown>;
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
+  }
+
+  return config;
 });
 
 function clearStoredAuthToken() {
