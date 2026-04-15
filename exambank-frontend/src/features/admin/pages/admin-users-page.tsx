@@ -26,8 +26,6 @@ import {
   getAdminUsersPageCardMetrics,
   updateAdminUser,
   deleteAdminUser,
-  assignRoleToUser,
-  removeRoleFromUser,
 } from "@/features/admin/services/admin-users.service";
 import type {
   AdminCreateUserPayload,
@@ -302,6 +300,7 @@ function getApiErrorMessage(error: unknown) {
 export default function AdminUsersPage() {
   const [stats, setStats] = useState<StatCard[]>(defaultStats);
   const [userRows, setUserRows] = useState<UserRow[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilterValue>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
@@ -344,11 +343,6 @@ export default function AdminUsersPage() {
     setIsCreateModalOpen(false);
   }
 
-  function openCreateUserModal() {
-    resetCreateUserForm();
-    setIsCreateModalOpen(true);
-  }
-
   function openEditUserModal(user: AdminUserRecord) {
     const roleCode = (user.primaryRole?.toUpperCase() || "USER") as AdminUserRoleCode;
     const status = (user.status?.toUpperCase() || "ACTIVE") as AdminUserStatusCode;
@@ -381,17 +375,6 @@ export default function AdminUsersPage() {
       alert(`Lỗi xóa người dùng: ${errorMsg}`);
     } finally {
       setIsDeletingUserId(null);
-    }
-  }
-
-  async function handleAssignRole(userId: string | number, roleCode: AdminUserRoleCode) {
-    try {
-      await assignRoleToUser(userId, roleCode);
-      await loadUsersPageData();
-      setActionMenuOpenId(null);
-    } catch (error) {
-      const errorMsg = getApiErrorMessage(error);
-      alert(`Lỗi phân công vai trò: ${errorMsg}`);
     }
   }
 
@@ -435,7 +418,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter, statusFilter, searchQuery]);
 
   function setCreateUserField<K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) {
     setCreateUserForm((prev) => ({
@@ -518,10 +501,19 @@ export default function AdminUsersPage() {
     }
   }
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
   const filteredRows = userRows.filter((user) => {
     const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
     const matchesStatus = statusFilter === "ALL" || user.status === statusFilter;
-    return matchesRole && matchesStatus;
+    const matchesSearch =
+      normalizedSearchQuery.length === 0 ||
+      user.name.toLowerCase().includes(normalizedSearchQuery) ||
+      user.email.toLowerCase().includes(normalizedSearchQuery) ||
+      user.idDisplay.toLowerCase().includes(normalizedSearchQuery) ||
+      user.idDisplay.replace("#", "").toLowerCase().includes(normalizedSearchQuery);
+
+    return matchesRole && matchesStatus && matchesSearch;
   });
 
   const rowsPerPage = 5;
@@ -713,6 +705,8 @@ export default function AdminUsersPage() {
           <Input
             type="text"
             placeholder="Tìm kiếm tên, email, ID..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
             startAdornment={<Search size={16} className="text-[var(--ink-500)]" />}
             containerClassName="w-full lg:max-w-md"
             inputWrapperClassName="h-11"
@@ -907,7 +901,7 @@ export default function AdminUsersPage() {
               <Pagination
                 currentPage={safeCurrentPage}
                 totalPages={totalPages}
-                onPageChange={(page) => setCurrentPage(Math.max(1, Math.min(totalPages, page)))}
+                onPageChange={(page) => setCurrentPage(page)}
               />
               <Button
                 type="button"

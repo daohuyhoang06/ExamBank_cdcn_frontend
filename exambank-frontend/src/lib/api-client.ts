@@ -21,7 +21,7 @@ apiClient.interceptors.request.use((config) => {
       if (!headers.Authorization && !headers.authorization) {
         headers.Authorization = `Bearer ${token}`;
       }
-      config.headers = headers;
+      config.headers = AxiosHeaders.from(headers);
     }
   }
 
