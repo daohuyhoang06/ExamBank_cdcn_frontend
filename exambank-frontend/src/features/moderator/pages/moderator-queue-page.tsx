@@ -1,6 +1,5 @@
 ﻿
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { isAxiosError } from "axios";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -28,6 +27,7 @@ import {
   updateModeratorQueueMetadata,
   type ModeratorQueueRecord,
 } from "@/features/moderator/services/moderator-queue.service";
+import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 const PAGE_SIZE = 5;
 const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
@@ -168,30 +168,7 @@ function canModerate(status: string) {
 }
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
-  if (isAxiosError(error)) {
-    const payload = error.response?.data;
-
-    if (typeof payload === "string" && payload.trim().length > 0) {
-      return payload;
-    }
-
-    if (payload && typeof payload === "object") {
-      const message = (payload as { message?: unknown }).message;
-      if (typeof message === "string" && message.trim().length > 0) {
-        return message;
-      }
-    }
-    
-    if (typeof error.message === "string" && error.message.trim().length > 0) {
-      return error.message;
-    }
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  return fallbackMessage;
+  return extractSharedApiErrorMessage(error, fallbackMessage);
 }
 
 export default function ModeratorQueuePage() {

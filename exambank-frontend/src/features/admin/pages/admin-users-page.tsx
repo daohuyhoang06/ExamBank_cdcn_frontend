@@ -13,7 +13,6 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { isAxiosError } from "axios";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button/button";
 import { Input } from "@/components/ui/Input/input";
@@ -33,6 +32,7 @@ import type {
   AdminUserRoleCode,
   AdminUserStatusCode,
 } from "@/features/admin/types/admin-users.type";
+import { extractApiErrorMessage } from "@/lib/error-utils";
 
 type StatCard = {
   title: string;
@@ -285,16 +285,7 @@ function buildStats(metrics: {
 }
 
 function getApiErrorMessage(error: unknown) {
-  if (isAxiosError(error)) {
-    const responseData = error.response?.data as { message?: string; error?: string } | undefined;
-    return responseData?.message ?? responseData?.error ?? "Tạo người dùng thất bại.";
-  }
-
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return "Tạo người dùng thất bại.";
+  return extractApiErrorMessage(error, "Tạo người dùng thất bại.");
 }
 
 export default function AdminUsersPage() {

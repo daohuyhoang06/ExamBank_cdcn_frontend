@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { isAxiosError } from "axios";
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,6 +29,7 @@ import type {
   ComposerQuestionRecord,
   ComposerSubjectRecord,
 } from "@/features/moderator/types/moderator-composer.type";
+import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 type QuestionType =
   | "Trắc nghiệm (Multiple Choice)"
@@ -161,28 +161,7 @@ function findSubjectByName(subjects: ComposerSubjectRecord[], subjectName: strin
 }
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
-  if (!isAxiosError(error)) {
-    return fallbackMessage;
-  }
-
-  const responseData = error.response?.data;
-  if (typeof responseData === "string" && responseData.trim()) {
-    return responseData;
-  }
-
-  if (responseData && typeof responseData === "object") {
-    const data = responseData as Record<string, unknown>;
-    const message = data.message ?? data.error ?? data.detail;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-  }
-
-  if (error.message) {
-    return error.message;
-  }
-
-  return fallbackMessage;
+  return extractSharedApiErrorMessage(error, fallbackMessage);
 }
 
 function parseOptionsJson(rawOptions: string | null): string[] {
