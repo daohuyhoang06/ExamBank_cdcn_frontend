@@ -5,9 +5,11 @@ import type { Exam } from '@/features/user/types/user.type';
 type ExamHeaderProps = {
   exam: Exam;
   timeLeft: number;
+  isSubmitting: boolean;
+  onSubmit: () => void;
 };
 
-const ExamHeader = ({ exam, timeLeft }: ExamHeaderProps) => {
+const ExamHeader = ({ exam, timeLeft, isSubmitting, onSubmit }: ExamHeaderProps) => {
   const navigate = useNavigate();
 
   const formatTime = (s: number) =>
@@ -37,10 +39,11 @@ const ExamHeader = ({ exam, timeLeft }: ExamHeaderProps) => {
             {formatTime(timeLeft)}
           </div>
           <button
-            onClick={() => navigate('/user/exambank/examreview')}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm shadow-indigo-200 transition-all active:scale-95"
+            onClick={onSubmit}
+            disabled={isSubmitting}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm shadow-indigo-200 transition-all active:scale-95 disabled:cursor-not-allowed"
           >
-            Nộp bài
+            {isSubmitting ? 'Đang nộp...' : 'Nộp bài'}
           </button>
         </div>
       </div>

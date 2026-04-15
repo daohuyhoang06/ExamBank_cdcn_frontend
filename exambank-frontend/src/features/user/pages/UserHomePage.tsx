@@ -2,27 +2,20 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ChevronRight, 
-  ArrowRight, 
   Info, 
-  Award, 
-  BookOpen, 
-  Languages 
+  Award
 } from "lucide-react";
-import type { Recommendation, Ranking } from '../types/user.type';
+import type { Ranking } from '../types/user.type';
 import { userService } from '../services/user.service';
 
 export default function UserHomePage() {
   const navigate = useNavigate();
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [rankings, setRankings] = useState<Ranking[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const recs = await userService.getRecommendations();
         const ranks = await userService.getRankings();
-        setRecommendations(recs);
         setRankings(ranks);
       } catch (error) {
         console.error('Error loading data:', error);
@@ -108,57 +101,10 @@ export default function UserHomePage() {
         </section>
       </div>
 
-      {/* SECTION 2: Recommendations & Ranking */}
+      {/* SECTION 2: Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Recommendations */}
-        <section className="lg:col-span-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-slate-800">Gợi ý đề thi dựa trên điểm yếu</h3>
-              <button
-                onClick={() => navigate('/user/exambank')}
-                className="text-xs font-bold text-blue-700 flex items-center gap-1 hover:underline"
-              >
-              Xem tất cả <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-5">
-            {recommendations.map((item) => {
-              const Icon = item.title.includes("Tiếng Anh") ? Languages : BookOpen;
-              const isError = item.color === 'error';
-              return (
-                <div
-                  key={item.title}
-                  onClick={() => navigate(item.documentId ? `/user/comment/${item.documentId}` : '/user/exambank')}
-                  className={`bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-l-4 transition-all hover:shadow-md cursor-pointer group ${isError ? 'border-l-red-400' : 'border-l-blue-400'}`}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`p-2 rounded-lg ${isError ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${isError ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {item.tag}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{item.title}</h4>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {item.description}
-                  </p>
-                  <div className="mt-6 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 font-medium">{item.stats}</span>
-                    <span className="text-blue-700 font-bold text-xs flex items-center gap-1">
-                      Luyện tập <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
         {/* Ranking */}
-        <section className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+        <section className="lg:col-span-12 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
           <h3 className="font-bold text-slate-800 mb-6 px-2">Xếp hạng tuần</h3>
           
           <div className="space-y-2 flex-1">

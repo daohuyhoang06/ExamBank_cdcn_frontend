@@ -87,6 +87,20 @@ export default function SubmitExamPage() {
     void fetchSubjects();
   }, []);
 
+  useEffect(() => {
+    if (!uploadSuccess) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUploadSuccess('');
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [uploadSuccess]);
+
   const handleChooseFile = () => {
     fileInputRef.current?.click();
   };
@@ -149,7 +163,7 @@ export default function SubmitExamPage() {
         fileToUpload,
       );
 
-      setUploadSuccess('Đề thi đã được gửi để phê duyệt thành công.');
+      setUploadSuccess('Bạn đã up đề thành công và chờ duyệt.');
       setSelectedFile(null);
       setFileToUpload(null);
       setFormData((prev) => ({ ...prev, title: '' }));
@@ -170,8 +184,7 @@ export default function SubmitExamPage() {
             <CheckCircle2 size={22} />
           </div>
           <div>
-            <p className="text-emerald-900 font-bold text-sm">Đề thi đã được gửi để phê duyệt</p>
-            <p className="text-emerald-700/70 text-xs">{uploadSuccess}</p>
+            <p className="text-emerald-900 font-bold text-sm">{uploadSuccess}</p>
           </div>
         </div>
       )}

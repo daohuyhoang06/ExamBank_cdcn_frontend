@@ -16,6 +16,25 @@ import {
 import type { Comment } from '../types/user.type';
 import { userService } from '../services/user.service';
 
+const resolveDocumentPreviewUrl = (documentId?: number): string | null => {
+  if (!documentId || Number.isNaN(documentId) || documentId <= 0) {
+    return null;
+  }
+
+  const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? '').trim();
+
+  if (configuredBaseUrl.length > 0) {
+    try {
+      const base = new URL(configuredBaseUrl, window.location.origin);
+      return new URL(`/api/v1/documents/${documentId}/preview`, `${base.protocol}//${base.host}`).toString();
+    } catch {
+      // Fallback to current origin when base URL is invalid.
+    }
+  }
+
+  return new URL(`/api/v1/documents/${documentId}/preview`, window.location.origin).toString();
+};
+
 // --- Main Page Component ---
 export default function DiscussionDetailPage() {
   const { documentId } = useParams();
@@ -24,13 +43,26 @@ export default function DiscussionDetailPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [relatedDocuments, setRelatedDocuments] = useState<Array<{ id: number; title: string; subject?: string; averageRating?: number; semesterYear?: string }>>([]);
   const [documentTitle, setDocumentTitle] = useState('Chi tiết thảo luận');
+  const [documentFileUrl, setDocumentFileUrl] = useState<string | null>(null);
+  const [inlinePreviewUrl, setInlinePreviewUrl] = useState<string | null>(null);
   const [ratingAverage, setRatingAverage] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
   const [activeDocumentId, setActiveDocumentId] = useState<number | null>(null);
+  const [isDocumentPreviewOpen, setIsDocumentPreviewOpen] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewLoadError, setPreviewLoadError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
+
+  useEffect(() => {
+    return () => {
+      if (inlinePreviewUrl && inlinePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(inlinePreviewUrl);
+      }
+    };
+  }, [inlinePreviewUrl]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,20 +80,40 @@ export default function DiscussionDetailPage() {
 
         if (!resolvedDocumentId) {
           setComments([]);
+          setDocumentFileUrl(null);
+          setInlinePreviewUrl((current) => {
+            if (current && current.startsWith('blob:')) {
+              URL.revokeObjectURL(current);
+            }
+            return null;
+          });
+          setIsDocumentPreviewOpen(false);
+          setIsPreviewLoading(false);
+          setPreviewLoadError(false);
           setIsLoading(false);
           return;
         }
 
         setActiveDocumentId(resolvedDocumentId);
+        setInlinePreviewUrl((current) => {
+          if (current && current.startsWith('blob:')) {
+            URL.revokeObjectURL(current);
+          }
+          return null;
+        });
+        setPreviewLoadError(false);
+        setIsDocumentPreviewOpen(false);
+        setIsPreviewLoading(false);
 
-        const [document, commentList, stats, related] = await Promise.all([
-          userService.getDocumentById(resolvedDocumentId),
+        const document = await userService.getDocumentById(resolvedDocumentId);
+        const [commentList, stats, related] = await Promise.all([
           userService.getComments(resolvedDocumentId),
           userService.getDocumentRatingStats(resolvedDocumentId),
-          userService.getDocuments({ status: 'APPROVED', size: 3, sort: 'highest_rated' }),
+          userService.getDocuments({ status: 'APPROVED', size: 3, sort: 'highest_rated' }).catch(() => []),
         ]);
 
         setDocumentTitle(document.title);
+        setDocumentFileUrl(resolveDocumentPreviewUrl(resolvedDocumentId));
         setComments(commentList);
         setRatingAverage(stats.average);
         setRatingCount(stats.count);
@@ -85,6 +137,48 @@ export default function DiscussionDetailPage() {
     };
     fetchData();
   }, [documentId, navigate]);
+
+  const handleOpenDocumentPreview = async () => {
+    if (!activeDocumentId) {
+      return;
+    }
+
+    setIsDocumentPreviewOpen(true);
+    setPreviewLoadError(false);
+
+    if (inlinePreviewUrl) {
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+      const previewBlob = await userService.getDocumentPreviewBlob(activeDocumentId);
+      const previewUrl = URL.createObjectURL(previewBlob);
+      setInlinePreviewUrl((current) => {
+        if (current && current.startsWith('blob:')) {
+          URL.revokeObjectURL(current);
+        }
+        return previewUrl;
+      });
+    } catch {
+      setPreviewLoadError(true);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleOpenDocumentInNewTab = () => {
+    if (inlinePreviewUrl) {
+      window.open(inlinePreviewUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (!documentFileUrl) {
+      return;
+    }
+
+    window.open(documentFileUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const handleSubmitReview = async () => {
     if (!activeDocumentId) {
@@ -142,13 +236,73 @@ export default function DiscussionDetailPage() {
             <span className="text-slate-500 font-medium">({ratingCount} đánh giá)</span>
           </div>
         </div>
-        <button
-          onClick={() => navigate('/user/exambank')}
-          className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all"
-        >
-          Làm lại đề thi
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleOpenDocumentPreview}
+            disabled={!documentFileUrl}
+            className="px-8 py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all bg-white border border-[#003466] text-[#003466] hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+          >
+            Xem đề
+          </button>
+          <button
+            onClick={() => navigate('/user/exambank')}
+            className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all"
+          >
+            Làm lại đề thi
+          </button>
+        </div>
       </div>
+
+      {isDocumentPreviewOpen && (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h2 className="text-2xl font-bold text-[#003466]">Xem nội dung đề thi</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenDocumentInNewTab}
+                className="px-4 py-2 rounded-lg text-sm font-bold border border-[#003466] text-[#003466] hover:bg-blue-50"
+              >
+                Mở tab mới
+              </button>
+              <button
+                onClick={() => setIsDocumentPreviewOpen(false)}
+                className="px-4 py-2 rounded-lg text-sm font-bold border border-slate-300 text-slate-600 hover:bg-slate-100"
+              >
+                Ẩn
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            {isPreviewLoading ? (
+              <div className="p-8 text-center">
+                <p className="text-slate-600 font-semibold">Đang tải nội dung đề...</p>
+              </div>
+            ) : previewLoadError ? (
+              <div className="p-8 text-center space-y-3">
+                <p className="text-slate-600 font-semibold">Không thể hiển thị đề trực tiếp trong trang này.</p>
+                <button
+                  onClick={handleOpenDocumentInNewTab}
+                  className="px-5 py-2.5 rounded-xl bg-[#003466] text-white font-bold text-sm"
+                >
+                  Mở đề ở tab mới
+                </button>
+              </div>
+            ) : !inlinePreviewUrl ? (
+              <div className="p-8 text-center">
+                <p className="text-slate-600 font-semibold">Chưa có dữ liệu xem trước.</p>
+              </div>
+            ) : (
+              <iframe
+                src={inlinePreviewUrl}
+                title={`Noi dung de ${documentTitle}`}
+                className="w-full h-[70vh]"
+                onError={() => setPreviewLoadError(true)}
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 2. Bento Grid: Stats & Ratings */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

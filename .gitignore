@@ -1,0 +1,6 @@
+login.json
+report.json
+review.json
+tmp-upload.txt
+*.tmp
+*.local
