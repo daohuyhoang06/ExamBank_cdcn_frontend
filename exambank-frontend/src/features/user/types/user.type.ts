@@ -171,6 +171,7 @@ export interface UserProfile {
 export interface UpdateUserProfilePayload {
   name: string;
   email: string;
+  status?: AccountStatus;
 }
 
 export interface ChangePasswordPayload {
