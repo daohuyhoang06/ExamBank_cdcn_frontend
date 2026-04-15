@@ -1,9 +1,9 @@
 import { type FormEvent, useState } from 'react';
-import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
 import { authService } from '@/features/auth/services/auth.service';
+import { extractApiErrorMessage } from '@/lib/error-utils';
 
 const SparklesIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -94,16 +94,7 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getApiErrorMessage = (error: unknown) => {
-    if (isAxiosError(error)) {
-      const responseData = error.response?.data as { message?: string; error?: string } | undefined;
-      return responseData?.message ?? responseData?.error ?? 'Đăng ký thất bại, vui lòng thử lại.';
-    }
-
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    return 'Đăng ký thất bại, vui lòng thử lại.';
+    return extractApiErrorMessage(error, 'Đăng ký thất bại, vui lòng thử lại.');
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {

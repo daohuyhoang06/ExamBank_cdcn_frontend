@@ -61,15 +61,24 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     return null;
   }
 
-  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-    return fileUrl;
+  const normalized = fileUrl.trim();
+  if (!normalized) {
+    return null;
   }
 
-  if (!fileUrl.startsWith("storage://")) {
-    return fileUrl;
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
   }
 
-  const pathWithoutScheme = fileUrl.slice("storage://".length);
+  if (normalized.startsWith("/")) {
+    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+  }
+
+  if (!normalized.startsWith("storage://")) {
+    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+  }
+
+  const pathWithoutScheme = normalized.slice("storage://".length);
   const firstSlash = pathWithoutScheme.indexOf("/");
   if (firstSlash <= 0) {
     return null;
@@ -86,28 +95,13 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
   return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
 }
 
-function canUseImagePreview(item: ModeratorQueueRecord) {
-  if (item.fileType === "Ảnh") {
-    return true;
-  }
-
-  const normalizedUrl = (item.fileUrl ?? "").toLowerCase();
-  return (
-    normalizedUrl.endsWith(".png") ||
-    normalizedUrl.endsWith(".jpg") ||
-    normalizedUrl.endsWith(".jpeg") ||
-    normalizedUrl.endsWith(".webp") ||
-    normalizedUrl.endsWith(".gif")
-  );
-}
-
 export function ModeratorQueueItemCard({
   item,
   active,
   onSelect,
 }: ModeratorQueueItemCardProps) {
-  const imageThumbnail = canUseImagePreview(item) ? toMinioPublicUrl(item.fileUrl) : null;
-  const thumbnailSrc = imageThumbnail ?? defaultQueueThumbnail;
+  const imageThumbnail = toMinioPublicUrl(item.fileUrl);
+  const thumbnailSrc = imageThumbnail || defaultQueueThumbnail;
 
   return (
     <button

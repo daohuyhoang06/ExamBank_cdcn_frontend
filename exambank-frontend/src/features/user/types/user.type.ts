@@ -67,6 +67,8 @@ export interface Submission {
   subject: string;
   type: string;
   status: "Approved" | "Pending" | "Rejected";
+  submittedAt?: string;
+  note?: string;
   reason?: string;
   date: string;
 }
@@ -122,6 +124,47 @@ export interface ExamListItem {
   createdAt?: string;
 }
 
+export type SubmitReason = "MANUAL" | "TIMEOUT" | "AUTO";
+
+export type ExamSessionStatus = "IN_PROGRESS" | "SUBMITTED" | "GRADING" | "COMPLETED" | "ABANDONED";
+
+export interface StartExamSessionResponse {
+  sessionId: number;
+  status: ExamSessionStatus;
+  startTime?: string;
+  timeLimitMinutes?: number;
+  expiresAt?: string;
+}
+
+export interface SaveAnswerItem {
+  questionId: number;
+  answerContent: string;
+  timeSpentSeconds?: number;
+}
+
+export interface ExamSessionStatusResponse {
+  sessionId: number;
+  status: ExamSessionStatus;
+  submittedAt?: string;
+  totalScore?: number;
+}
+
+export interface QuestionResult {
+  questionId: number;
+  isCorrect?: boolean;
+  scoreEarned?: number;
+}
+
+export interface ExamSessionResult {
+  sessionId: number;
+  totalScore?: number;
+  submitReason?: SubmitReason;
+  startTime?: string;
+  submittedAt?: string;
+  timeLimitMinutes?: number;
+  questionResults: QuestionResult[];
+}
+
 export interface DocumentSummary {
   id: number;
   title: string;
@@ -134,6 +177,7 @@ export interface DocumentSummary {
   averageRating?: number;
   downloadCount?: number;
   status?: string;
+  submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
 }
@@ -159,6 +203,7 @@ export interface UserProfile {
   name: string;
   email: string;
   username: string;
+  avatarUrl?: string;
   roles: string[];
   status: AccountStatus;
   xp: number;
@@ -170,6 +215,7 @@ export interface UserProfile {
 export interface UpdateUserProfilePayload {
   name: string;
   email: string;
+  status?: AccountStatus;
 }
 
 export interface ChangePasswordPayload {

@@ -63,11 +63,19 @@ export type ModeratorMetadataPayload = {
   semesterYear?: string;
   type?: string;
   lecturer?: string;
+  moderatorNote?: string;
 };
 
 export type ModeratorDocumentPreview = {
   fileUrl: string | null;
   fileType: string | null;
+};
+
+export type ModeratorQueueMetrics = {
+  totalDocuments: number;
+  pendingDocuments: number;
+  approvedDocuments: number;
+  rejectedDocuments: number;
 };
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -300,6 +308,11 @@ function resolveQueueTimestamp(document: DocumentApiRecord): unknown {
   return document.submittedAt ?? document.createdAt ?? document.publishedAt;
 }
 
+function toQueueTimestampMillis(document: DocumentApiRecord): number {
+  const parsed = parseApiDateTime(resolveQueueTimestamp(document));
+  return parsed?.getTime() ?? 0;
+}
+
 function mapFileType(value: string | null, fileUrl?: string | null): "PDF" | "DOCX" | "Ảnh" {
   const normalized = `${value ?? ""} ${fileUrl ?? ""}`.toLowerCase();
   if (normalized.includes("doc")) {
@@ -448,7 +461,41 @@ export async function listModeratorQueueItems(): Promise<ModeratorQueueRecord[]>
   const documents = await listModeratorDocuments();
   const documentsWithPreview = await enrichDocumentsWithPreview(documents);
 
-  return documentsWithPreview.map(toQueueRecord);
+  return documentsWithPreview
+    .sort((left, right) => {
+      const timestampDiff = toQueueTimestampMillis(right) - toQueueTimestampMillis(left);
+      if (timestampDiff !== 0) {
+        return timestampDiff;
+      }
+
+      return right.id - left.id;
+    })
+    .map(toQueueRecord);
+}
+
+export async function getModeratorQueueMetrics(): Promise<ModeratorQueueMetrics> {
+  const documents = await listModeratorDocuments();
+
+  const pendingDocuments = documents.filter((item) => {
+    const normalizedStatus = (item.status ?? "").toUpperCase();
+    return normalizedStatus === "PENDING" || normalizedStatus === "PENDING_REVIEW";
+  }).length;
+
+  const approvedDocuments = documents.filter((item) => {
+    const normalizedStatus = (item.status ?? "").toUpperCase();
+    return normalizedStatus === "APPROVED" || normalizedStatus === "TRANSFORMED";
+  }).length;
+
+  const rejectedDocuments = documents.filter(
+    (item) => (item.status ?? "").toUpperCase() === "REJECTED"
+  ).length;
+
+  return {
+    totalDocuments: documents.length,
+    pendingDocuments,
+    approvedDocuments,
+    rejectedDocuments,
+  };
 }
 
 export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord, payload: ModeratorMetadataPayload) {
@@ -466,6 +513,7 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
       ...(payload.semesterYear?.trim() ? { semester: payload.semesterYear.trim() } : {}),
       ...(payload.type?.trim() ? { type: payload.type.trim() } : {}),
       ...(payload.lecturer?.trim() ? { lecturer: payload.lecturer.trim() } : {}),
+      ...(payload.moderatorNote?.trim() ? { moderatorNote: payload.moderatorNote.trim() } : { moderatorNote: null }),
     },
     buildAuthConfig()
   );
@@ -473,10 +521,11 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
   return response.data;
 }
 
-export async function approveModeratorQueueItem(record: ModeratorQueueRecord) {
+export async function approveModeratorQueueItem(record: ModeratorQueueRecord, moderatorNote?: string) {
+  const trimmedNote = moderatorNote?.trim();
   const response = await apiClient.put(
     `${MODERATOR_DOCUMENTS_PATH}/${record.documentId}/approve`,
-    undefined,
+    trimmedNote ? { note: trimmedNote } : undefined,
     buildAuthConfig()
   );
   return response.data;

@@ -12,34 +12,13 @@ import {
 } from 'lucide-react';
 import type { SelectedFile } from '../../types/user.type';
 import { userService } from '../../services/user.service';
+import { extractApiErrorMessage } from '@/lib/error-utils';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
 
 const extractUploadErrorMessage = (error: unknown): string => {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof (error as { response?: unknown }).response === 'object'
-  ) {
-    const response = (error as { response?: { status?: number; data?: { message?: string } } }).response;
-    if (response?.data?.message) {
-      return response.data.message;
-    }
-    if (response?.status === 401) {
-      return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi thử upload.';
-    }
-    if (response?.status === 413) {
-      return 'File vượt quá giới hạn cho phép (tối đa 50MB).';
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.';
+  return extractApiErrorMessage(error, 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.');
 };
 
 // Component phụ cho phần Tips
@@ -86,6 +65,20 @@ export default function SubmitExamPage() {
     };
     void fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    if (!uploadSuccess) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUploadSuccess('');
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [uploadSuccess]);
 
   const handleChooseFile = () => {
     fileInputRef.current?.click();
@@ -149,7 +142,7 @@ export default function SubmitExamPage() {
         fileToUpload,
       );
 
-      setUploadSuccess('Đề thi đã được gửi để phê duyệt thành công.');
+      setUploadSuccess('Bạn đã up đề thành công và chờ duyệt.');
       setSelectedFile(null);
       setFileToUpload(null);
       setFormData((prev) => ({ ...prev, title: '' }));
@@ -170,8 +163,7 @@ export default function SubmitExamPage() {
             <CheckCircle2 size={22} />
           </div>
           <div>
-            <p className="text-emerald-900 font-bold text-sm">Đề thi đã được gửi để phê duyệt</p>
-            <p className="text-emerald-700/70 text-xs">{uploadSuccess}</p>
+            <p className="text-emerald-900 font-bold text-sm">{uploadSuccess}</p>
           </div>
         </div>
       )}

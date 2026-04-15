@@ -704,6 +704,13 @@ export default function ModeratorComposerPage() {
       return;
     }
 
+    if (targetExam.questionCount <= 0) {
+      window.alert(
+        `Đề "${targetExam.title}" chưa có câu hỏi trên hệ thống. Vui lòng mở form tạo đề, thêm câu hỏi và bấm "Lưu bản nháp" trước khi xuất bản.`
+      );
+      return;
+    }
+
     const shouldPublish = window.confirm(
       `Xuất bản đề "${targetExam.title}" để người dùng có thể truy cập ngay bây giờ?`
     );

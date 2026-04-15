@@ -1,10 +1,9 @@
 ﻿
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { isAxiosError } from "axios";
 import {
-  ArrowLeft,
-  ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   Maximize2,
@@ -16,6 +15,7 @@ import {
 import { Button } from "@/components/ui/Button/button";
 import { Input } from "@/components/ui/Input/input";
 import { Modal } from "@/components/ui/Modal/modal";
+import { Pagination } from "@/components/ui/Pagination/pagination";
 import {
   ModeratorQueueItemCard,
 } from "@/features/moderator/components/moderator-queue-item-card";
@@ -27,6 +27,7 @@ import {
   updateModeratorQueueMetadata,
   type ModeratorQueueRecord,
 } from "@/features/moderator/services/moderator-queue.service";
+import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 const PAGE_SIZE = 5;
 const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
@@ -46,45 +47,29 @@ const quickReasons = [
   },
 ];
 
-function buildPaginationItems(currentPage: number, totalPages: number) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const items: Array<number | "ellipsis-left" | "ellipsis-right"> = [1];
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) {
-    items.push("ellipsis-left");
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page);
-  }
-
-  if (end < totalPages - 1) {
-    items.push("ellipsis-right");
-  }
-
-  items.push(totalPages);
-  return items;
-}
-
 function toMinioPublicUrl(fileUrl: string | null | undefined) {
   if (!fileUrl) {
     return null;
   }
 
-  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-    return fileUrl;
+  const normalized = fileUrl.trim();
+  if (!normalized) {
+    return null;
   }
 
-  if (!fileUrl.startsWith("storage://")) {
-    return fileUrl;
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
   }
 
-  const pathWithoutScheme = fileUrl.slice("storage://".length);
+  if (normalized.startsWith("/")) {
+    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+  }
+
+  if (!normalized.startsWith("storage://")) {
+    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+  }
+
+  const pathWithoutScheme = normalized.slice("storage://".length);
   const firstSlash = pathWithoutScheme.indexOf("/");
   if (firstSlash <= 0) {
     return null;
@@ -183,30 +168,7 @@ function canModerate(status: string) {
 }
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
-  if (isAxiosError(error)) {
-    const payload = error.response?.data;
-
-    if (typeof payload === "string" && payload.trim().length > 0) {
-      return payload;
-    }
-
-    if (payload && typeof payload === "object") {
-      const message = (payload as { message?: unknown }).message;
-      if (typeof message === "string" && message.trim().length > 0) {
-        return message;
-      }
-    }
-    
-    if (typeof error.message === "string" && error.message.trim().length > 0) {
-      return error.message;
-    }
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  return fallbackMessage;
+  return extractSharedApiErrorMessage(error, fallbackMessage);
 }
 
 export default function ModeratorQueuePage() {
@@ -296,6 +258,7 @@ export default function ModeratorQueuePage() {
     }
     return Math.ceil(filteredQueue.length / PAGE_SIZE);
   }, [filteredQueue.length]);
+  const safeCurrentPage = useMemo(() => Math.min(currentPage, totalPages), [currentPage, totalPages]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -308,13 +271,9 @@ export default function ModeratorQueuePage() {
   }, [subject, level, statusFilter, globalKeyword]);
 
   const paginatedQueue = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
     return filteredQueue.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [currentPage, filteredQueue]);
-
-  const paginationItems = useMemo(() => {
-    return buildPaginationItems(currentPage, totalPages);
-  }, [currentPage, totalPages]);
+  }, [filteredQueue, safeCurrentPage]);
 
   const selected = useMemo(() => {
     if (paginatedQueue.length === 0) {
@@ -430,6 +389,7 @@ export default function ModeratorQueuePage() {
         semesterYear: metadataSemesterYear,
         type: metadataCategory,
         lecturer: metadataLecturer,
+        moderatorNote: metadataModeratorNote,
       });
 
       await refreshQueue(true);
@@ -463,7 +423,7 @@ export default function ModeratorQueuePage() {
     setIsActionRunning(true);
 
     try {
-      await approveModeratorQueueItem(selected);
+      await approveModeratorQueueItem(selected, metadataModeratorNote);
       await refreshQueue(true);
     } catch (error) {
       window.alert(extractApiErrorMessage(error, "Duyệt tài liệu thất bại."));
@@ -480,6 +440,11 @@ export default function ModeratorQueuePage() {
     const finalReason = rejectReason.trim() || quickReason.trim();
     if (!finalReason) {
       window.alert("Vui lòng nhập lý do từ chối.");
+      return;
+    }
+
+    const shouldReject = window.confirm(`Từ chối tài liệu "${selected.title}"?`);
+    if (!shouldReject) {
       return;
     }
 
@@ -514,6 +479,13 @@ export default function ModeratorQueuePage() {
   const selectedStatus = selected?.status ?? "";
   const canRunActions = Boolean(selected) && !isActionRunning && !isRefreshing && canModerate(selectedStatus);
   const previewKind = useMemo(() => detectPreviewKind(previewFileType ?? selected?.fileType ?? null, previewUrl), [previewFileType, previewUrl, selected?.fileType]);
+  const hasPaginationData = filteredQueue.length > 0;
+  const handlePageChange = useCallback(
+    (page: number) => {
+      setCurrentPage(Math.max(1, Math.min(totalPages, page)));
+    },
+    [totalPages]
+  );
 
   return (
     <div className="relative min-h-[78vh] overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-gradient-to-br from-[#f7f9fb] via-[#f4f7fb] to-[#eef4ff] shadow-[0_16px_40px_rgba(16,21,38,0.08)]">
@@ -617,61 +589,39 @@ export default function ModeratorQueuePage() {
             )}
           </div>
 
-          <div className="shrink-0 flex items-center justify-between border-t border-[#d9e2ef] bg-[var(--bg-soft)]/25 px-4 py-3">
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-                currentPage <= 1 || filteredQueue.length === 0
-                  ? "cursor-not-allowed text-slate-400"
-                  : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-              }`}
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1 || filteredQueue.length === 0}
-            >
-              <ArrowLeft size={14} /> Trước
-            </button>
-
-            <div className="flex items-center gap-1.5">
-              {paginationItems.map((item) => {
-                if (typeof item !== "number") {
-                  return (
-                    <span key={item} className="px-1 text-sm text-[var(--ink-500)]">
-                      ...
-                    </span>
-                  );
-                }
-
-                const isCurrent = item === currentPage;
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-semibold transition ${
-                      isCurrent
-                        ? "bg-[var(--brand-700)] font-bold text-white"
-                        : "text-[var(--ink-700)] hover:bg-[var(--bg-soft)]"
-                    }`}
-                    onClick={() => setCurrentPage(item)}
-                    disabled={isCurrent}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
+          <div className="shrink-0 flex flex-col items-center justify-between gap-3 border-t border-[#d9e2ef] bg-[var(--bg-soft)]/25 p-4 sm:flex-row">
+            <p className="text-sm text-[var(--ink-600)]">
+              Trang {safeCurrentPage} / {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={safeCurrentPage <= 1 || !hasPaginationData}
+                leftIcon={<ChevronLeft size={16} />}
+                className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
+                onClick={() => handlePageChange(safeCurrentPage - 1)}
+              >
+                Trước
+              </Button>
+              <Pagination
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                rightIcon={<ChevronRight size={16} />}
+                disabled={safeCurrentPage >= totalPages || !hasPaginationData}
+                className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
+                onClick={() => handlePageChange(safeCurrentPage + 1)}
+              >
+                Tiếp
+              </Button>
             </div>
-
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-                currentPage >= totalPages || filteredQueue.length === 0
-                  ? "cursor-not-allowed text-slate-400"
-                  : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-              }`}
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages || filteredQueue.length === 0}
-            >
-              Tiếp theo <ArrowRight size={14} />
-            </button>
           </div>
         </section>
 

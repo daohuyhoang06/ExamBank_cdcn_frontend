@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { NotificationPopover } from "./notification-popover";
 import type { NotificationItem } from "./notification-popover";
 import { clearStoredAuthUser, getStoredAuthUser } from "@/features/auth/services/auth.service";
+import { AUTH_USER_UPDATED_EVENT } from "@/features/auth/services/auth.service";
 import { setAuthToken } from "@/lib/api-client";
 
 const initialNotifications: NotificationItem[] = [
@@ -62,13 +63,7 @@ export function AppHeader({
   );
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
-
-  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
-  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
-
-  const unreadCount = notificationItems.filter((item) => item.unread).length;
-
-  const currentUserDisplayName = (() => {
+  const [currentUserDisplayName, setCurrentUserDisplayName] = useState(() => {
     const fallbackName = "Người dùng";
     const currentUser = getStoredAuthUser() as
       | {
@@ -79,7 +74,21 @@ export function AppHeader({
       | null;
 
     return currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName;
-  })();
+  });
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState(() => {
+    const currentUser = getStoredAuthUser() as
+      | {
+          avatarUrl?: string;
+        }
+      | null;
+
+    return currentUser?.avatarUrl ?? "";
+  });
+
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const unreadCount = notificationItems.filter((item) => item.unread).length;
 
   const avatarInitial = (currentUserDisplayName.trim().charAt(0) || "A").toUpperCase();
   const headerMetaTitle = isStudentArea ? "Tài khoản" : title;
@@ -105,6 +114,28 @@ export function AppHeader({
     };
   }, []);
 
+  useEffect(() => {
+    function handleAuthUserUpdated() {
+      const fallbackName = "Người dùng";
+      const currentUser = getStoredAuthUser() as
+        | {
+            fullName?: string;
+            name?: string;
+            email?: string;
+            avatarUrl?: string;
+          }
+        | null;
+
+      setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
+      setCurrentUserAvatarUrl(currentUser?.avatarUrl ?? "");
+    }
+
+    window.addEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
+    return () => {
+      window.removeEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
+    };
+  }, []);
+
   function handleOpenProfile() {
     if (location.pathname.startsWith("/admin")) {
       navigate("/admin/profile");
@@ -126,7 +157,7 @@ export function AppHeader({
     setAuthToken(null);
     clearStoredAuthUser();
     setIsAvatarMenuOpen(false);
-    navigate("/login");
+    navigate("/", { replace: true });
   }
 
   function handleNotificationItemClick(item: NotificationItem) {
@@ -220,13 +251,17 @@ export function AppHeader({
           <button
             type="button"
             onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
-            className="h-10 w-10 rounded-full border-2 border-[var(--brand-100)] bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2"
+            className="h-10 w-10 overflow-hidden rounded-full border-2 border-[var(--brand-100)] bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2"
             aria-label="Mở menu tài khoản"
             aria-haspopup="menu"
             aria-expanded={isAvatarMenuOpen}
             title="Tài khoản"
           >
-            {avatarInitial}
+            {currentUserAvatarUrl ? (
+              <img src={currentUserAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+            ) : (
+              avatarInitial
+            )}
           </button>
 
           {isAvatarMenuOpen ? (

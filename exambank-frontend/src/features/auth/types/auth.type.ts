@@ -14,9 +14,11 @@ export type RegisterPayload = {
 export type AuthUser = {
   id?: string | number;
   fullName?: string;
+  name?: string;
   email?: string;
   role?: string;
   roles?: string[];
+  avatarUrl?: string;
 };
 
 export type AuthSuccess = {

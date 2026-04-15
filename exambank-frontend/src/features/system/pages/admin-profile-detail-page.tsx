@@ -18,9 +18,11 @@ import { Card } from "@/components/ui/Card/card";
 import { Input } from "@/components/ui/Input/input";
 import { Table, type TableColumn } from "@/components/ui/Table/table";
 import { ChangePasswordModal } from "@/features/auth/pages/change-password-modal";
+import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 import { userService } from "@/features/user/services/user.service";
 import type { UserProfile } from "@/features/user/types/user.type";
+import { extractApiErrorMessage } from "@/lib/error-utils";
 
 const initialAdminProfile = {
   fullName: "Nguyễn Văn Quản Trị",
@@ -36,9 +38,11 @@ const initialAdminProfile = {
   device: "MacBook Pro (Chrome)",
   ipAddress: "192.168.1.45",
   lastPasswordChangedAt: "12/03/2026 09:10",
+  avatarUrl: "",
 };
 
 type AdminProfile = typeof initialAdminProfile;
+const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
 
 const formatDate = (value?: string): string => {
   if (!value) {
@@ -57,13 +61,85 @@ const formatDate = (value?: string): string => {
   }).format(date);
 };
 
+const toNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toPublicAssetUrl = (value: string | null | undefined): string | null => {
+  const normalized = toNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("blob:")
+  ) {
+    return normalized;
+  }
+
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    const encodedObjectKey = objectKey
+      .split("/")
+      .filter((segment) => segment.length > 0)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+
+    return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+  }
+
+  if (normalized.startsWith("/")) {
+    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+  }
+
+  return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+};
+
+const buildFallbackAvatarUrl = (seed: string): string => {
+  const finalSeed = seed.trim() || "scholarly-user";
+  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(finalSeed)}`;
+};
+
+const getAvatarFromStoredPreferences = (userId: string | number | null | undefined): string | null => {
+  if (typeof window === "undefined" || userId === undefined || userId === null) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(`user-profile-ui:${userId}`);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { avatarUrl?: string };
+    return toPublicAssetUrl(parsed.avatarUrl);
+  } catch {
+    return null;
+  }
+};
+
 const formatRoleLabel = (roles: string[]): string => {
   if (roles.includes("ADMIN")) {
     return "Quản trị viên";
   }
 
   if (roles.includes("MODERATOR")) {
-    return "Điều phối viên";
+    return "Cộng tác viên";
   }
 
   if (roles.includes("USER")) {
@@ -103,7 +179,11 @@ const mapProfileToViewModel = (profile: UserProfile): AdminProfile => ({
   device: "Chưa có dữ liệu",
   ipAddress: "Chưa có dữ liệu",
   lastPasswordChangedAt: "Chưa có dữ liệu",
+  avatarUrl: profile.avatarUrl ?? "",
 });
+
+const extractErrorMessage = (error: unknown): string =>
+  extractApiErrorMessage(error, "Đã xảy ra lỗi không xác định.");
 
 const buildInitialProfile = (): AdminProfile => {
   const storedUser = getStoredAuthUser();
@@ -116,7 +196,7 @@ const buildInitialProfile = (): AdminProfile => {
   const resolvedRole = roleList.includes("ADMIN")
     ? "Quản trị viên"
     : roleList.includes("MODERATOR")
-      ? "Điều phối viên"
+      ? "Cộng tác viên"
       : roleList[0] ?? "Người dùng";
 
   return {
@@ -253,16 +333,34 @@ function logStatusClasses(status: ActivityLog["status"]) {
 }
 
 export default function AdminProfileDetailPage() {
+  const storedAuthUser = useMemo(() => getStoredAuthUser(), []);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [timeFilter, setTimeFilter] = useState<ActivityLog["period"] | "Tất cả">("Tất cả");
   const [actionFilter, setActionFilter] = useState<ActivityLog["category"] | "Tất cả">("Tất cả");
   const [profileForm, setProfileForm] = useState(buildInitialProfile);
   const [profileBaseline, setProfileBaseline] = useState(buildInitialProfile);
+  const avatarUrl = useMemo(() => {
+    const authAvatar = toPublicAssetUrl((storedAuthUser as { avatarUrl?: string } | null)?.avatarUrl);
+    if (authAvatar) {
+      return authAvatar;
+    }
+
+    const preferenceAvatar = getAvatarFromStoredPreferences(storedAuthUser?.id);
+    if (preferenceAvatar) {
+      return preferenceAvatar;
+    }
+
+    return buildFallbackAvatarUrl(storedAuthUser?.fullName ?? storedAuthUser?.email ?? "scholarly-user");
+  }, [storedAuthUser]);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [selectedAvatarName, setSelectedAvatarName] = useState("");
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
 
   const filteredLogs = useMemo(() => {
     return activityLogs.filter((log) => {
@@ -272,6 +370,12 @@ export default function AdminProfileDetailPage() {
       return matchTime && matchAction;
     });
   }, [timeFilter, actionFilter]);
+
+  const fallbackAvatarUrl = useMemo(
+    () => buildFallbackAvatarUrl(profileForm.fullName || profileForm.email || "scholarly-user"),
+    [profileForm.email, profileForm.fullName]
+  );
+  const effectiveAvatarUrl = avatarPreviewUrl ?? avatarUrl ?? fallbackAvatarUrl;
 
   const handleFieldChange = (field: keyof typeof initialAdminProfile, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
@@ -293,13 +397,13 @@ export default function AdminProfileDetailPage() {
         const mappedProfile = mapProfileToViewModel(profile);
         setProfileForm(mappedProfile);
         setProfileBaseline(mappedProfile);
-      } catch {
+        setAvatarPreviewUrl(mappedProfile.avatarUrl || null);
+      } catch (error) {
         if (!isActive) {
           return;
         }
 
-        setProfileForm(profileBaseline);
-        setProfileError(null);
+        setProfileError(extractErrorMessage(error));
       } finally {
         if (isActive) {
           setIsLoadingProfile(false);
@@ -314,15 +418,74 @@ export default function AdminProfileDetailPage() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+        avatarObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCancelEdit = () => {
     setProfileForm(profileBaseline);
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = null;
+    }
+    setAvatarPreviewUrl(null);
     setSelectedAvatarName("");
+    setSelectedAvatarFile(null);
+    setAvatarPreviewUrl(profileBaseline.avatarUrl || null);
     setIsEditing(false);
   };
 
-  const handleSaveProfile = () => {
-    setProfileBaseline(profileForm);
-    setIsEditing(false);
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      let updated = await userService.updateMyProfile({
+        name: profileForm.fullName.trim(),
+        email: profileForm.email.trim(),
+        status:
+          profileForm.accountStatus === "Bị khóa"
+            ? "BANNED"
+            : profileForm.accountStatus === "Tạm ngưng"
+              ? "INACTIVE"
+              : "ACTIVE",
+      });
+
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
+
+      // Always refresh from backend after save so UI state uses canonical profile data.
+      updated = await userService.getMyProfile();
+
+      const mappedProfile = mapProfileToViewModel(updated);
+      const resolvedAvatarUrl = updated.avatarUrl?.trim() || avatarPreviewUrl || profileBaseline.avatarUrl;
+      mappedProfile.avatarUrl = resolvedAvatarUrl;
+      setProfileForm(mappedProfile);
+      setProfileBaseline(mappedProfile);
+      setAvatarPreviewUrl(resolvedAvatarUrl);
+      setSelectedAvatarName("");
+      setSelectedAvatarFile(null);
+      syncStoredAuthUser({
+        id: updated.id,
+        email: updated.email,
+        role: updated.roles[0],
+        roles: updated.roles,
+        fullName: updated.name,
+        avatarUrl: resolvedAvatarUrl,
+      });
+      setIsEditing(false);
+    } catch (error) {
+      setProfileError(extractErrorMessage(error));
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleChooseAvatar = () => {
@@ -332,6 +495,15 @@ export default function AdminProfileDetailPage() {
   const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     setSelectedAvatarName(selectedFile?.name ?? "");
+    setSelectedAvatarFile(selectedFile ?? null);
+    if (selectedFile) {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+      }
+      const objectUrl = URL.createObjectURL(selectedFile);
+      avatarObjectUrlRef.current = objectUrl;
+      setAvatarPreviewUrl(objectUrl);
+    }
   };
 
 
@@ -375,8 +547,12 @@ export default function AdminProfileDetailPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-5">
             <div className="w-24 shrink-0 space-y-2 lg:w-28">
-              <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
-                <Shield size={34} />
+              <div className="relative inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
+                {effectiveAvatarUrl ? (
+                  <img src={effectiveAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <Shield size={34} />
+                )}
                 <span className="absolute -bottom-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white ring-4 ring-white">
                   <CheckCircle2 size={16} />
                 </span>
@@ -433,8 +609,8 @@ export default function AdminProfileDetailPage() {
                 <Button type="button" variant="ghost" size="md" onClick={handleCancelEdit}>
                   Hủy
                 </Button>
-                <Button type="button" variant="primary" size="md" onClick={handleSaveProfile}>
-                  Lưu
+                <Button type="button" variant="primary" size="md" onClick={() => void handleSaveProfile()} disabled={isSavingProfile}>
+                  {isSavingProfile ? "Đang lưu..." : "Lưu"}
                 </Button>
               </>
             )}

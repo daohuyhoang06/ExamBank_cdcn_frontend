@@ -12,9 +12,11 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { authService } from "@/features/auth/services/auth.service";
 import { userService } from "../services/user.service";
 import type { UserProfile } from "../types/user.type";
+import { extractApiErrorMessage } from "@/lib/error-utils";
 
 type NoticeType = "success" | "error" | "info";
 
@@ -37,25 +39,8 @@ type PasswordForm = {
 
 const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/notionists/svg?seed=scholarly-user";
 
-const extractErrorMessage = (error: unknown): string => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: unknown }).response === "object"
-  ) {
-    const response = (error as { response?: { data?: { message?: string } } }).response;
-    if (response?.data?.message) {
-      return response.data.message;
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Da xay ra loi khong xac dinh.";
-};
+const extractErrorMessage = (error: unknown): string =>
+  extractApiErrorMessage(error, "Đã xảy ra lỗi không xác định.");
 
 const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
   username: profile.username,
@@ -65,7 +50,7 @@ const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
   notifyPush: true,
   notifyMentor: false,
   profileVisibility: "public",
-  avatarUrl: DEFAULT_AVATAR,
+  avatarUrl: profile.avatarUrl || DEFAULT_AVATAR,
 });
 
 const readStoredPreferences = (profile: UserProfile): UiPreferences => {
@@ -85,7 +70,7 @@ const readStoredPreferences = (profile: UserProfile): UiPreferences => {
       ...buildDefaultPreferences(profile),
       ...parsed,
       username: parsed.username?.trim() || profile.username,
-      avatarUrl: parsed.avatarUrl?.trim() || DEFAULT_AVATAR,
+      avatarUrl: profile.avatarUrl || parsed.avatarUrl?.trim() || DEFAULT_AVATAR,
       profileVisibility: parsed.profileVisibility === "private" ? "private" : "public",
     };
   } catch {
@@ -119,6 +104,8 @@ export default function UserProfileSettingsPage() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(DEFAULT_AVATAR);
 
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -133,6 +120,15 @@ export default function UserProfileSettingsPage() {
     setName(nextProfile.name);
     setEmail(nextProfile.email);
     setPreferences(stored);
+    setAvatarPreviewUrl(nextProfile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
+    syncStoredAuthUser({
+      id: nextProfile.id,
+      email: nextProfile.email,
+      role: nextProfile.roles[0],
+      roles: nextProfile.roles,
+      fullName: nextProfile.name,
+      avatarUrl: nextProfile.avatarUrl,
+    });
   };
 
   const persistPreferences = (): void => {
@@ -178,18 +174,18 @@ export default function UserProfileSettingsPage() {
 
   const saveProfileToBackend = async (): Promise<UserProfile> => {
     if (!profile) {
-      throw new Error("Khong tim thay thong tin nguoi dung hien tai.");
+      throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
     }
 
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
 
     if (!trimmedName) {
-      throw new Error("Ho ten khong duoc de trong.");
+      throw new Error("Họ tên không được để trống.");
     }
 
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      throw new Error("Email khong hop le.");
+      throw new Error("Email không hợp lệ.");
     }
 
     return userService.updateMyProfile({
@@ -202,10 +198,14 @@ export default function UserProfileSettingsPage() {
     setSavingProfile(true);
     setNotice(null);
     try {
-      const updated = await saveProfileToBackend();
+      let updated = await saveProfileToBackend();
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
       hydrateFromProfile(updated);
+      setSelectedAvatarFile(null);
       persistPreferences();
-      setNotice({ type: "success", message: "Da cap nhat thong tin ca nhan thanh cong." });
+      setNotice({ type: "success", message: "Đã cập nhật thông tin cá nhân và ảnh đại diện thành công." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -218,13 +218,13 @@ export default function UserProfileSettingsPage() {
     setNotice(null);
     try {
       if (!passwordForm.currentPassword.trim()) {
-        throw new Error("Vui long nhap mat khau hien tai.");
+        throw new Error("Vui lòng nhập mật khẩu hiện tại.");
       }
       if (passwordForm.nextPassword.trim().length < 8) {
-        throw new Error("Mat khau moi can toi thieu 8 ky tu.");
+        throw new Error("Mật khẩu mới cần tối thiểu 8 ký tự.");
       }
       if (passwordForm.nextPassword !== passwordForm.confirmPassword) {
-        throw new Error("Mat khau xac nhan khong trung khop.");
+        throw new Error("Mật khẩu xác nhận không trùng khớp.");
       }
 
       await userService.updateMyPassword({
@@ -235,7 +235,7 @@ export default function UserProfileSettingsPage() {
       setPasswordForm({ currentPassword: "", nextPassword: "", confirmPassword: "" });
       setNotice({
         type: "success",
-        message: "Da cap nhat mat khau thanh cong.",
+        message: "Đã cập nhật mật khẩu thành công.",
       });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -248,13 +248,17 @@ export default function UserProfileSettingsPage() {
     setSavingAll(true);
     setNotice(null);
     try {
-      const updated = await saveProfileToBackend();
+      let updated = await saveProfileToBackend();
+      if (selectedAvatarFile) {
+        updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      }
       hydrateFromProfile(updated);
+      setSelectedAvatarFile(null);
       persistPreferences();
       setNotice({
         type: "info",
         message:
-          "Da luu thong tin ho so len backend. Cac tuy chon ngon ngu/thong bao/hien thi duoc luu cuc bo do backend chua co API tuong ung.",
+          "Đã lưu thông tin hồ sơ và ảnh đại diện lên backend. Các tùy chọn ngôn ngữ/thông báo/hiển thị được lưu cục bộ do backend chưa có API tương ứng.",
       });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -269,7 +273,7 @@ export default function UserProfileSettingsPage() {
     }
 
     if (typeof window !== "undefined") {
-      const confirmed = window.confirm("Ban co chac chan muon vo hieu hoa tai khoan?");
+      const confirmed = window.confirm("Bạn có chắc chắn muốn vô hiệu hóa tài khoản?");
       if (!confirmed) {
         return;
       }
@@ -280,7 +284,7 @@ export default function UserProfileSettingsPage() {
     try {
       const updated = await userService.updateMyStatus("INACTIVE");
       hydrateFromProfile(updated);
-      setNotice({ type: "success", message: "Tai khoan da duoc chuyen sang trang thai INACTIVE." });
+      setNotice({ type: "success", message: "Tài khoản đã được chuyển sang trạng thái INACTIVE." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
@@ -296,6 +300,8 @@ export default function UserProfileSettingsPage() {
     setName(profile.name);
     setEmail(profile.email);
     setPreferences(stored);
+    setAvatarPreviewUrl(profile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
+    setSelectedAvatarFile(null);
     setPasswordForm({ currentPassword: "", nextPassword: "", confirmPassword: "" });
     setNotice(null);
   };
@@ -307,19 +313,21 @@ export default function UserProfileSettingsPage() {
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      setNotice({ type: "error", message: "Kich thuoc anh vuot qua 2MB." });
+      setNotice({ type: "error", message: "Kích thước ảnh vượt quá 2MB." });
       return;
     }
 
     const objectUrl = URL.createObjectURL(file);
     setPreferences((prev) => ({ ...prev, avatarUrl: objectUrl }));
-    setNotice({ type: "info", message: "Anh dai dien da duoc cap nhat tam thoi. Bam Luu tat ca thay doi de ghi nho." });
+    setAvatarPreviewUrl(objectUrl);
+    setSelectedAvatarFile(file);
+    setNotice({ type: "info", message: "Ảnh đại diện đã được cập nhật tạm thời. Bấm Lưu tất cả thay đổi để lưu lên MinIO." });
   };
 
   if (loading) {
     return (
       <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-8 text-center text-[var(--ink-600)]">
-        Dang tai du lieu ho so...
+        Đang tải dữ liệu hồ sơ...
       </div>
     );
   }
@@ -327,7 +335,7 @@ export default function UserProfileSettingsPage() {
   if (!profile) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-rose-700">
-        Khong the tai du lieu ho so. Vui long dang nhap de su dung endpoint /api/v1/users/me.
+        Không thể tải dữ liệu hồ sơ. Vui lòng đăng nhập để sử dụng endpoint `/api/v1/users/me`.
       </div>
     );
   }
@@ -335,9 +343,9 @@ export default function UserProfileSettingsPage() {
   return (
     <div className="space-y-8 pb-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-extrabold text-[var(--ink-900)]">Cai dat tai khoan</h1>
+        <h1 className="text-3xl font-extrabold text-[var(--ink-900)]">Cài đặt tài khoản</h1>
         <p className="text-[var(--ink-600)]">
-          Cap nhat thong tin ca nhan va thiet lap bao mat cho hanh trinh hoc tap cua ban.
+          Cập nhật thông tin cá nhân và thiết lập bảo mật cho hành trình học tập của bạn.
         </p>
       </header>
 
@@ -360,13 +368,13 @@ export default function UserProfileSettingsPage() {
           <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
             <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
               <UserCircle2 size={20} />
-              Thong tin ca nhan
+              Thông tin cá nhân
             </h2>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-[var(--ink-600)]">Ho va ten</span>
+                  <span className="font-semibold text-[var(--ink-600)]">Họ và tên</span>
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
@@ -375,7 +383,7 @@ export default function UserProfileSettingsPage() {
                 </label>
 
                 <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-[var(--ink-600)]">Ten hien thi / Username</span>
+                  <span className="font-semibold text-[var(--ink-600)]">Tên hiển thị / Username</span>
                   <input
                     value={preferences.username}
                     onChange={(event) =>
@@ -397,7 +405,7 @@ export default function UserProfileSettingsPage() {
               </label>
 
               <label className="space-y-1.5 text-sm">
-                <span className="font-semibold text-[var(--ink-600)]">Tieu su (Bio)</span>
+                <span className="font-semibold text-[var(--ink-600)]">Tiểu sử (Bio)</span>
                 <textarea
                   rows={4}
                   value={preferences.bio}
@@ -415,7 +423,7 @@ export default function UserProfileSettingsPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <Save size={15} />
-                {savingProfile ? "Dang luu..." : "Luu thong tin ca nhan"}
+                {savingProfile ? "Đang lưu..." : "Lưu thông tin cá nhân"}
               </button>
             </div>
           </div>
@@ -424,7 +432,7 @@ export default function UserProfileSettingsPage() {
         <aside className="rounded-3xl border border-[var(--line-soft)] bg-white p-6 text-center">
           <div className="mx-auto w-fit">
             <div className="relative mx-auto h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-lg">
-              <img src={preferences.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+              <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => avatarFileInputRef.current?.click()}
@@ -441,15 +449,15 @@ export default function UserProfileSettingsPage() {
               />
             </div>
 
-            <p className="mt-4 text-sm font-semibold text-[var(--ink-900)]">Anh dai dien</p>
-            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF hoac PNG. Toi da 2MB.</p>
+            <p className="mt-4 text-sm font-semibold text-[var(--ink-900)]">Ảnh đại diện</p>
+            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF hoặc PNG. Tối đa 2MB.</p>
           </div>
 
           <div className="mt-6 rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-3 text-left text-xs text-[var(--ink-600)]">
-            <p className="font-semibold text-[var(--ink-700)]">Thong tin he thong</p>
+            <p className="font-semibold text-[var(--ink-700)]">Thông tin hệ thống</p>
             <p className="mt-1">ID: {profile.id}</p>
-            <p>Vai tro: {profile.roles.join(", ")}</p>
-            <p>Trang thai: {profile.status}</p>
+            <p>Vai trò: {profile.roles.join(", ")}</p>
+            <p>Trạng thái: {profile.status}</p>
             <p>XP: {profile.xp}</p>
           </div>
         </aside>
@@ -458,15 +466,15 @@ export default function UserProfileSettingsPage() {
       <section className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
         <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
           <Lock size={20} />
-          Bao mat tai khoan
+          Bảo mật tài khoản
         </h2>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Doi mat khau</p>
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Đổi mật khẩu</p>
 
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Mat khau hien tai</span>
+              <span className="font-semibold text-[var(--ink-600)]">Mật khẩu hiện tại</span>
               <input
                 type="password"
                 value={passwordForm.currentPassword}
@@ -478,7 +486,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Mat khau moi</span>
+              <span className="font-semibold text-[var(--ink-600)]">Mật khẩu mới</span>
               <input
                 type="password"
                 value={passwordForm.nextPassword}
@@ -490,7 +498,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Xac nhan mat khau moi</span>
+              <span className="font-semibold text-[var(--ink-600)]">Xác nhận mật khẩu mới</span>
               <input
                 type="password"
                 value={passwordForm.confirmPassword}
@@ -508,12 +516,12 @@ export default function UserProfileSettingsPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Shield size={15} />
-              {savingPassword ? "Dang cap nhat..." : "Cap nhat mat khau"}
+              {savingPassword ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
             </button>
           </div>
 
           <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Tai khoan lien ket</p>
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ink-500)]">Tài khoản liên kết</p>
 
             <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-4">
               <div className="flex items-center justify-between">
@@ -523,11 +531,11 @@ export default function UserProfileSettingsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[var(--ink-900)]">Google</p>
-                    <p className="text-xs text-emerald-600">Da ket noi (hien thi mau)</p>
+                    <p className="text-xs text-emerald-600">Đã kết nối (hiển thị mẫu)</p>
                   </div>
                 </div>
                 <button type="button" className="text-xs font-semibold text-rose-600">
-                  Huy ket noi
+                  Hủy kết nối
                 </button>
               </div>
             </div>
@@ -540,17 +548,17 @@ export default function UserProfileSettingsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[var(--ink-900)]">Facebook</p>
-                    <p className="text-xs text-[var(--ink-500)]">Chua ket noi</p>
+                    <p className="text-xs text-[var(--ink-500)]">Chưa kết nối</p>
                   </div>
                 </div>
                 <button type="button" className="text-xs font-semibold text-[var(--brand-700)]">
-                  Ket noi ngay
+                  Kết nối ngay
                 </button>
               </div>
             </div>
 
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-              Chuc nang lien ket tai khoan chua co endpoint tuong ung trong backend hien tai.
+              Chức năng liên kết tài khoản chưa có endpoint tương ứng trong backend hiện tại.
             </div>
           </div>
         </div>
@@ -560,12 +568,12 @@ export default function UserProfileSettingsPage() {
         <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
           <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
             <BellRing size={20} />
-            Tuy chon hien thi
+            Tùy chọn hiển thị
           </h2>
 
           <div className="space-y-4">
             <label className="space-y-1 text-sm">
-              <span className="font-semibold text-[var(--ink-600)]">Ngon ngu he thong</span>
+              <span className="font-semibold text-[var(--ink-600)]">Ngôn ngữ hệ thống</span>
               <select
                 value={preferences.language}
                 onChange={(event) =>
@@ -573,14 +581,14 @@ export default function UserProfileSettingsPage() {
                 }
                 className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
               >
-                <option value="vi-VN">Tieng Viet (Vietnam)</option>
+                <option value="vi-VN">Tiếng Việt (Việt Nam)</option>
                 <option value="en-US">English (US)</option>
                 <option value="ja-JP">Nihongo (Japan)</option>
               </select>
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Thong bao qua Email</span>
+              <span>Thông báo qua Email</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyEmail}
@@ -592,7 +600,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Thong bao day (Browser)</span>
+              <span>Thông báo đẩy (trình duyệt)</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyPush}
@@ -604,7 +612,7 @@ export default function UserProfileSettingsPage() {
             </label>
 
             <label className="flex items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm">
-              <span>Tin nhan tu giang vien</span>
+              <span>Tin nhắn từ giảng viên</span>
               <input
                 type="checkbox"
                 checked={preferences.notifyMentor}
@@ -620,14 +628,14 @@ export default function UserProfileSettingsPage() {
         <div className="rounded-3xl border border-[var(--line-soft)] bg-white p-6">
           <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--brand-700)]">
             <Globe2 size={20} />
-            Quyen rieng tu
+            Quyền riêng tư
           </h2>
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
-              <p className="font-semibold text-amber-800">Trang thai ho so</p>
+              <p className="font-semibold text-amber-800">Trạng thái hồ sơ</p>
               <p className="mt-1 text-amber-700">
-                API backend hien chua co endpoint rieng cho profile visibility, trang thai nay duoc luu cuc bo.
+                API backend hiện chưa có endpoint riêng cho profile visibility, trạng thái này được lưu cục bộ.
               </p>
               <div className="mt-3 flex gap-2">
                 <button
@@ -641,7 +649,7 @@ export default function UserProfileSettingsPage() {
                       : "bg-white text-amber-800"
                   }`}
                 >
-                  Cong khai
+                  Công khai
                 </button>
                 <button
                   type="button"
@@ -654,7 +662,7 @@ export default function UserProfileSettingsPage() {
                       : "bg-white text-amber-800"
                   }`}
                 >
-                  Rieng tu
+                  Riêng tư
                 </button>
               </div>
             </div>
@@ -663,8 +671,8 @@ export default function UserProfileSettingsPage() {
               type="button"
               className="flex w-full items-center justify-between rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 text-sm"
             >
-              <span>Xuat du lieu ca nhan</span>
-              <span className="text-[var(--ink-400)]">(sap co)</span>
+              <span>Xuất dữ liệu cá nhân</span>
+              <span className="text-[var(--ink-400)]">(sắp có)</span>
             </button>
 
             <button
@@ -673,7 +681,7 @@ export default function UserProfileSettingsPage() {
               disabled={changingStatus || profile.status === "INACTIVE"}
               className="flex w-full items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <span>Vo hieu hoa tai khoan</span>
+              <span>Vô hiệu hóa tài khoản</span>
               <AlertTriangle size={16} />
             </button>
           </div>
@@ -686,7 +694,7 @@ export default function UserProfileSettingsPage() {
           onClick={handleReset}
           className="rounded-xl border border-[var(--line-soft)] px-5 py-2.5 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
         >
-          Huy thay doi
+          Hủy thay đổi
         </button>
         <button
           type="button"
@@ -695,7 +703,7 @@ export default function UserProfileSettingsPage() {
           className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Save size={15} />
-          {savingAll ? "Dang luu..." : "Luu tat ca thay doi"}
+          {savingAll ? "Đang lưu..." : "Lưu tất cả thay đổi"}
         </button>
       </div>
     </div>

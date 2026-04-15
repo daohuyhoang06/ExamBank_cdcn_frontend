@@ -13,6 +13,7 @@ const LEGACY_REGISTER_PATH = "/auth/register";
 const USER_KEY = "exambank_user";
 const SESSION_USER_KEY = `${USER_KEY}_session`;
 const PERSISTENT_USER_KEY = `${USER_KEY}_persistent`;
+export const AUTH_USER_UPDATED_EVENT = "exambank-auth-user-updated";
 
 type ApiAuthResponse = {
   token?: string;
@@ -53,6 +54,11 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
         name?: string;
         role?: string;
         roles?: string[];
+        avatarUrl?: string;
+        avatar?: string;
+        imageUrl?: string;
+        photoUrl?: string;
+        profileImageUrl?: string;
       }
     | undefined;
 
@@ -65,6 +71,7 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
           email: rawUser.email,
           role: rawUser.role,
           roles: rawUser.roles,
+          avatarUrl: (rawUser as { avatarUrl?: string }).avatarUrl,
           fullName: rawUser.fullName ?? rawUser.name,
         }
       : undefined,
@@ -96,6 +103,10 @@ function clearStoredAuthUserInternal() {
   } catch {
     // Ignore storage access issues in restricted browser modes.
   }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_USER_UPDATED_EVENT));
+  }
 }
 
 function saveUser(user: AuthSuccess["user"], persist: boolean) {
@@ -120,6 +131,10 @@ function saveUser(user: AuthSuccess["user"], persist: boolean) {
     localStorage.setItem(PERSISTENT_USER_KEY, serialized);
   } catch {
     localStorage.setItem(USER_KEY, serialized);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_USER_UPDATED_EVENT));
   }
 }
 
@@ -157,6 +172,47 @@ export function getStoredAuthUser(): AuthSuccess["user"] | null {
 
 export function clearStoredAuthUser() {
   clearStoredAuthUserInternal();
+}
+
+export function syncStoredAuthUser(user: AuthSuccess["user"]) {
+  if (!user) {
+    return;
+  }
+
+  const serialized = JSON.stringify(user);
+  const hasSessionUser = (() => {
+    try {
+      return Boolean(sessionStorage.getItem(SESSION_USER_KEY));
+    } catch {
+      return false;
+    }
+  })();
+  const hasPersistentUser = (() => {
+    try {
+      return Boolean(localStorage.getItem(PERSISTENT_USER_KEY) || localStorage.getItem(USER_KEY));
+    } catch {
+      return false;
+    }
+  })();
+
+  try {
+    sessionStorage.setItem(SESSION_USER_KEY, serialized);
+  } catch {
+    // Ignore storage access issues in restricted browser modes.
+  }
+
+  if (hasPersistentUser || (!hasSessionUser && hasPersistentUser)) {
+    try {
+      localStorage.setItem(PERSISTENT_USER_KEY, serialized);
+      localStorage.setItem(USER_KEY, serialized);
+    } catch {
+      // Ignore storage access issues in restricted browser modes.
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_USER_UPDATED_EVENT));
+  }
 }
 
 export const authService = {

@@ -5,14 +5,13 @@ import {
   ChevronDown,
   Star,
   Check,
-  ArrowRight,
+  Eye,
   School,
   BookMarked
 } from 'lucide-react';
 
-import type { EducationLevel, ExamListItem, Subject } from '../types/user.type';
+import type { DocumentSummary, EducationLevel, Subject } from '../types/user.type';
 import { userService } from '../services/user.service';
-import { examService } from '../services/user.service';
 
 export default function ExamBankPage() {
   const navigate = useNavigate();
@@ -24,8 +23,30 @@ export default function ExamBankPage() {
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [keyword, setKeyword] = useState('');
-  const [allExams, setAllExams] = useState<ExamListItem[]>([]);
-  const [filteredExams, setFilteredExams] = useState<ExamListItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [documentsError, setDocumentsError] = useState('');
+
+  const loadApprovedDocuments = async (nextKeyword = '', nextSubject = '') => {
+    setIsLoadingDocuments(true);
+    setDocumentsError('');
+
+    try {
+      const result = await userService.getDocuments({
+        keyword: nextKeyword.trim() || undefined,
+        subject: nextSubject && nextSubject !== 'Tất cả môn học' ? nextSubject : undefined,
+        sortBy: 'NEWEST',
+        size: 200,
+      });
+      setDocuments(result);
+    } catch (error) {
+      console.error('Fetch documents error:', error);
+      setDocuments([]);
+      setDocumentsError('Không thể tải đề thi từ hệ thống. Vui lòng thử lại.');
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
 
   // Fetch data từ service
   useEffect(() => {
@@ -33,44 +54,25 @@ export default function ExamBankPage() {
       try {
         const levels = await userService.getEducationLevels();
         const subs = await userService.getSubjects();
-        const exams = await examService.getAllExams();
 
         setEducationLevels(levels);
         setSubjects(subs);
-        setAllExams(exams);
-        setFilteredExams(exams);
 
         // set default
         if (levels.length > 0) setSelectedLevel(levels[0]);
         if (subs.length > 0) setSelectedSubject(subs[0]);
+
+        await loadApprovedDocuments('', '');
       } catch (error) {
         console.error('Fetch error:', error);
       }
     };
 
-    fetchData();
+    void fetchData();
   }, []);
 
-  const applyFilters = (nextKeyword = keyword, nextSubject = selectedSubject) => {
-    const normalizedKeyword = nextKeyword.trim().toLowerCase();
-    const normalizedSubject = nextSubject.trim().toLowerCase();
-    const hasSubjectFilter = nextSubject && nextSubject !== 'Tất cả môn học';
-
-    const next = allExams.filter((exam) => {
-      const matchesKeyword =
-        !normalizedKeyword || exam.title.toLowerCase().includes(normalizedKeyword);
-
-      const examSubject = (exam.subjectName ?? '').toLowerCase();
-
-      const matchesSubject =
-        !hasSubjectFilter ||
-        examSubject.includes(normalizedSubject) ||
-        exam.title.toLowerCase().includes(normalizedSubject);
-
-      return matchesKeyword && matchesSubject;
-    });
-
-    setFilteredExams(next);
+  const applyFilters = async (nextKeyword = keyword, nextSubject = selectedSubject) => {
+    await loadApprovedDocuments(nextKeyword, nextSubject);
   };
 
   return (
@@ -162,7 +164,7 @@ export default function ExamBankPage() {
                   onClick={() => {
                     setSelectedSubject(sub);
                     setIsSubjectOpen(false);
-                    applyFilters(keyword, sub);
+                    void applyFilters(keyword, sub);
                   }}
                   className="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex justify-between"
                 >
@@ -174,49 +176,61 @@ export default function ExamBankPage() {
           )}
         </div>
 
-        <button onClick={() => applyFilters()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl">
+        <button onClick={() => void applyFilters()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl">
           Lọc
         </button>
       </div>
 
+      {documentsError && (
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-red-700 font-semibold text-sm">
+          {documentsError}
+        </div>
+      )}
+
       {/* List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredExams.map((exam) => (
-          <div key={exam.id} className="bg-white p-3 rounded-2xl border">
+        {documents.map((document) => (
+          <div key={document.id} className="bg-white p-3 rounded-2xl border">
             <img
               src="https://images.unsplash.com/photo-1606326666490-45757474e788"
-              alt={exam.title}
+              alt={document.title}
               className="rounded-xl mb-3"
             />
 
             <h3 className="font-bold text-sm mb-2">
-              {exam.title}
+              {document.title}
             </h3>
 
             <p className="text-xs text-slate-400 mb-3">
-              {exam.subjectName ?? selectedSubject ?? 'Đa môn'} • {exam.durationMinutes ?? 30} phút
+              {document.subject ?? selectedSubject ?? 'Đa môn'} • {document.semesterYear ?? 'Chưa cập nhật kỳ/năm'}
             </p>
 
             <div className="flex justify-between">
               <div className="flex items-center gap-1 text-yellow-500">
                 <Star className="w-4 h-4 fill-current" />
-                <span>4.{(exam.id % 4) + 5}</span>
+                <span>{(document.averageRating ?? 0).toFixed(1)}</span>
               </div>
 
               <button
-                onClick={() => navigate(`/user/exam/${exam.id}`)}
+                onClick={() => navigate(`/user/comment/${document.id}`)}
                 className="text-blue-600 flex items-center gap-1"
               >
-                Làm ngay <ArrowRight className="w-4 h-4" />
+                Xem đề <Eye className="w-4 h-4" />
               </button>
             </div>
           </div>
         ))}
       </div>
 
-      {filteredExams.length === 0 && (
+      {!isLoadingDocuments && documents.length === 0 && (
         <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500">
           Không tìm thấy đề phù hợp bộ lọc hiện tại.
+        </div>
+      )}
+
+      {isLoadingDocuments && (
+        <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500">
+          Đang tải danh sách đề...
         </div>
       )}
     </div>

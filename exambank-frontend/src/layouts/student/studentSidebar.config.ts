@@ -1,10 +1,9 @@
 import { 
   LayoutDashboard, 
-  UserCircle, 
   FileText,
   BarChart3, 
   Settings,
-  HelpCircle
+  MonitorPlay
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,11 +21,6 @@ export const studentSidebarItems: SidebarNavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    label: "Hồ sơ",
-    path: "/user/profile",
-    icon: UserCircle,
-  },
-  {
     label: "Ngân hàng đề",
     path: "/user/exambank",
     icon: FileText,
@@ -42,8 +36,8 @@ export const studentSidebarItems: SidebarNavItem[] = [
     icon: Settings,
   },
   {
-    label: "Thảo luận đề",
-    path: "/user/comment",
-    icon: HelpCircle,
+    label: "Thi online",
+    path: "/user/online-exam",
+    icon: MonitorPlay,
   },
 ];
