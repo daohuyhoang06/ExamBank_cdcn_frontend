@@ -356,7 +356,7 @@ export default function AdminProfileDetailPage() {
   const [actionFilter, setActionFilter] = useState<ActivityLog["category"] | "Tất cả">("Tất cả");
   const [profileForm, setProfileForm] = useState(buildInitialProfile);
   const [profileBaseline, setProfileBaseline] = useState(buildInitialProfile);
-  const [avatarUrl, setAvatarUrl] = useState<string>(() => {
+  const avatarUrl = useMemo(() => {
     const authAvatar = toPublicAssetUrl((storedAuthUser as { avatarUrl?: string } | null)?.avatarUrl);
     if (authAvatar) {
       return authAvatar;
@@ -368,12 +368,10 @@ export default function AdminProfileDetailPage() {
     }
 
     return buildFallbackAvatarUrl(storedAuthUser?.fullName ?? storedAuthUser?.email ?? "scholarly-user");
-  });
+  }, [storedAuthUser]);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [selectedAvatarName, setSelectedAvatarName] = useState("");
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -415,7 +413,7 @@ export default function AdminProfileDetailPage() {
         const mappedProfile = mapProfileToViewModel(profile);
         setProfileForm(mappedProfile);
         setProfileBaseline(mappedProfile);
-        setAvatarPreviewUrl(mappedProfile.avatarUrl);
+        setAvatarPreviewUrl(mappedProfile.avatarUrl || null);
       } catch (error) {
         if (!isActive) {
           return;
@@ -437,10 +435,6 @@ export default function AdminProfileDetailPage() {
   }, []);
 
   useEffect(() => {
-    setAvatarLoadFailed(false);
-  }, [effectiveAvatarUrl]);
-
-  useEffect(() => {
     return () => {
       if (avatarObjectUrlRef.current) {
         URL.revokeObjectURL(avatarObjectUrlRef.current);
@@ -458,7 +452,7 @@ export default function AdminProfileDetailPage() {
     setAvatarPreviewUrl(null);
     setSelectedAvatarName("");
     setSelectedAvatarFile(null);
-    setAvatarPreviewUrl(profileBaseline.avatarUrl);
+    setAvatarPreviewUrl(profileBaseline.avatarUrl || null);
     setIsEditing(false);
   };
 
@@ -519,7 +513,12 @@ export default function AdminProfileDetailPage() {
     setSelectedAvatarName(selectedFile?.name ?? "");
     setSelectedAvatarFile(selectedFile ?? null);
     if (selectedFile) {
-      setAvatarPreviewUrl(URL.createObjectURL(selectedFile));
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+      }
+      const objectUrl = URL.createObjectURL(selectedFile);
+      avatarObjectUrlRef.current = objectUrl;
+      setAvatarPreviewUrl(objectUrl);
     }
   };
 
@@ -565,8 +564,8 @@ export default function AdminProfileDetailPage() {
           <div className="flex items-start gap-5">
             <div className="w-24 shrink-0 space-y-2 lg:w-28">
               <div className="relative inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)] ring-4 ring-white lg:h-24 lg:w-24">
-                {avatarPreviewUrl ? (
-                  <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
+                {effectiveAvatarUrl ? (
+                  <img src={effectiveAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
                   <Shield size={34} />
                 )}

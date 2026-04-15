@@ -73,12 +73,6 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
           roles: rawUser.roles,
           avatarUrl: (rawUser as { avatarUrl?: string }).avatarUrl,
           fullName: rawUser.fullName ?? rawUser.name,
-          avatarUrl:
-            rawUser.avatarUrl ??
-            rawUser.avatar ??
-            rawUser.imageUrl ??
-            rawUser.photoUrl ??
-            rawUser.profileImageUrl,
         }
       : undefined,
     message: raw.message,

@@ -465,6 +465,11 @@ export default function ModeratorQueuePage() {
       return;
     }
 
+    const shouldReject = window.confirm(`Từ chối tài liệu "${selected.title}"?`);
+    if (!shouldReject) {
+      return;
+    }
+
     setIsActionRunning(true);
 
     try {

@@ -307,6 +307,11 @@ function resolveQueueTimestamp(document: DocumentApiRecord): unknown {
   return document.submittedAt ?? document.createdAt ?? document.publishedAt;
 }
 
+function toQueueTimestampMillis(document: DocumentApiRecord): number {
+  const parsed = parseApiDateTime(resolveQueueTimestamp(document));
+  return parsed?.getTime() ?? 0;
+}
+
 function mapFileType(value: string | null, fileUrl?: string | null): "PDF" | "DOCX" | "Ảnh" {
   const normalized = `${value ?? ""} ${fileUrl ?? ""}`.toLowerCase();
   if (normalized.includes("doc")) {
@@ -455,7 +460,16 @@ export async function listModeratorQueueItems(): Promise<ModeratorQueueRecord[]>
   const documents = await listModeratorDocuments();
   const documentsWithPreview = await enrichDocumentsWithPreview(documents);
 
-  return documentsWithPreview.map(toQueueRecord);
+  return documentsWithPreview
+    .sort((left, right) => {
+      const timestampDiff = toQueueTimestampMillis(right) - toQueueTimestampMillis(left);
+      if (timestampDiff !== 0) {
+        return timestampDiff;
+      }
+
+      return right.id - left.id;
+    })
+    .map(toQueueRecord);
 }
 
 export async function getModeratorQueueMetrics(): Promise<ModeratorQueueMetrics> {
