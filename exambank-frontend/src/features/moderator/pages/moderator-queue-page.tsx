@@ -412,6 +412,7 @@ export default function ModeratorQueuePage() {
         semesterYear: metadataSemesterYear,
         type: metadataCategory,
         lecturer: metadataLecturer,
+        moderatorNote: metadataModeratorNote,
       });
 
       await refreshQueue(true);
@@ -445,7 +446,7 @@ export default function ModeratorQueuePage() {
     setIsActionRunning(true);
 
     try {
-      await approveModeratorQueueItem(selected);
+      await approveModeratorQueueItem(selected, metadataModeratorNote);
       await refreshQueue(true);
     } catch (error) {
       window.alert(extractApiErrorMessage(error, "Duyệt tài liệu thất bại."));

@@ -63,6 +63,7 @@ export type ModeratorMetadataPayload = {
   semesterYear?: string;
   type?: string;
   lecturer?: string;
+  moderatorNote?: string;
 };
 
 export type ModeratorDocumentPreview = {
@@ -512,6 +513,7 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
       ...(payload.semesterYear?.trim() ? { semester: payload.semesterYear.trim() } : {}),
       ...(payload.type?.trim() ? { type: payload.type.trim() } : {}),
       ...(payload.lecturer?.trim() ? { lecturer: payload.lecturer.trim() } : {}),
+      ...(payload.moderatorNote?.trim() ? { moderatorNote: payload.moderatorNote.trim() } : { moderatorNote: null }),
     },
     buildAuthConfig()
   );
@@ -519,10 +521,11 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
   return response.data;
 }
 
-export async function approveModeratorQueueItem(record: ModeratorQueueRecord) {
+export async function approveModeratorQueueItem(record: ModeratorQueueRecord, moderatorNote?: string) {
+  const trimmedNote = moderatorNote?.trim();
   const response = await apiClient.put(
     `${MODERATOR_DOCUMENTS_PATH}/${record.documentId}/approve`,
-    undefined,
+    trimmedNote ? { note: trimmedNote } : undefined,
     buildAuthConfig()
   );
   return response.data;

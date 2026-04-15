@@ -67,6 +67,8 @@ export interface Submission {
   subject: string;
   type: string;
   status: "Approved" | "Pending" | "Rejected";
+  submittedAt?: string;
+  note?: string;
   reason?: string;
   date: string;
 }
@@ -175,6 +177,7 @@ export interface DocumentSummary {
   averageRating?: number;
   downloadCount?: number;
   status?: string;
+  submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
 }

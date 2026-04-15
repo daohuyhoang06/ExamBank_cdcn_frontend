@@ -62,6 +62,7 @@ type BackendDocument = {
   averageRating?: number;
   downloadCount?: number;
   status?: string;
+  submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
 };
@@ -354,6 +355,23 @@ const toDisplayDate = (isoDate?: string): string => {
   }).format(date);
 };
 
+const toDisplayDateTime = (isoDate?: string): string => {
+  if (!isoDate) {
+    return "N/A";
+  }
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "N/A";
+  }
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
 const parseOptions = (rawOptions?: string | null): string[] => {
   if (!rawOptions) {
     return [];
@@ -504,6 +522,7 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
   status: doc.status,
+  submittedAt: doc.submittedAt,
   createdAt: doc.createdAt,
   moderatorNote: doc.moderatorNote,
 });
@@ -536,6 +555,7 @@ const toStoredBackendDocument = (doc: DocumentSummary): BackendDocument => ({
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
   status: doc.status,
+  submittedAt: doc.submittedAt,
   createdAt: doc.createdAt,
   moderatorNote: doc.moderatorNote,
 });
@@ -564,6 +584,7 @@ const normalizeStoredDocument = (value: unknown): BackendDocument | null => {
     averageRating: item.averageRating,
     downloadCount: item.downloadCount,
     status: item.status,
+    submittedAt: item.submittedAt,
     createdAt: item.createdAt,
     moderatorNote: item.moderatorNote,
   };
@@ -601,6 +622,7 @@ const upsertStoredSubmission = (summary: DocumentSummary): void => {
   const nextDocument = {
     ...toStoredBackendDocument(summary),
     status: summary.status ?? "PENDING_REVIEW",
+    submittedAt: summary.submittedAt ?? summary.createdAt ?? new Date().toISOString(),
     createdAt: summary.createdAt ?? new Date().toISOString(),
   };
 
@@ -715,6 +737,8 @@ const mapDocumentToSubmission = (doc: DocumentSummary): Submission => {
     subject: doc.subject ?? "Chưa phân loại",
     type: doc.type ?? "Tài liệu",
     status,
+    submittedAt: toDisplayDateTime(doc.submittedAt ?? doc.createdAt),
+    note: doc.moderatorNote,
     reason: doc.moderatorNote,
     date: toDisplayDate(doc.createdAt),
   };
@@ -840,6 +864,31 @@ export const userService = {
 
   getSubmissions: async (): Promise<Submission[]> => {
     try {
+      try {
+        const { data } = await api.get<BackendDocument[]>("/api/v1/users/me/documents");
+        const normalizedDocuments = data.map((item) => ({
+          ...item,
+          semesterYear: item.semesterYear ?? item.semester,
+          semester: item.semester ?? item.semesterYear,
+        }));
+
+        saveStoredSubmissions(normalizedDocuments);
+
+        return normalizedDocuments
+          .sort((left, right) => {
+            const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : left.createdAt ? new Date(left.createdAt).getTime() : 0;
+            const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : right.createdAt ? new Date(right.createdAt).getTime() : 0;
+            if (leftTime !== rightTime) {
+              return rightTime - leftTime;
+            }
+            return right.id - left.id;
+          })
+          .map(mapDocumentToSummary)
+          .map(mapDocumentToSubmission);
+      } catch {
+        // Fallback for older backend versions that do not expose current-user documents yet.
+      }
+
       let approvedDocuments: DocumentSummary[] = [];
       try {
         const { data } = await api.get<BackendDocument[]>("/api/v1/documents", {
@@ -855,8 +904,8 @@ export const userService = {
 
       const syncedSubmissions = syncStoredSubmissionsWithApproved(approvedDocuments)
         .sort((left, right) => {
-          const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-          const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+          const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : left.createdAt ? new Date(left.createdAt).getTime() : 0;
+          const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : right.createdAt ? new Date(right.createdAt).getTime() : 0;
           if (leftTime !== rightTime) {
             return rightTime - leftTime;
           }
