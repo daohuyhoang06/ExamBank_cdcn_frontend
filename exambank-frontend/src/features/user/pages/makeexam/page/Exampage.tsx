@@ -16,16 +16,16 @@ const Exampage = () => {
       return;
     }
 
-    const result = await submitExam(reason);
-    if (!result) {
+    const status = await submitExam(reason);
+    if (!status) {
       return;
     }
 
-    navigate(`/user/exambank/examreview?sessionId=${result.sessionId}`, {
+    navigate(`/user/exambank/examreview?sessionId=${status.sessionId}`, {
       state: {
         examTitle: exam.title,
         questionCount: exam.questions.length,
-        totalScore: result.totalScore ?? 0,
+        totalScore: status.totalScore ?? 0,
       },
     });
   };
