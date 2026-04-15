@@ -180,15 +180,30 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
       if (typeof message === "string" && message.trim().length > 0) {
         return message;
       }
+      // Nếu message là object, trả về JSON.stringify
+      if (typeof message === "object" && message !== null) {
+        return JSON.stringify(message);
+      }
     }
-    
+
     if (typeof error.message === "string" && error.message.trim().length > 0) {
       return error.message;
     }
+    // Nếu error.message là object
+    if (typeof error.message === "object" && error.message !== null) {
+      return JSON.stringify(error.message);
+    }
   }
 
-  if (error instanceof Error && error.message.trim().length > 0) {
+  if (error instanceof Error && typeof error.message === "string" && error.message.trim().length > 0) {
     return error.message;
+  }
+  if (error instanceof Error && typeof error.message === "object" && error.message !== null) {
+    return JSON.stringify(error.message);
+  }
+  // Nếu error là object, trả về JSON.stringify
+  if (typeof error === "object" && error !== null) {
+    return JSON.stringify(error);
   }
 
   return fallbackMessage;
