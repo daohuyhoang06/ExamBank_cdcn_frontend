@@ -218,8 +218,9 @@ export function AppSidebar({
   return (
     <aside
       className={`
-        hidden h-screen shrink-0 md:flex md:flex-col
-        border-r border-[var(--line-soft)] bg-[#f2f5fa]
+        hidden h-full shrink-0 md:flex md:flex-col
+        bg-transparent
+        border-r border-[var(--line-soft)]
         transition-all duration-300 ease-in-out
         relative
         ${isCollapsed ? 'w-16' : 'w-64'}
@@ -230,19 +231,19 @@ export function AppSidebar({
         aria-label={isCollapsed ? 'Mo rong sidebar' : 'Thu gon sidebar'}
         className={`
           absolute top-20 -right-3
-          w-6 h-6 rounded-full
-          bg-white border border-[var(--line-soft)]
-          shadow-[0_2px_8px_rgba(0,0,0,0.1)]
+          w-7 h-7 rounded-full
+          bg-white border border-[rgba(0,0,0,0.08)]
+          shadow-[0_4px_12px_rgba(0,0,0,0.08)]
           flex items-center justify-center
           transition-all duration-200 ease-in-out
-          hover:scale-110 hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]
-          hover:text-[var(--brand-700)]
+          hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)]
+          hover:text-[var(--brand-700)] hover:border-[var(--brand-200)]
           active:scale-95
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)]
           z-10
         `}
       >
-        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
       <div className={`px-6 py-5 transition-all duration-300 ${!isExpanded && 'px-2'}`}>
@@ -348,7 +349,7 @@ export function AppSidebar({
                       ${unreadCount > 9 ? 'h-4 min-w-5 px-1.5' : 'h-4 w-4'}
                       rounded-full
                       bg-[#F87171]
-                      border-2 border-[#f2f5fa]
+                      border-2 border-white
                       text-[9px] font-bold text-white
                       shadow-sm
                     `}
