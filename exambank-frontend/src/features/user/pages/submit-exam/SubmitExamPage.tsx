@@ -32,6 +32,7 @@ const Tip: React.FC<{ text: string }> = ({ text }) => (
 export default function SubmitExamPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const classOptions = Array.from({ length: 12 }, (_, index) => `L\u1edbp ${index + 1}`);
 
   // Quản lý State với Type cụ thể
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
@@ -47,7 +48,7 @@ export default function SubmitExamPage() {
     type: 'final',
     school: '',
     subject: '',
-    lecturer: '',
+    className: '',
   });
 
   useEffect(() => {
@@ -137,7 +138,7 @@ export default function SubmitExamPage() {
           subject: formData.subject || undefined,
           semesterYear: formData.semesterYear || undefined,
           type: formData.type || undefined,
-          lecturer: formData.lecturer || undefined,
+          className: formData.className || undefined,
         },
         fileToUpload,
       );
@@ -334,14 +335,22 @@ export default function SubmitExamPage() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 block ml-1">Giảng viên</label>
-                <input
-                  type="text"
-                  value={formData.lecturer}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, lecturer: e.target.value }))}
-                  placeholder="VD: TS. Nguyễn Văn A"
-                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/10 outline-none text-sm"
-                />
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 block ml-1">Lớp học</label>
+                <div className="relative">
+                  <select
+                    value={formData.className}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, className: e.target.value }))}
+                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/10 outline-none text-sm cursor-pointer appearance-none"
+                  >
+                    <option value="">Chọn lớp</option>
+                    {classOptions.map((classOption) => (
+                      <option key={classOption} value={classOption}>
+                        {classOption}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-50">

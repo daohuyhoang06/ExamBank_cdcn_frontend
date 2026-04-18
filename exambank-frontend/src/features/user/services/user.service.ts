@@ -56,7 +56,7 @@ type BackendDocument = {
   semesterYear?: string;
   semester?: string;
   type?: string;
-  lecturer?: string;
+  className?: string;
   fileUrl?: string;
   previewUrl?: string;
   averageRating?: number;
@@ -517,7 +517,7 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   subject: doc.subject,
   semesterYear: doc.semesterYear ?? doc.semester,
   type: doc.type,
-  lecturer: doc.lecturer,
+  className: doc.className,
   fileUrl: doc.fileUrl ?? doc.previewUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
@@ -550,7 +550,7 @@ const toStoredBackendDocument = (doc: DocumentSummary): BackendDocument => ({
   semesterYear: doc.semesterYear,
   semester: doc.semesterYear,
   type: doc.type,
-  lecturer: doc.lecturer,
+  className: doc.className,
   fileUrl: doc.fileUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
@@ -578,7 +578,7 @@ const normalizeStoredDocument = (value: unknown): BackendDocument | null => {
     semesterYear: item.semesterYear ?? item.semester,
     semester: item.semester ?? item.semesterYear,
     type: item.type,
-    lecturer: item.lecturer,
+    className: item.className,
     fileUrl: item.fileUrl,
     previewUrl: item.previewUrl,
     averageRating: item.averageRating,
@@ -1032,7 +1032,7 @@ export const userService = {
       subject: payload.subject,
       semester: payload.semesterYear,
       type: payload.type,
-      lecturer: payload.lecturer,
+      className: payload.className,
     };
 
     formData.append("document", new Blob([JSON.stringify(uploadRequest)], { type: "application/json" }));

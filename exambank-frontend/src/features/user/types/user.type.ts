@@ -172,7 +172,7 @@ export interface DocumentSummary {
   subject?: string;
   semesterYear?: string;
   type?: string;
-  lecturer?: string;
+  className?: string;
   fileUrl?: string;
   averageRating?: number;
   downloadCount?: number;
@@ -193,7 +193,7 @@ export interface UploadDocumentPayload {
   subject?: string;
   semesterYear?: string;
   type?: string;
-  lecturer?: string;
+  className?: string;
 }
 
 export type AccountStatus = "ACTIVE" | "INACTIVE" | "BANNED";

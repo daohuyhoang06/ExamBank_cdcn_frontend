@@ -8,6 +8,7 @@ import {
   Eye,
   Maximize2,
   Loader2,
+  RefreshCcw,
   Save,
   Search,
   X,
@@ -39,13 +40,31 @@ const quickReasons = [
   },
   {
     title: "Sai phân loại",
-    detail: "Môn học, học kỳ hoặc loại tài liệu chưa khớp.",
+    detail: "Môn học, năm học hoặc loại tài liệu chưa khớp.",
   },
   {
     title: "Cần cập nhật metadata",
     detail: "Cần chỉnh lại thông tin trước khi duyệt tài liệu.",
   },
 ];
+
+const DEFAULT_METADATA_SUBJECTS = [
+  "Toán học",
+  "Văn học",
+  "Tiếng Anh",
+  "Vật lý",
+  "Hóa học",
+  "Sinh học",
+  "Lịch sử",
+  "Địa lý",
+  "Giáo dục công dân",
+  "Tin học",
+];
+
+const METADATA_CATEGORY_OPTIONS = ["Thi thử", "Giữa kỳ", "Cuối kỳ"] as const;
+const DEFAULT_METADATA_CATEGORY = METADATA_CATEGORY_OPTIONS[0];
+const METADATA_SEMESTER_YEAR_OPTIONS = Array.from({ length: 7 }, (_, index) => String(2020 + index));
+const METADATA_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
 
 function toMinioPublicUrl(fileUrl: string | null | undefined) {
   if (!fileUrl) {
@@ -131,35 +150,70 @@ function normalizeStatusKey(status: string) {
   return normalizeText(status).toUpperCase();
 }
 
-type StatusFilterValue = "ALL" | "PENDING" | "APPROVED" | "REJECTED";
+function normalizeMetadataCategory(value: string | null | undefined) {
+  const normalized = normalizeText(value ?? "");
 
-const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilterValue; label: string }> = [
-  { value: "ALL", label: "Trạng thái" },
-  { value: "PENDING", label: "Chờ duyệt" },
-  { value: "APPROVED", label: "Đã duyệt" },
-  { value: "REJECTED", label: "Từ chối" },
-];
-
-function matchesStatusFilter(status: string, filter: StatusFilterValue) {
-  if (filter === "ALL") {
-    return true;
+  if (normalized.includes("giua ky")) {
+    return "Giữa kỳ";
   }
 
-  const normalized = normalizeStatusKey(status);
-
-  if (filter === "PENDING") {
-    return normalized === "PENDING" || normalized === "PENDING_REVIEW";
+  if (normalized.includes("cuoi ky")) {
+    return "Cuối kỳ";
   }
 
-  if (filter === "APPROVED") {
-    return normalized === "APPROVED" || normalized === "TRANSFORMED";
+  if (normalized.includes("thi thu")) {
+    return "Thi thử";
   }
 
-  if (filter === "REJECTED") {
-    return normalized === "REJECTED";
+  return DEFAULT_METADATA_CATEGORY;
+}
+
+function normalizeMetadataSemesterYear(value: string | null | undefined) {
+  const raw = (value ?? "").trim();
+  if (!raw) {
+    return "";
   }
 
-  return false;
+  const directMatch = METADATA_SEMESTER_YEAR_OPTIONS.find(
+    (option) => normalizeText(option) === normalizeText(raw)
+  );
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const yearMatch = raw.match(/20\d{2}/);
+  if (!yearMatch) {
+    return "";
+  }
+
+  const year = Number(yearMatch[0]);
+  if (year < 2020 || year > 2026) {
+    return "";
+  }
+
+  return String(year);
+}
+
+function normalizeMetadataClassroom(value: string | null | undefined) {
+  const raw = (value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const directMatch = METADATA_CLASS_OPTIONS.find(
+    (option) => normalizeText(option) === normalizeText(raw)
+  );
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const normalized = normalizeText(raw);
+  const classMatch = normalized.match(/\b(1[0-2]|[1-9])\b/);
+  if (!classMatch) {
+    return "";
+  }
+
+  return `Lớp ${classMatch[1]}`;
 }
 
 function canModerate(status: string) {
@@ -173,8 +227,7 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
 
 export default function ModeratorQueuePage() {
   const [subject, setSubject] = useState("Tất cả");
-  const [level, setLevel] = useState("Tất cả");
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
+  const [classroomFilter, setClassroomFilter] = useState("Tất cả");
   const [globalKeyword, setGlobalKeyword] = useState("");
 
   const [queueItems, setQueueItems] = useState<ModeratorQueueRecord[]>([]);
@@ -196,8 +249,8 @@ export default function ModeratorQueuePage() {
   const [metadataSchool, setMetadataSchool] = useState("");
   const [metadataSubject, setMetadataSubject] = useState("");
   const [metadataSemesterYear, setMetadataSemesterYear] = useState("");
-  const [metadataCategory, setMetadataCategory] = useState("Đề thi học kỳ");
-  const [metadataLecturer, setMetadataLecturer] = useState("");
+  const [metadataCategory, setMetadataCategory] = useState<string>(DEFAULT_METADATA_CATEGORY);
+  const [metadataClassroom, setMetadataClassroom] = useState("");
   const [metadataModeratorNote, setMetadataModeratorNote] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileType, setPreviewFileType] = useState<string | null>(null);
@@ -236,21 +289,34 @@ export default function ModeratorQueuePage() {
     return ["Tất cả", ...subjects.sort((first, second) => first.localeCompare(second, "vi"))];
   }, [queueItems]);
 
+  const metadataSubjectOptions = useMemo(() => {
+    const merged = Array.from(
+      new Set([
+        ...DEFAULT_METADATA_SUBJECTS,
+        ...queueItems.map((item) => item.subject).filter(Boolean),
+        metadataSubject.trim(),
+      ])
+    );
+
+    return merged.filter((item) => item.trim().length > 0).sort((first, second) => first.localeCompare(second, "vi"));
+  }, [metadataSubject, queueItems]);
+
   const filteredQueue = useMemo(() => {
     const normalizedGlobalKeyword = normalizeText(globalKeyword);
 
     return queueItems.filter((item) => {
       const bySubject = subject === "Tất cả" || item.subject === subject;
-      const byLevel = level === "Tất cả" || item.level === level;
-      const byStatus = matchesStatusFilter(item.status, statusFilter);
+      const byClassroom =
+        classroomFilter === "Tất cả" ||
+        normalizeMetadataClassroom(item.className) === classroomFilter;
       const byKeyword =
         normalizedGlobalKeyword.length === 0 ||
         normalizeText(item.title).includes(normalizedGlobalKeyword) ||
         normalizeText(item.uploader).includes(normalizedGlobalKeyword);
 
-      return bySubject && byLevel && byStatus && byKeyword;
+      return bySubject && byClassroom && byKeyword;
     });
-  }, [globalKeyword, level, queueItems, statusFilter, subject]);
+  }, [classroomFilter, globalKeyword, queueItems, subject]);
 
   const totalPages = useMemo(() => {
     if (filteredQueue.length === 0) {
@@ -268,7 +334,7 @@ export default function ModeratorQueuePage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [subject, level, statusFilter, globalKeyword]);
+  }, [subject, classroomFilter, globalKeyword]);
 
   const paginatedQueue = useMemo(() => {
     const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
@@ -307,8 +373,8 @@ export default function ModeratorQueuePage() {
       setMetadataSchool("");
       setMetadataSubject("");
       setMetadataSemesterYear("");
-      setMetadataCategory("Đề thi học kỳ");
-      setMetadataLecturer("");
+      setMetadataCategory(DEFAULT_METADATA_CATEGORY);
+      setMetadataClassroom("");
       setMetadataModeratorNote("");
       return;
     }
@@ -316,9 +382,9 @@ export default function ModeratorQueuePage() {
     setMetadataTitle(selected.title);
     setMetadataSchool(selected.school);
     setMetadataSubject(selected.subject);
-    setMetadataSemesterYear(selected.semesterYear);
-    setMetadataCategory(selected.category || "Đề thi học kỳ");
-    setMetadataLecturer(selected.lecturer || "");
+    setMetadataSemesterYear(normalizeMetadataSemesterYear(selected.semesterYear));
+    setMetadataCategory(normalizeMetadataCategory(selected.category));
+    setMetadataClassroom(normalizeMetadataClassroom(selected.className));
     setMetadataModeratorNote(selected.moderatorNote ?? "");
   }, [selected]);
 
@@ -388,7 +454,7 @@ export default function ModeratorQueuePage() {
         subject: metadataSubject,
         semesterYear: metadataSemesterYear,
         type: metadataCategory,
-        lecturer: metadataLecturer,
+        className: metadataClassroom,
         moderatorNote: metadataModeratorNote,
       });
 
@@ -521,27 +587,18 @@ export default function ModeratorQueuePage() {
                 ))}
               </select>
               <select
-                value={level}
-                onChange={(event) => setLevel(event.target.value)}
+                value={classroomFilter}
+                onChange={(event) => setClassroomFilter(event.target.value)}
                 className="h-10 flex-1 rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none"
               >
-                <option value="Tất cả">Bậc học</option>
-                <option value="THPT">THPT</option>
-                <option value="THCS">THCS</option>
+                <option value="Tất cả">Lớp học</option>
+                {METADATA_CLASS_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as StatusFilterValue)}
-              className="h-10 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none"
-            >
-              {STATUS_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
 
             <div className="flex items-center justify-between gap-2">
               {errorMessage ? <p className="text-xs font-semibold text-rose-600">{errorMessage}</p> : <span />}
@@ -555,10 +612,12 @@ export default function ModeratorQueuePage() {
               >
                 {isRefreshing ? (
                   <span className="inline-flex items-center gap-2">
-                    <Loader2 size={13} className="animate-spin" /> Đang tải...
+                    <Loader2 size={13} className="animate-spin" /> Đang làm mới...
                   </span>
                 ) : (
-                  "Tải lại"
+                  <span className="inline-flex items-center gap-2">
+                    <RefreshCcw size={13} /> Làm mới
+                  </span>
                 )}
               </Button>
             </div>
@@ -725,48 +784,123 @@ export default function ModeratorQueuePage() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Tiêu đề"
-                  value={metadataTitle}
-                  onChange={(event) => setMetadataTitle(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
-                <Input
-                  label="Trường"
-                  value={metadataSchool}
-                  onChange={(event) => setMetadataSchool(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
-                <Input
-                  label="Môn học"
-                  value={metadataSubject}
-                  onChange={(event) => setMetadataSubject(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
-                <Input
-                  label="Học kỳ / Năm"
-                  value={metadataSemesterYear}
-                  onChange={(event) => setMetadataSemesterYear(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
-                <Input
-                  label="Loại tài liệu"
-                  value={metadataCategory}
-                  onChange={(event) => setMetadataCategory(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
-                <Input
-                  label="Giảng viên"
-                  value={metadataLecturer}
-                  onChange={(event) => setMetadataLecturer(event.target.value)}
-                  disabled={!selected}
-                  inputClassName="h-11"
-                />
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-title"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Tiêu đề
+                  </label>
+                  <input
+                    id="metadata-title"
+                    value={metadataTitle}
+                    onChange={(event) => setMetadataTitle(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-school"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Trường
+                  </label>
+                  <input
+                    id="metadata-school"
+                    value={metadataSchool}
+                    onChange={(event) => setMetadataSchool(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-subject"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Môn học
+                  </label>
+                  <select
+                    id="metadata-subject"
+                    value={metadataSubject}
+                    onChange={(event) => setMetadataSubject(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Chọn môn học</option>
+                    {metadataSubjectOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-semester-year"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Năm học
+                  </label>
+                  <select
+                    id="metadata-semester-year"
+                    value={metadataSemesterYear}
+                    onChange={(event) => setMetadataSemesterYear(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Chọn năm học</option>
+                    {METADATA_SEMESTER_YEAR_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-category"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Loại tài liệu
+                  </label>
+                  <select
+                    id="metadata-category"
+                    value={metadataCategory}
+                    onChange={(event) => setMetadataCategory(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {METADATA_CATEGORY_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="metadata-classroom"
+                    className="font-[var(--font-label)] text-[0.82rem] font-bold tracking-[0.12em] text-[var(--ink-600)]"
+                  >
+                    Lớp học
+                  </label>
+                  <select
+                    id="metadata-classroom"
+                    value={metadataClassroom}
+                    onChange={(event) => setMetadataClassroom(event.target.value)}
+                    disabled={!selected}
+                    className="h-11 w-full rounded-lg border border-[#d5dfec] bg-white px-3 text-xs font-medium shadow-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Chọn lớp học</option>
+                    {METADATA_CLASS_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
