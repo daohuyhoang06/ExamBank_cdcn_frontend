@@ -22,6 +22,7 @@ export function StudentLayout() {
       headerSubtitle={dynamicHeader.sub}
       sidebarItems={studentSidebarItems} // Lúc này studentSidebarItems đã có label và path
       sidebarSubtitle="Student Portal"
+      showAdminExtras
     >
       <div className="p-1 animate-in fade-in slide-in-from-bottom-2 duration-500">
         <Outlet />
