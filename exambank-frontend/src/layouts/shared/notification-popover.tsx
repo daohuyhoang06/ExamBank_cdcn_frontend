@@ -56,18 +56,18 @@ export function NotificationPopover({
   onViewAll,
 }: Props) {
   return (
-    <div className="absolute right-0 top-12 z-30 w-[22rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]">
+    <div className="absolute bottom-12 right-0 z-30 w-[22rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
         <h3 className="text-sm font-semibold text-[var(--brand-700)]">
-          Thông báo
+          ThÃƒÂ´ng bÃƒÂ¡o
         </h3>
 
         <button
           onClick={onMarkAllAsRead}
           className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800"
         >
-          Đánh dấu đã đọc
+          Ã„ÂÃƒÂ¡nh dÃ¡ÂºÂ¥u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã¡Â»Âc
         </button>
       </div>
 
@@ -76,10 +76,10 @@ export function NotificationPopover({
         {items.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <p className="text-sm font-medium text-[var(--ink-700)]">
-              Chưa có thông báo
+              ChÃ†Â°a cÃƒÂ³ thÃƒÂ´ng bÃƒÂ¡o
             </p>
             <p className="mt-1 text-xs text-[var(--ink-500)]">
-              Các cập nhật mới sẽ hiển thị tại đây
+              CÃƒÂ¡c cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t mÃ¡Â»â€ºi sÃ¡ÂºÂ½ hiÃ¡Â»Æ’n thÃ¡Â»â€¹ tÃ¡ÂºÂ¡i Ã„â€˜ÃƒÂ¢y
             </p>
           </div>
         ) : (
@@ -139,7 +139,7 @@ export function NotificationPopover({
           onClick={onViewAll}
           className="w-full rounded-lg bg-[var(--brand-700)] px-3 py-2 text-xs font-semibold text-white hover:brightness-110"
         >
-          Xem tất cả
+          Xem tÃ¡ÂºÂ¥t cÃ¡ÂºÂ£
         </button>
       </div>
     </div>

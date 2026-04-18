@@ -86,7 +86,7 @@ const formatPercent = (value: number, target: number) => `${Math.min(value, targ
 
 export default function LandingPage() {
   return (
-    <main className="bg-[#f4f6fa] text-[#0f1f4a]">
+    <main className="bg-[#F3F4F6] text-[#0f1f4a]">
       <header className="sticky top-0 z-20 border-b border-[#dbe2ef] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-[68px] w-full max-w-[1200px] items-center justify-between px-4 sm:px-6">
           <p className="font-[var(--font-body)] text-lg font-extrabold text-[#0a2e68]">Scholar Core</p>

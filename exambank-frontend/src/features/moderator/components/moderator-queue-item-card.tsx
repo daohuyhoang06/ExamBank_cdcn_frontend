@@ -18,6 +18,24 @@ function normalizeText(value: string) {
     .toLowerCase();
 }
 
+function toDisplayText(value: unknown, fallback = ""): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized && serialized !== "{}" ? serialized : fallback;
+  } catch {
+    return String(value);
+  }
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function statusLabel(status: string) {
   const normalized = normalizeText(status).toUpperCase();
@@ -167,7 +185,7 @@ export function ModeratorQueueItemCard({
 
           {item.moderatorNote ? (
             <p className="mt-2 line-clamp-1 text-[12px] font-medium text-amber-700">
-              Ghi chú: {item.moderatorNote}
+              Ghi chú: {toDisplayText(item.moderatorNote)}
             </p>
           ) : null}
         </div>
