@@ -424,10 +424,10 @@ export function AppSidebar({
                 type="button"
                 onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
                 className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[var(--brand-500)] shadow-[0_0_0_4px_rgba(31,99,180,0.18),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : 'border-[var(--brand-100)] hover:brightness-110'}`}
-                aria-label="Mo menu tai khoan"
+                aria-label="Mở menu tài khoảnS"
                 aria-haspopup="menu"
                 aria-expanded={isAvatarMenuOpen}
-                title={!isExpanded ? 'Tai khoan' : undefined}
+                title={!isExpanded ? 'Tài khoản' : undefined}
               >
                 {currentUserAvatarUrl ? (
                   <img src={currentUserAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
@@ -466,7 +466,7 @@ export function AppSidebar({
                 <p className="truncate font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">
                   {currentUserDisplayName}
                 </p>
-                <p className="truncate font-[var(--font-label)] text-[10px] text-[var(--ink-600)]">Tai khoan</p>
+                <p className="truncate font-[var(--font-label)] text-[10px] text-[var(--ink-600)]">Tài khoản</p>
               </div>
             )}
           </div>
