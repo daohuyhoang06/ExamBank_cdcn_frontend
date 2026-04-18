@@ -25,7 +25,7 @@ export default function UserHomePage() {
   }, []);
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 bg-[#f7f9fb] min-h-screen animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700">
 
       
       {/* SECTION 1: Hero & Analytics */}
