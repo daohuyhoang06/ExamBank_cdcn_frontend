@@ -12,6 +12,23 @@ import type { Submission } from '../../types/user.type';
 import { userService } from '../../services/user.service';
 
 const cn = (...classes: (string | boolean | undefined | null)[]) => classes.filter(Boolean).join(' ');
+const toDisplayText = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized && serialized !== '{}' ? serialized : null;
+  } catch {
+    return String(value);
+  }
+};
 
 export default function MySubmissionsPage() {
   const navigate = useNavigate();
@@ -86,7 +103,7 @@ export default function MySubmissionsPage() {
                     <StatusBadge status={item.status} />
                   </td>
                   <td className="px-6 py-5">
-                    {item.note?.trim() ? (
+                    {toDisplayText(item.note) ? (
                       <div className="relative inline-flex">
                         <button
                           type="button"
@@ -104,7 +121,7 @@ export default function MySubmissionsPage() {
                         </button>
                         {openNoteId === item.id ? (
                           <div className="absolute left-12 top-1/2 z-20 w-72 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
-                            <p className="text-sm leading-relaxed text-slate-700">{item.note.trim()}</p>
+                            <p className="text-sm leading-relaxed text-slate-700">{toDisplayText(item.note)}</p>
                           </div>
                         ) : null}
                       </div>

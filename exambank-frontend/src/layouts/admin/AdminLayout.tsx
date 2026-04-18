@@ -19,7 +19,6 @@ export function AdminLayout({
       headerSubtitle={headerSubtitle}
       sidebarItems={adminSidebarItems}
       sidebarSubtitle="Admin Control Panel"
-      showAdminExtras
     >
       {children}
     </AppShell>
