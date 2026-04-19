@@ -2,8 +2,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Eye,
   Maximize2,
@@ -545,7 +543,6 @@ export default function ModeratorQueuePage() {
   const selectedStatus = selected?.status ?? "";
   const canRunActions = Boolean(selected) && !isActionRunning && !isRefreshing && canModerate(selectedStatus);
   const previewKind = useMemo(() => detectPreviewKind(previewFileType ?? selected?.fileType ?? null, previewUrl), [previewFileType, previewUrl, selected?.fileType]);
-  const hasPaginationData = filteredQueue.length > 0;
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(Math.max(1, Math.min(totalPages, page)));
@@ -653,33 +650,11 @@ export default function ModeratorQueuePage() {
               Trang {safeCurrentPage} / {totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={safeCurrentPage <= 1 || !hasPaginationData}
-                leftIcon={<ChevronLeft size={16} />}
-                className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
-                onClick={() => handlePageChange(safeCurrentPage - 1)}
-              >
-                Trước
-              </Button>
               <Pagination
                 currentPage={safeCurrentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                rightIcon={<ChevronRight size={16} />}
-                disabled={safeCurrentPage >= totalPages || !hasPaginationData}
-                className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
-                onClick={() => handlePageChange(safeCurrentPage + 1)}
-              >
-                Tiếp
-              </Button>
             </div>
           </div>
         </section>
