@@ -3,8 +3,7 @@ import {
   FileText,
   BarChart3, 
   Settings,
-  MonitorPlay,
-  UserCircle2
+  MonitorPlay
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -40,10 +39,5 @@ export const studentSidebarItems: SidebarNavItem[] = [
     label: "Thi online",
     path: "/user/online-exam",
     icon: MonitorPlay,
-  },
-  {
-    label: "Hồ sơ cá nhân",
-    path: "/user/profile",
-    icon: UserCircle2,
   },
 ];
