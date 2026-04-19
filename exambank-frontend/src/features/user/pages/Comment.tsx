@@ -350,12 +350,6 @@ export default function DiscussionDetailPage() {
           >
             Download đề
           </button>
-          <button
-            onClick={() => navigate('/user/exambank')}
-            className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all"
-          >
-            Làm lại đề thi
-          </button>
         </div>
       </div>
 
