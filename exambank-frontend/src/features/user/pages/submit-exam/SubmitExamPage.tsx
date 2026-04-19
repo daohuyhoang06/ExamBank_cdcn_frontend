@@ -17,6 +17,46 @@ import { extractApiErrorMessage } from '@/lib/error-utils';
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
 
+const normalizeText = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const SUBJECT_DISPLAY_MAP: Record<string, string> = {
+  'toan hoc': 'Toán học',
+  toan: 'Toán học',
+  'vat ly': 'Vật lý',
+  ly: 'Vật lý',
+  'hoa hoc': 'Hóa học',
+  hoa: 'Hóa học',
+  'sinh hoc': 'Sinh học',
+  sinh: 'Sinh học',
+  'ngu van': 'Ngữ văn',
+  van: 'Ngữ văn',
+  'tieng anh': 'Tiếng Anh',
+  anh: 'Tiếng Anh',
+  'lich su': 'Lịch sử',
+  'dia ly': 'Địa lý',
+  'tin hoc': 'Tin học',
+  gdcd: 'Giáo dục công dân',
+};
+
+const toTitleCase = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const formatSubjectLabel = (subject: string): string => {
+  const raw = subject.replace(/\s+/g, ' ').trim();
+  const key = normalizeText(raw);
+  return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
+};
+
 const extractUploadErrorMessage = (error: unknown): string => {
   return extractApiErrorMessage(error, 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.');
 };
@@ -53,7 +93,14 @@ export default function SubmitExamPage() {
   useEffect(() => {
     const fetchSubjects = async () => {
       const data = await userService.getSubjects();
-      const normalized = data.filter((item) => item !== 'Tất cả môn học');
+      const normalized = Array.from(
+        new Map(
+          data
+            .filter((item) => normalizeText(item) !== normalizeText('Tất cả môn học'))
+            .map((item) => formatSubjectLabel(item))
+            .map((item) => [normalizeText(item), item]),
+        ).values(),
+      );
       setSubjects(normalized);
 
       setFormData((prev) => {
