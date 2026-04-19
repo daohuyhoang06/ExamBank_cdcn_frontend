@@ -119,6 +119,8 @@ export interface ExamListItem {
   title: string;
   subjectId?: number | null;
   subjectName?: string;
+  className?: string;
+  educationLevelName?: string;
   durationMinutes?: number | null;
   status?: string;
   createdAt?: string;
@@ -153,6 +155,7 @@ export interface QuestionResult {
   questionId: number;
   isCorrect?: boolean;
   scoreEarned?: number;
+  maxScore?: number;
 }
 
 export interface ExamSessionResult {
@@ -162,6 +165,7 @@ export interface ExamSessionResult {
   startTime?: string;
   submittedAt?: string;
   timeLimitMinutes?: number;
+  durationMinutes?: number;
   questionResults: QuestionResult[];
 }
 
