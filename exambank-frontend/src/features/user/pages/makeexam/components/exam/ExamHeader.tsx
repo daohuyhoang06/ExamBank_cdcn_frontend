@@ -1,5 +1,4 @@
-import { Clock, ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+﻿import { Clock } from 'lucide-react';
 import type { Exam } from '@/features/user/types/user.type';
 
 type ExamHeaderProps = {
@@ -10,38 +9,36 @@ type ExamHeaderProps = {
 };
 
 const ExamHeader = ({ exam, timeLeft, isSubmitting, onSubmit }: ExamHeaderProps) => {
-  const navigate = useNavigate();
-
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+  const formatTime = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const mins = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            <ChevronLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">{exam.title}</h1>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Final Examination</p>
-          </div>
+    <header className="w-full">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="line-clamp-1 min-w-0 font-[var(--font-label)] text-lg font-extrabold tracking-tight text-[#003466] md:text-xl">
+            {exam.title}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono text-xl font-bold ${
-            timeLeft < 300 ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-700'
-          }`}>
-            <Clock size={20} />
+        <div className="flex w-full items-center justify-end gap-4 sm:w-auto sm:gap-6">
+          <div
+            className={`flex items-center gap-2 rounded-full px-4 py-2 font-mono text-sm font-bold tabular-nums md:text-base ${
+              timeLeft < 300 ? 'bg-red-50 text-red-600' : 'bg-[#f2f4f6] text-[#003466]'
+            }`}
+          >
+            <Clock size={18} />
             {formatTime(timeLeft)}
           </div>
+
           <button
             onClick={onSubmit}
             disabled={isSubmitting}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-6 py-2.5 rounded-xl font-bold shadow-sm shadow-indigo-200 transition-all active:scale-95 disabled:cursor-not-allowed"
+            className="rounded-md bg-gradient-to-br from-[#003466] to-[#1a4b84] px-6 py-2 text-sm font-bold text-white transition-all duration-300 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 md:text-base"
           >
             {isSubmitting ? 'Đang nộp...' : 'Nộp bài'}
           </button>

@@ -4,6 +4,7 @@ export type ComposerExamRecord = {
   id: number;
   title: string;
   subjectId: number | null;
+  className: string | null;
   uploadedBy: number | null;
   approvedBy: number | null;
   durationMinutes: number | null;
@@ -16,6 +17,7 @@ export type ComposerExamRecord = {
 export type ComposerExamPayload = {
   title: string;
   subjectId: number;
+  className?: string | null;
   uploadedBy?: number | null;
   approvedBy?: number | null;
   durationMinutes?: number | null;
