@@ -7,14 +7,14 @@ import type { DocumentSummary, EducationLevel, Subject } from '../types/user.typ
 import { userService } from '../services/user.service';
 
 const DOCUMENTS_PER_PAGE = 9;
-const ALL_SUBJECTS = 'Tất cả môn học';
-const ALL_LEVELS: EducationLevel = { id: 'all', name: 'Tất cả lớp', group: 'TH' };
+const ALL_SUBJECTS = 'T\u1ea5t c\u1ea3 m\u00f4n h\u1ecdc';
+const ALL_LEVELS: EducationLevel = { id: 'all', name: 'T\u1ea5t c\u1ea3 l\u1edbp', group: 'TH' };
 
 const CLASS_LEVELS: EducationLevel[] = Array.from({ length: 12 }, (_, i) => {
   const level = i + 1;
   return {
     id: String(level),
-    name: `Lớp ${level}`,
+    name: `L\u1edbp ${level}`,
     group: level <= 5 ? 'TH' : level <= 9 ? 'THCS' : 'THPT',
   };
 });
@@ -26,23 +26,51 @@ const normalizeText = (value?: string): string =>
     .toLowerCase()
     .trim();
 
+const looksLikeMojibake = (value: string): boolean => /(Ã.|Â.|Æ.|Ð.|áº|á»|Ä.)/.test(value);
+
+const repairMojibakeText = (value?: string): string => {
+  const raw = (value ?? '').trim();
+  if (!raw || !looksLikeMojibake(raw)) {
+    return raw;
+  }
+
+  let repaired = raw;
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const bytes = Uint8Array.from(repaired, (char) => char.charCodeAt(0) & 0xff);
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) {
+        break;
+      }
+      repaired = decoded;
+      if (!looksLikeMojibake(repaired)) {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return repaired;
+};
+
 const SUBJECT_DISPLAY_MAP: Record<string, string> = {
-  'toan hoc': 'Toán học',
-  toan: 'Toán học',
-  'vat ly': 'Vật lý',
-  ly: 'Vật lý',
-  'hoa hoc': 'Hóa học',
-  hoa: 'Hóa học',
-  'sinh hoc': 'Sinh học',
-  sinh: 'Sinh học',
-  'ngu van': 'Ngữ văn',
-  van: 'Ngữ văn',
-  'tieng anh': 'Tiếng Anh',
-  anh: 'Tiếng Anh',
-  'lich su': 'Lịch sử',
-  'dia ly': 'Địa lý',
-  'tin hoc': 'Tin học',
-  gdcd: 'Giáo dục công dân',
+  'toan hoc': 'To\u00e1n h\u1ecdc',
+  toan: 'To\u00e1n h\u1ecdc',
+  'vat ly': 'V\u1eadt l\u00fd',
+  ly: 'V\u1eadt l\u00fd',
+  'hoa hoc': 'H\u00f3a h\u1ecdc',
+  hoa: 'H\u00f3a h\u1ecdc',
+  'sinh hoc': 'Sinh h\u1ecdc',
+  sinh: 'Sinh h\u1ecdc',
+  'ngu van': 'Ng\u1eef v\u0103n',
+  van: 'Ng\u1eef v\u0103n',
+  'tieng anh': 'Ti\u1ebfng Anh',
+  anh: 'Ti\u1ebfng Anh',
+  'lich su': 'L\u1ecbch s\u1eed',
+  'dia ly': '\u0110\u1ecba l\u00fd',
+  'tin hoc': 'Tin h\u1ecdc',
+  gdcd: 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
 };
 
 const toTitleCase = (text: string): string =>
@@ -54,13 +82,13 @@ const toTitleCase = (text: string): string =>
     .join(' ');
 
 const formatSubjectLabel = (subject: string): string => {
-  const raw = subject.replace(/\s+/g, ' ').trim();
+  const raw = repairMojibakeText(subject).replace(/\s+/g, ' ').trim();
   const key = normalizeText(raw);
   return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
 };
 
 const buildCardAccent = (subject?: string): string => {
-  const normalized = normalizeText(subject);
+  const normalized = normalizeText(repairMojibakeText(subject));
   if (normalized.includes('toan')) return 'from-[#003466] via-[#1a4b84] to-[#2c6fbe]';
   if (normalized.includes('hoa')) return 'from-[#5b2a00] via-[#8a3f00] to-[#c35f00]';
   if (normalized.includes('ly')) return 'from-[#213a7a] via-[#2b4e9b] to-[#3f66c7]';
@@ -83,7 +111,9 @@ const matchesSelectedLevel = (document: DocumentSummary, selectedLevelId: string
     return true;
   }
 
-  const text = normalizeText(`${document.className ?? ''} ${document.title ?? ''} ${document.type ?? ''}`);
+  const text = normalizeText(
+    `${repairMojibakeText(document.className)} ${repairMojibakeText(document.title)} ${repairMojibakeText(document.type)}`,
+  );
   const levelRegex = new RegExp(`\\b(lop\\s*)?${selectedLevelId}\\b`);
   return levelRegex.test(text);
 };
@@ -130,6 +160,10 @@ export default function ExamBankPage() {
 
       const mapped = result.map((item) => ({
         ...item,
+        title: repairMojibakeText(item.title),
+        className: repairMojibakeText(item.className),
+        school: repairMojibakeText(item.school),
+        semesterYear: repairMojibakeText(item.semesterYear),
         subject: item.subject ? formatSubjectLabel(item.subject) : item.subject,
       }));
 
@@ -138,7 +172,7 @@ export default function ExamBankPage() {
     } catch (error) {
       console.error('Fetch documents error:', error);
       setDocuments([]);
-      setDocumentsError('Không thể tải đề thi từ hệ thống. Vui lòng thử lại.');
+      setDocumentsError('Kh\u00f4ng th\u1ec3 t\u1ea3i \u0111\u1ec1 thi t\u1eeb h\u1ec7 th\u1ed1ng. Vui l\u00f2ng th\u1eed l\u1ea1i.');
     } finally {
       setIsLoadingDocuments(false);
     }
@@ -211,7 +245,7 @@ export default function ExamBankPage() {
           >
             <div className="flex items-center gap-3">
               <School className="w-4 h-4 text-blue-600" />
-              <span className="font-bold text-sm">{selectedLevel?.name || 'Chọn lớp'}</span>
+              <span className="font-bold text-sm">{repairMojibakeText(selectedLevel?.name) || 'Chọn lớp'}</span>
             </div>
             <ChevronDown className={`w-4 h-4 ${isLevelOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -228,7 +262,7 @@ export default function ExamBankPage() {
                   }}
                   className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex justify-between"
                 >
-                  <span>{level.name}</span>
+                  <span>{repairMojibakeText(level.name)}</span>
                   {selectedLevel?.id === level.id && <Check />}
                 </div>
               ))}
@@ -246,7 +280,7 @@ export default function ExamBankPage() {
           >
             <div className="flex items-center gap-3">
               <BookMarked className="w-4 h-4 text-indigo-600" />
-              <span className="font-bold text-sm">{selectedSubject || 'Chọn môn'}</span>
+              <span className="font-bold text-sm">{repairMojibakeText(selectedSubject) || 'Chọn môn'}</span>
             </div>
             <ChevronDown className={`w-4 h-4 ${isSubjectOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -262,7 +296,7 @@ export default function ExamBankPage() {
                   }}
                   className="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex justify-between"
                 >
-                  <span>{subject}</span>
+                  <span>{repairMojibakeText(subject)}</span>
                   {selectedSubject === subject && <Check />}
                 </div>
               ))}
@@ -304,23 +338,25 @@ export default function ExamBankPage() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
                 <div className="relative flex items-start justify-between gap-3">
                   <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
-                    {document.subject ?? 'Đa môn'}
+                    {repairMojibakeText(document.subject) || 'Đa môn'}
                   </span>
                   <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
-                    {document.className ?? 'Tự do'}
+                    {repairMojibakeText(document.className) || 'Tự do'}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-3 p-4">
-                <h3 className="min-h-[2.5rem] overflow-hidden text-sm font-black leading-tight text-slate-900">{document.title}</h3>
+                <h3 className="min-h-[2.5rem] overflow-hidden text-sm font-black leading-tight text-slate-900">
+                  {repairMojibakeText(document.title)}
+                </h3>
 
                 <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
                   <span className="inline-flex items-center gap-1.5">
-                    <School size={12} /> {document.school ?? 'Cộng đồng'}
+                    <School size={12} /> {repairMojibakeText(document.school) || 'Cộng đồng'}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <Calendar size={12} /> {document.semesterYear ?? 'Chưa cập nhật'}
+                    <Calendar size={12} /> {repairMojibakeText(document.semesterYear) || 'Chưa cập nhật'}
                   </span>
                 </div>
 
