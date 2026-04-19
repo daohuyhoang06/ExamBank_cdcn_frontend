@@ -1,34 +1,86 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Timer, BookOpen, PlayCircle, ChevronDown, Check, BookMarked, School, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/Button/button";
+import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Calendar } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import { examService, userService } from "../services/user.service";
-import type { EducationLevel, ExamListItem, Subject } from "../types/user.type";
+import type { ExamListItem, Subject } from "../types/user.type";
 
-const ALL_SUBJECT = "Tất cả môn học";
-const ALL_LEVEL = "Tất cả lớp học";
+const ALL_SUBJECT = "T\u1ea5t c\u1ea3 m\u00f4n h\u1ecdc";
+const ALL_LEVEL = "T\u1ea5t c\u1ea3 l\u1edbp h\u1ecdc";
 const EXAMS_PER_PAGE = 9;
+const CLASS_LEVEL_OPTIONS = Array.from({ length: 12 }, (_, index) => `L\u1edbp ${index + 1}`);
 
-const isAllSubjectOption = (value?: string): boolean => {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return normalized.includes("tất cả") || normalized.includes("tat ca");
+const normalizeSearchText = (value?: string): string =>
+  (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const isAllSubjectOption = (value?: string): boolean => normalizeSearchText(value).includes("tat ca");
+const isAllLevelOption = (value?: string): boolean => normalizeSearchText(value).includes("tat ca");
+
+const looksLikeMojibake = (value: string): boolean => /(Ã.|Â.|Æ.|Ð.|áº|á»|Ä.)/.test(value);
+
+const repairMojibakeText = (value?: string): string => {
+  const raw = (value ?? "").trim();
+  if (!raw || !looksLikeMojibake(raw)) return raw;
+
+  let repaired = raw;
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const bytes = Uint8Array.from(repaired, (char) => char.charCodeAt(0) & 0xff);
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) break;
+      repaired = decoded;
+      if (!looksLikeMojibake(repaired)) break;
+    } catch {
+      break;
+    }
+  }
+
+  return repaired;
 };
 
-const isAllLevelOption = (value?: string): boolean => {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return normalized.includes("tất cả") || normalized.includes("tat ca");
+const SUBJECT_DISPLAY_MAP: Record<string, string> = {
+  "toan hoc": "To\u00e1n h\u1ecdc",
+  toan: "To\u00e1n h\u1ecdc",
+  "vat ly": "V\u1eadt l\u00fd",
+  ly: "V\u1eadt l\u00fd",
+  "hoa hoc": "H\u00f3a h\u1ecdc",
+  hoa: "H\u00f3a h\u1ecdc",
+  "sinh hoc": "Sinh h\u1ecdc",
+  sinh: "Sinh h\u1ecdc",
+  "ngu van": "Ng\u1eef v\u0103n",
+  van: "Ng\u1eef v\u0103n",
+  "tieng anh": "Ti\u1ebfng Anh",
+  anh: "Ti\u1ebfng Anh",
+  "lich su": "L\u1ecbch s\u1eed",
+  "dia ly": "\u0110\u1ecba l\u00fd",
+  "tin hoc": "Tin h\u1ecdc",
+  gdcd: "Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n",
+};
+
+const toTitleCase = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const formatSubjectLabel = (subject?: string): string => {
+  const raw = repairMojibakeText(subject).replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  const key = normalizeSearchText(raw);
+  return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
 };
 
 const toDisplayDate = (isoDate?: string): string => {
-  if (!isoDate) {
-    return "Chưa cập nhật";
-  }
+  if (!isoDate) return "Ch\u01b0a c\u1eadp nh\u1eadt";
 
   const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) {
-    return "Chưa cập nhật";
-  }
+  if (Number.isNaN(date.getTime())) return "Ch\u01b0a c\u1eadp nh\u1eadt";
 
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
@@ -44,11 +96,15 @@ const CARD_FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1513258496099-48168024aec0?auto=format&fit=crop&w=1400&q=80",
 ];
 
-const normalizeSearchText = (value?: string): string =>
-  (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+const buildCardAccent = (subject?: string): string => {
+  const normalized = normalizeSearchText(subject);
+  if (normalized.includes("toan") || normalized.includes("math")) return "from-[#003466] via-[#1a4b84] to-[#2c6fbe]";
+  if (normalized.includes("hoa") || normalized.includes("chem")) return "from-[#5b2a00] via-[#8a3f00] to-[#c35f00]";
+  if (normalized.includes("ly") || normalized.includes("physics")) return "from-[#213a7a] via-[#2b4e9b] to-[#3f66c7]";
+  if (normalized.includes("anh") || normalized.includes("english")) return "from-[#0f5f52] via-[#14816f] to-[#21ab93]";
+  if (normalized.includes("sinh")) return "from-[#245500] via-[#2f7600] to-[#409d00]";
+  return "from-[#2f3a46] via-[#3f4d5c] to-[#56677a]";
+};
 
 const resolveExamCardImage = (exam: ExamListItem, index: number): string => {
   const normalizedSubject = normalizeSearchText(exam.subjectName);
@@ -71,7 +127,6 @@ const resolveExamCardImage = (exam: ExamListItem, index: number): string => {
 export default function OnlineExamPage() {
   const navigate = useNavigate();
   const [allExams, setAllExams] = useState<ExamListItem[]>([]);
-  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [keyword, setKeyword] = useState("");
   const [selectedLevel, setSelectedLevel] = useState<string>(ALL_LEVEL);
@@ -88,11 +143,7 @@ export default function OnlineExamPage() {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [exams, subjectOptions, levelOptions] = await Promise.all([
-          examService.getAllExams(),
-          userService.getSubjects(),
-          userService.getEducationLevels(),
-        ]);
+        const [exams, subjectOptions] = await Promise.all([examService.getAllExams(), userService.getSubjects()]);
 
         const sortedExams = [...exams].sort((left, right) => {
           const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
@@ -100,9 +151,20 @@ export default function OnlineExamPage() {
           return rightTime - leftTime;
         });
 
-        setAllExams(sortedExams);
-        setSubjects(subjectOptions ?? []);
-        setEducationLevels(levelOptions ?? []);
+        const normalizedExams = sortedExams.map((exam) => ({
+          ...exam,
+          title: repairMojibakeText(exam.title),
+          subjectName: formatSubjectLabel(exam.subjectName),
+          className: repairMojibakeText(exam.className),
+          educationLevelName: repairMojibakeText(exam.educationLevelName),
+        }));
+
+        const normalizedSubjects = Array.from(
+          new Set((subjectOptions ?? []).map((subject) => formatSubjectLabel(subject)).filter(Boolean)),
+        );
+
+        setAllExams(normalizedExams);
+        setSubjects(normalizedSubjects);
       } finally {
         setIsLoading(false);
       }
@@ -111,21 +173,10 @@ export default function OnlineExamPage() {
     void loadData();
   }, []);
 
-  const levelFilterOptions = useMemo(() => {
-    const levelNames = educationLevels
-      .map((level) => level.name)
-      .filter((name) => name && !isAllLevelOption(name));
-    const classNamesFromExam = allExams
-      .map((exam) => exam.className ?? exam.educationLevelName)
-      .filter((value): value is string => Boolean(value && value.trim().length > 0));
-
-    return [ALL_LEVEL, ...Array.from(new Set([...levelNames, ...classNamesFromExam]))];
-  }, [educationLevels, allExams]);
+  const levelFilterOptions = useMemo(() => [ALL_LEVEL, ...CLASS_LEVEL_OPTIONS], []);
 
   const subjectFilterOptions = useMemo(() => {
-    const normalizedSubjects = Array.from(
-      new Set(subjects.filter((subject) => subject && !isAllSubjectOption(subject)))
-    );
+    const normalizedSubjects = Array.from(new Set(subjects.filter((subject) => subject && !isAllSubjectOption(subject))));
     return [ALL_SUBJECT, ...normalizedSubjects];
   }, [subjects]);
 
@@ -139,16 +190,16 @@ export default function OnlineExamPage() {
   };
 
   const filteredExams = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    const normalizedLevel = selectedLevel.trim().toLowerCase();
-    const normalizedSubject = selectedSubject.trim().toLowerCase();
+    const normalizedKeyword = normalizeSearchText(keyword);
+    const normalizedLevel = normalizeSearchText(selectedLevel);
+    const normalizedSubject = normalizeSearchText(selectedSubject);
     const hasLevelFilter = !isAllLevelOption(selectedLevel);
     const hasSubjectFilter = !isAllSubjectOption(selectedSubject);
 
     return allExams.filter((exam) => {
-      const title = exam.title.toLowerCase();
-      const subject = (exam.subjectName ?? "").toLowerCase();
-      const className = (exam.className ?? exam.educationLevelName ?? "").toLowerCase();
+      const title = normalizeSearchText(exam.title);
+      const subject = normalizeSearchText(exam.subjectName);
+      const className = normalizeSearchText(exam.className ?? exam.educationLevelName);
 
       const matchesKeyword = !normalizedKeyword || title.includes(normalizedKeyword) || subject.includes(normalizedKeyword);
       const matchesLevel = !hasLevelFilter || className.includes(normalizedLevel) || title.includes(normalizedLevel);
@@ -162,9 +213,7 @@ export default function OnlineExamPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
   useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
+    if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
   const paginatedExams = useMemo(() => {
@@ -173,11 +222,11 @@ export default function OnlineExamPage() {
   }, [filteredExams, safeCurrentPage]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8 pb-20">
       <section className="relative overflow-hidden rounded-[2rem] bg-[#003466] p-8 text-white">
-        <h1 className="mb-2 text-3xl font-black">Thi online</h1>
+        <h1 className="mb-2 text-3xl font-black">{"Thi online"}</h1>
         <p className="text-sm font-medium text-blue-200/70">
-          Danh sách đề thi do quản trị viên đăng tải. Chọn đề để vào phòng thi trực tuyến.
+          {"Danh s\u00e1ch c\u00e1c \u0111\u1ec1 thi online \u0111\u01b0\u1ee3c t\u1ed5ng h\u1ee3p t\u1eeb nhi\u1ec1u ngu\u1ed3n kh\u00e1c nhau. B\u1ea1n c\u00f3 th\u1ec3 t\u00ecm ki\u1ebfm v\u00e0 l\u1ecdc theo m\u00f4n h\u1ecdc, l\u1edbp h\u1ecdc ho\u1eb7c t\u1eeb kh\u00f3a."}
         </p>
       </section>
 
@@ -189,11 +238,9 @@ export default function OnlineExamPage() {
             value={filterKeyword}
             onChange={(event) => setFilterKeyword(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                applyFilters();
-              }
+              if (event.key === "Enter") applyFilters();
             }}
-            placeholder="Tên đề thi..."
+            placeholder={"T\u00ean \u0111\u1ec1 thi..."}
             className="w-full rounded-2xl bg-slate-50 py-3 pl-12 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -208,7 +255,7 @@ export default function OnlineExamPage() {
           >
             <div className="flex items-center gap-3">
               <School className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-bold">{filterLevel || "Chọn lớp"}</span>
+              <span className="text-sm font-bold">{filterLevel || "Ch\u1ecdn l\u1edbp"}</span>
             </div>
             <ChevronDown className={`h-4 w-4 ${isLevelOpen ? "rotate-180" : ""}`} />
           </button>
@@ -242,7 +289,7 @@ export default function OnlineExamPage() {
           >
             <div className="flex items-center gap-3">
               <BookMarked className="h-4 w-4 text-indigo-600" />
-              <span className="text-sm font-bold">{filterSubject || "Chọn môn"}</span>
+              <span className="text-sm font-bold">{filterSubject || "Ch\u1ecdn m\u00f4n"}</span>
             </div>
             <ChevronDown className={`h-4 w-4 ${isSubjectOpen ? "rotate-180" : ""}`} />
           </button>
@@ -267,21 +314,26 @@ export default function OnlineExamPage() {
         </div>
 
         <button onClick={applyFilters} className="rounded-2xl bg-blue-600 px-6 py-3 text-white">
-          Lọc
+          {"L\u1ecdc"}
         </button>
       </section>
 
       {isLoading ? (
         <section className="rounded-2xl border border-slate-100 bg-white p-10 text-center text-slate-500">
-          Đang tải danh sách đề thi online...
+          {"\u0110ang t\u1ea3i danh s\u00e1ch \u0111\u1ec1 thi online..."}
         </section>
       ) : filteredExams.length === 0 ? (
         <section className="rounded-2xl border border-slate-100 bg-white p-10 text-center text-slate-500">
-          Chưa có đề thi phù hợp với bộ lọc hiện tại.
+          {"Ch\u01b0a c\u00f3 \u0111\u1ec1 thi ph\u00f9 h\u1ee3p v\u1edbi b\u1ed9 l\u1ecdc hi\u1ec7n t\u1ea1i."}
         </section>
       ) : (
-        <section className="space-y-6">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section className="space-y-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-slate-500">{"Danh s\u00e1ch cu\u1ed9c thi"}</p>
+            <p className="text-xs font-bold text-slate-400">{`${filteredExams.length} \u0111\u1ec1`}</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {paginatedExams.map((exam, index) => {
               const cardImage = resolveExamCardImage(exam, (safeCurrentPage - 1) * EXAMS_PER_PAGE + index);
               const duration = exam.durationMinutes ?? 30;
@@ -289,52 +341,50 @@ export default function OnlineExamPage() {
               return (
                 <article
                   key={exam.id}
-                  className="group overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl"
+                  className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div
-                    className="relative h-44 overflow-hidden bg-[#002140] p-6 transition-transform duration-700 group-hover:scale-105"
-                    style={{
-                      backgroundImage: `linear-gradient(160deg, rgba(0, 33, 64, 0.92), rgba(10, 64, 122, 0.78)), url(${cardImage})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  >
-                    <div className="absolute -right-12 -top-12 h-52 w-52 rounded-full bg-blue-400/50 blur-[85px]" />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(191,219,254,0.35),transparent_35%)]" />
-                    <div className="relative z-10 flex h-full items-center justify-center">
-                      <BookOpen className="h-16 w-16 text-blue-100/90 drop-shadow-lg" />
+                  <div className={`relative h-28 bg-gradient-to-br ${buildCardAccent(exam.subjectName)} p-3 text-white`}>
+                    <img
+                      src={cardImage}
+                      alt={exam.title}
+                      className="absolute inset-0 h-full w-full object-cover opacity-70"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/25" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
+                    <div className="relative flex items-start justify-between gap-3">
+                      <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
+                        {exam.subjectName ?? "\u0110a m\u00f4n"}
+                      </span>
+                      <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
+                        {exam.className ?? exam.educationLevelName ?? "T\u1ef1 do"}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-6">
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-green-500" />
-                      <span className="text-xs font-black uppercase tracking-widest text-slate-500">Trực tuyến</span>
-                    </div>
+                  <div className="space-y-3 p-4">
+                    <h2 className="min-h-[2.5rem] overflow-hidden text-sm font-black leading-tight text-slate-900">{exam.title}</h2>
 
-                    <h2 className="mb-2 line-clamp-2 text-lg font-black leading-tight text-slate-800 transition-colors group-hover:text-blue-600">
-                      {exam.title}
-                    </h2>
-
-                    <p className="mb-5 text-xs font-semibold text-slate-500">
-                      <span>#Mã đề: {exam.id}</span> | <span>{duration} phút</span>
-                    </p>
-
-                    <div className="mb-6 flex items-center justify-between text-xs font-semibold text-slate-500">
-                      <span>{exam.subjectName ?? "Chưa phân loại"}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <Timer className="h-3.5 w-3.5 text-slate-400" />
-                        {toDisplayDate(exam.createdAt)}
+                    <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Timer size={12} /> {duration} {"ph\u00fat"}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Calendar size={12} /> {toDisplayDate(exam.createdAt)}
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => navigate(`/user/exam/${exam.id}`)}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#002140] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-blue-900/15 transition-all hover:bg-blue-600"
-                    >
-                      <PlayCircle className="h-4 w-4" />
-                      Vào làm bài
-                    </button>
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-[11px] font-semibold text-slate-400">{"#M\u00e3 \u0111\u1ec1:"} {exam.id}</span>
+
+                      <button
+                        onClick={() => navigate(`/user/exam/${exam.id}`)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#003466] px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#0b457e]"
+                      >
+                        <PlayCircle size={12} />
+                        {"V\u00e0o l\u00e0m b\u00e0i"}
+                      </button>
+                    </div>
                   </div>
                 </article>
               );
@@ -342,39 +392,8 @@ export default function OnlineExamPage() {
           </div>
 
           {totalPages > 1 ? (
-            <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-5 sm:flex-row">
-              <p className="text-sm text-slate-600">
-                Trang {safeCurrentPage} / {totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={safeCurrentPage <= 1}
-                  leftIcon={<ChevronLeft size={16} />}
-                  className="rounded-lg px-3 py-2 text-slate-500"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                >
-                  Trước
-                </Button>
-                <Pagination
-                  currentPage={safeCurrentPage}
-                  totalPages={totalPages}
-                  onPageChange={(page) => setCurrentPage(page)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  rightIcon={<ChevronRight size={16} />}
-                  disabled={safeCurrentPage >= totalPages}
-                  className="rounded-lg px-3 py-2 text-slate-700 transition hover:bg-white"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                >
-                  Tiếp
-                </Button>
-              </div>
+            <div className="flex justify-center pt-2">
+              <Pagination currentPage={safeCurrentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
             </div>
           ) : null}
         </section>
