@@ -210,6 +210,8 @@ export interface UserProfile {
   avatarUrl?: string;
   roles: string[];
   status: AccountStatus;
+  phone?: string;
+  birthDate?: string;
   xp: number;
   coinBalance: number;
   streak: number;
@@ -220,6 +222,8 @@ export interface UpdateUserProfilePayload {
   name: string;
   email: string;
   status?: AccountStatus;
+  phone?: string;
+  birthDate?: string;
 }
 
 export interface ChangePasswordPayload {

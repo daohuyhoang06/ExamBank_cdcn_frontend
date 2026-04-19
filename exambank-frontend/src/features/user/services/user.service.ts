@@ -203,6 +203,8 @@ type BackendUser = {
   coinBalance?: number;
   streak?: number;
   status?: string;
+  phone?: string;
+  birthDate?: string;
   createdAt?: string;
 };
 
@@ -353,6 +355,8 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   avatarUrl: resolveBackendAvatarUrl(user),
   roles: normalizeRoles(user),
   status: toAccountStatus(user.status),
+  phone: toNonEmptyString(user.phone),
+  birthDate: toNonEmptyString(user.birthDate),
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
@@ -380,6 +384,8 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     avatarUrl: storedUser.avatarUrl,
     roles: resolvedRoles,
     status: "ACTIVE",
+    phone: undefined,
+    birthDate: undefined,
     xp: 0,
     coinBalance: 0,
     streak: 0,
@@ -1027,6 +1033,8 @@ export const userService = {
       email: payload.email,
       name: payload.name,
       status: payload.status ?? current.status ?? "ACTIVE",
+      phone: payload.phone,
+      birthDate: payload.birthDate,
     });
     return mapBackendUserToProfile(data);
   },

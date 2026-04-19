@@ -36,7 +36,6 @@ export default function SubmitExamPage() {
 
   // Quản lý State với Type cụ thể
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
-  const [difficulty, setDifficulty] = useState<'Dễ' | 'Vừa' | 'Khó'>('Vừa');
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -350,25 +349,6 @@ export default function SubmitExamPage() {
                     ))}
                   </select>
                   <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-50">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 block ml-1">Độ khó ước tính</label>
-                <div className="flex gap-2">
-                  {(['Dễ', 'Vừa', 'Khó'] as const).map((lv) => (
-                    <button
-                      key={lv}
-                      onClick={() => setDifficulty(lv)}
-                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all border ${
-                        difficulty === lv 
-                        ? 'bg-[#1a4b84] border-[#1a4b84] text-white shadow-lg shadow-blue-900/20' 
-                        : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
-                      }`}
-                    >
-                      {lv}
-                    </button>
-                  ))}
                 </div>
               </div>
 
