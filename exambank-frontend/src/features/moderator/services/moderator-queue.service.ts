@@ -21,7 +21,7 @@ type DocumentApiRecord = {
   subject: string | null;
   semesterYear: string | null;
   type: string | null;
-  lecturer: string | null;
+  className: string | null;
   fileUrl: string | null;
   fileType: string | null;
   status: DocumentStatus;
@@ -48,7 +48,7 @@ export type ModeratorQueueRecord = {
   fileType: "PDF" | "DOCX" | "Ảnh";
   category: string;
   semesterYear: string;
-  lecturer: string;
+  className: string;
   fileUrl: string | null;
   downloadCount: number;
   tags: string[];
@@ -62,7 +62,7 @@ export type ModeratorMetadataPayload = {
   subject?: string;
   semesterYear?: string;
   type?: string;
-  lecturer?: string;
+  className?: string;
   moderatorNote?: string;
 };
 
@@ -374,7 +374,7 @@ function normalizeDocument(value: unknown): DocumentApiRecord | null {
     subject: toStringOrNull(objectValue.subject),
     semesterYear: toStringOrNull(objectValue.semesterYear ?? objectValue.semester),
     type: toStringOrNull(objectValue.type),
-    lecturer: toStringOrNull(objectValue.lecturer),
+    className: toStringOrNull(objectValue.className),
     fileUrl: toStringOrNull(objectValue.fileUrl),
     fileType: toStringOrNull(objectValue.fileType),
     status: normalizeStatus(objectValue.status),
@@ -448,7 +448,7 @@ function toQueueRecord(document: DocumentApiRecord): ModeratorQueueRecord {
     fileType: mapFileType(document.fileType, document.fileUrl),
     category,
     semesterYear,
-    lecturer: document.lecturer ?? "",
+    className: document.className ?? "",
     fileUrl: document.fileUrl,
     downloadCount: document.downloadCount ?? 0,
     tags,
@@ -512,7 +512,7 @@ export async function updateModeratorQueueMetadata(record: ModeratorQueueRecord,
       ...(payload.subject?.trim() ? { subject: payload.subject.trim() } : {}),
       ...(payload.semesterYear?.trim() ? { semester: payload.semesterYear.trim() } : {}),
       ...(payload.type?.trim() ? { type: payload.type.trim() } : {}),
-      ...(payload.lecturer?.trim() ? { lecturer: payload.lecturer.trim() } : {}),
+      ...(payload.className?.trim() ? { className: payload.className.trim() } : {}),
       ...(payload.moderatorNote?.trim() ? { moderatorNote: payload.moderatorNote.trim() } : { moderatorNote: null }),
     },
     buildAuthConfig()
@@ -547,26 +547,43 @@ export async function rejectModeratorQueueItem(record: ModeratorQueueRecord, rej
 }
 
 export async function getModeratorDocumentPreview(documentId: number): Promise<ModeratorDocumentPreview> {
-  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
-    ...buildAuthConfig(),
-    params: {
-      docId1: documentId,
-      docId2: documentId,
-    },
-  });
+  try {
+    // Use dedicated preview endpoint that returns proper public/presigned URL
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/${documentId}/preview`, buildAuthConfig());
 
-  const payload = toObject(unwrapPayload(response.data));
-  const left = payload ? toObject(payload.left) : null;
-  const target = left ?? payload;
+    const payload = toObject(unwrapPayload(response.data)) ?? toObject(response.data);
 
-  if (!target) {
-    return { fileUrl: null, fileType: null };
+    if (!payload) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(payload.previewUrl ?? payload.fileUrl),
+      fileType: toStringOrNull(payload.fileType),
+    };
+  } catch {
+    // Fallback: use compare endpoint for backward compatibility
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
+      ...buildAuthConfig(),
+      params: {
+        docId1: documentId,
+        docId2: documentId,
+      },
+    });
+
+    const payload = toObject(unwrapPayload(response.data));
+    const left = payload ? toObject(payload.left) : null;
+    const target = left ?? payload;
+
+    if (!target) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
+      fileType: toStringOrNull(target.fileType),
+    };
   }
-
-  return {
-    fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
-    fileType: toStringOrNull(target.fileType),
-  };
 }
 
 

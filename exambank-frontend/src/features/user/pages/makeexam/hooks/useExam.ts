@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { examService } from '@/features/user/services/user.service';
-import type { Exam, ExamSessionResult, SaveAnswerItem, SubmitReason } from '@/features/user/types/user.type';
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import type { Exam, ExamSessionStatusResponse, SaveAnswerItem, SubmitReason } from '@/features/user/types/user.type';
 
 const toAnswerContent = (question: Exam['questions'][number], rawValue: unknown): string => {
   if (question.type === 'multiple_choice') {
@@ -105,7 +103,7 @@ export const useExam = (examId?: string) => {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  const submitExam = async (submitReason: SubmitReason = 'MANUAL'): Promise<ExamSessionResult | null> => {
+  const submitExam = async (submitReason: SubmitReason = 'MANUAL'): Promise<ExamSessionStatusResponse | null> => {
     if (!exam || sessionId === null) {
       return null;
     }
@@ -138,21 +136,7 @@ export const useExam = (examId?: string) => {
         await examService.saveExamAnswers(sessionId, answers);
       }
 
-      await examService.submitExamSession(sessionId, submitReason);
-
-      const maxAttempts = 30;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const status = await examService.getExamSessionStatus(sessionId);
-        if (status.status === 'COMPLETED') {
-          return await examService.getExamSessionResult(sessionId);
-        }
-        if (status.status === 'ABANDONED') {
-          throw new Error('Bai thi da bi huy, vui long thu lai.');
-        }
-        await sleep(1000);
-      }
-
-      throw new Error('He thong dang cham diem. Vui long mo lai ket qua sau it phut.');
+      return await examService.submitExamSession(sessionId, submitReason);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Khong the nop bai luc nay.';
       setSubmitError(message);

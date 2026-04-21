@@ -16,6 +16,7 @@ import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { authService } from "@/features/auth/services/auth.service";
 import { userService } from "../services/user.service";
 import type { UserProfile } from "../types/user.type";
+import { extractApiErrorMessage } from "@/lib/error-utils";
 
 type NoticeType = "success" | "error" | "info";
 
@@ -36,27 +37,135 @@ type PasswordForm = {
   confirmPassword: string;
 };
 
+type ProfileFieldErrors = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  birthDate?: string;
+};
+
+type PasswordFieldErrors = {
+  currentPassword?: string;
+  nextPassword?: string;
+  confirmPassword?: string;
+};
+
 const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/notionists/svg?seed=scholarly-user";
 
-const extractErrorMessage = (error: unknown): string => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: unknown }).response === "object"
-  ) {
-    const response = (error as { response?: { data?: { message?: string } } }).response;
-    if (response?.data?.message) {
-      return response.data.message;
+const extractErrorMessage = (error: unknown): string =>
+  extractApiErrorMessage(error, "Đã xảy ra lỗi không xác định.");
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9+\-\s()]{8,20}$/;
+
+const normalizePhoneValue = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizeBirthDateValue = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const isAtLeastYearsOld = (birthDateValue: string, minimumAge: number): boolean => {
+  const today = new Date();
+  const birthDate = new Date(`${birthDateValue}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) {
+    return false;
+  }
+
+  const ageDiff = today.getFullYear() - birthDate.getFullYear();
+  const hasHadBirthdayThisYear =
+    today.getMonth() > birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+
+  const age = hasHadBirthdayThisYear ? ageDiff : ageDiff - 1;
+  return age >= minimumAge;
+};
+
+const validateProfileFields = (
+  nameValue: string,
+  emailValue: string,
+  phoneValue: string,
+  birthDateValue: string,
+): ProfileFieldErrors => {
+  const errors: ProfileFieldErrors = {};
+
+  const trimmedName = nameValue.trim();
+  if (!trimmedName) {
+    errors.name = "Họ tên không được để trống.";
+  }
+
+  const trimmedEmail = emailValue.trim();
+  if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
+    errors.email = "Email không hợp lệ.";
+  }
+
+  const normalizedPhone = normalizePhoneValue(phoneValue);
+  if (normalizedPhone && !PHONE_PATTERN.test(normalizedPhone)) {
+    errors.phone = "Số điện thoại không hợp lệ.";
+  }
+
+  const normalizedBirthDate = normalizeBirthDateValue(birthDateValue);
+  if (normalizedBirthDate) {
+    const dateValue = new Date(`${normalizedBirthDate}T00:00:00`);
+    if (Number.isNaN(dateValue.getTime())) {
+      errors.birthDate = "Ngày sinh không hợp lệ.";
+    } else {
+      const now = new Date();
+      if (dateValue.getTime() > now.getTime()) {
+        errors.birthDate = "Ngày sinh không thể ở tương lai.";
+      } else if (!isAtLeastYearsOld(normalizedBirthDate, 13)) {
+        errors.birthDate = "Người dùng cần từ 13 tuổi trở lên.";
+      }
     }
   }
 
-  if (error instanceof Error && error.message) {
-    return error.message;
+  return errors;
+};
+
+const validatePasswordFields = (form: PasswordForm): PasswordFieldErrors => {
+  const errors: PasswordFieldErrors = {};
+
+  if (form.currentPassword.length > 0 && form.currentPassword.trim().length === 0) {
+    errors.currentPassword = "Mật khẩu hiện tại không hợp lệ.";
   }
 
-  return "Đã xảy ra lỗi không xác định.";
+  if (form.nextPassword.length > 0 && form.nextPassword.trim().length < 8) {
+    errors.nextPassword = "Mật khẩu mới cần tối thiểu 8 ký tự.";
+  }
+
+  if (form.confirmPassword.length > 0 && form.confirmPassword !== form.nextPassword) {
+    errors.confirmPassword = "Mật khẩu xác nhận không trùng khớp.";
+  }
+
+  return errors;
 };
+
+const formatTimestamp = (isoDate?: string): string => {
+  const sourceDate = isoDate ? new Date(isoDate) : new Date();
+  if (Number.isNaN(sourceDate.getTime())) {
+    return "Chưa đồng bộ";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(sourceDate);
+};
+
+const pickComparablePreferences = (preferences: UiPreferences) => ({
+  bio: preferences.bio,
+  language: preferences.language,
+  notifyEmail: preferences.notifyEmail,
+  notifyPush: preferences.notifyPush,
+  notifyMentor: preferences.notifyMentor,
+  profileVisibility: preferences.profileVisibility,
+});
 
 const buildDefaultPreferences = (profile: UserProfile): UiPreferences => ({
   username: profile.username,
@@ -99,7 +208,19 @@ export default function UserProfileSettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [preferences, setPreferences] = useState<UiPreferences>({
+    username: "",
+    bio: "",
+    language: "vi-VN",
+    notifyEmail: true,
+    notifyPush: true,
+    notifyMentor: false,
+    profileVisibility: "public",
+    avatarUrl: DEFAULT_AVATAR,
+  });
+  const [initialPreferences, setInitialPreferences] = useState<UiPreferences>({
     username: "",
     bio: "",
     language: "vi-VN",
@@ -122,21 +243,96 @@ export default function UserProfileSettingsPage() {
   const [changingStatus, setChangingStatus] = useState(false);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(DEFAULT_AVATAR);
+  const [lastSyncedAt, setLastSyncedAt] = useState("Chưa đồng bộ");
 
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
 
   const profileStorageKey = useMemo(
     () => (profile ? `user-profile-ui:${profile.id}` : null),
     [profile],
   );
 
-  const hydrateFromProfile = (nextProfile: UserProfile): void => {
-    const stored = readStoredPreferences(nextProfile);
+  const profileErrors = useMemo(
+    () => validateProfileFields(name, email, phone, birthDate),
+    [name, email, phone, birthDate],
+  );
+
+  const passwordErrors = useMemo(() => validatePasswordFields(passwordForm), [passwordForm]);
+
+  const normalizedName = name.trim();
+  const normalizedEmail = email.trim();
+  const normalizedPhone = normalizePhoneValue(phone) ?? "";
+  const normalizedBirthDate = normalizeBirthDateValue(birthDate) ?? "";
+
+  const profileDirty = useMemo(() => {
+    if (!profile) {
+      return false;
+    }
+
+    return (
+      normalizedName !== profile.name ||
+      normalizedEmail !== profile.email ||
+      normalizedPhone !== (profile.phone ?? "") ||
+      normalizedBirthDate !== (profile.birthDate ?? "")
+    );
+  }, [profile, normalizedName, normalizedEmail, normalizedPhone, normalizedBirthDate]);
+
+  const preferencesDirty = useMemo(() => {
+    return (
+      JSON.stringify(pickComparablePreferences(preferences)) !==
+      JSON.stringify(pickComparablePreferences(initialPreferences))
+    );
+  }, [preferences, initialPreferences]);
+
+  const hasPasswordInput =
+    passwordForm.currentPassword.length > 0 ||
+    passwordForm.nextPassword.length > 0 ||
+    passwordForm.confirmPassword.length > 0;
+
+  const hasUnsavedChanges = profileDirty || preferencesDirty || selectedAvatarFile !== null;
+
+  const canSaveProfile =
+    !savingProfile &&
+    (profileDirty || selectedAvatarFile !== null) &&
+    Object.keys(profileErrors).length === 0;
+
+  const canSavePassword =
+    !savingPassword && hasPasswordInput && Object.keys(passwordErrors).length === 0;
+
+  const canSaveAll =
+    !savingAll && hasUnsavedChanges && Object.keys(profileErrors).length === 0;
+
+  const clearAvatarObjectUrl = (): void => {
+    if (!avatarObjectUrlRef.current) {
+      return;
+    }
+
+    URL.revokeObjectURL(avatarObjectUrlRef.current);
+    avatarObjectUrlRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      clearAvatarObjectUrl();
+    };
+  }, []);
+
+  const hydrateFromProfile = (
+    nextProfile: UserProfile,
+    preferenceOverride?: UiPreferences,
+  ): void => {
+    clearAvatarObjectUrl();
+    const stored = preferenceOverride ?? readStoredPreferences(nextProfile);
     setProfile(nextProfile);
     setName(nextProfile.name);
     setEmail(nextProfile.email);
+    setPhone(nextProfile.phone ?? "");
+    setBirthDate(nextProfile.birthDate ?? "");
     setPreferences(stored);
+    setInitialPreferences(stored);
     setAvatarPreviewUrl(nextProfile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
+    setLastSyncedAt(formatTimestamp());
     syncStoredAuthUser({
       id: nextProfile.id,
       email: nextProfile.email,
@@ -147,11 +343,12 @@ export default function UserProfileSettingsPage() {
     });
   };
 
-  const persistPreferences = (): void => {
+  const persistPreferences = (nextPreferences: UiPreferences = preferences): void => {
     if (typeof window === "undefined" || !profileStorageKey) {
       return;
     }
-    window.localStorage.setItem(profileStorageKey, JSON.stringify(preferences));
+    window.localStorage.setItem(profileStorageKey, JSON.stringify(nextPreferences));
+    setInitialPreferences(nextPreferences);
   };
 
   const fetchProfile = useCallback(async (): Promise<void> => {
@@ -193,34 +390,41 @@ export default function UserProfileSettingsPage() {
       throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
     }
 
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
+    const firstError =
+      profileErrors.name ??
+      profileErrors.email ??
+      profileErrors.phone ??
+      profileErrors.birthDate;
 
-    if (!trimmedName) {
-      throw new Error("Họ tên không được để trống.");
-    }
-
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      throw new Error("Email không hợp lệ.");
+    if (firstError) {
+      throw new Error(firstError);
     }
 
     return userService.updateMyProfile({
-      name: trimmedName,
-      email: trimmedEmail,
+      name: normalizedName,
+      email: normalizedEmail,
+      phone: normalizePhoneValue(phone),
+      birthDate: normalizeBirthDateValue(birthDate),
     });
   };
 
   const handleSaveProfile = async (): Promise<void> => {
+    if (!profileDirty && !selectedAvatarFile) {
+      setNotice({ type: "info", message: "Không có thay đổi mới để lưu." });
+      return;
+    }
+
     setSavingProfile(true);
     setNotice(null);
     try {
       let updated = await saveProfileToBackend();
       if (selectedAvatarFile) {
         updated = await userService.uploadMyAvatar(selectedAvatarFile);
+        clearAvatarObjectUrl();
       }
-      hydrateFromProfile(updated);
+      hydrateFromProfile(updated, preferences);
       setSelectedAvatarFile(null);
-      persistPreferences();
+      persistPreferences(preferences);
       setNotice({ type: "success", message: "Đã cập nhật thông tin cá nhân và ảnh đại diện thành công." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -230,6 +434,16 @@ export default function UserProfileSettingsPage() {
   };
 
   const handleSavePassword = async (): Promise<void> => {
+    const firstError =
+      passwordErrors.currentPassword ??
+      passwordErrors.nextPassword ??
+      passwordErrors.confirmPassword;
+
+    if (firstError) {
+      setNotice({ type: "error", message: firstError });
+      return;
+    }
+
     setSavingPassword(true);
     setNotice(null);
     try {
@@ -261,16 +475,32 @@ export default function UserProfileSettingsPage() {
   };
 
   const handleSaveAll = async (): Promise<void> => {
+    if (!hasUnsavedChanges) {
+      setNotice({ type: "info", message: "Không có thay đổi mới để lưu." });
+      return;
+    }
+
     setSavingAll(true);
     setNotice(null);
     try {
-      let updated = await saveProfileToBackend();
+      let updated = profile;
+
+      if (!updated) {
+        throw new Error("Không tìm thấy thông tin người dùng hiện tại.");
+      }
+
+      if (profileDirty) {
+        updated = await saveProfileToBackend();
+      }
+
       if (selectedAvatarFile) {
         updated = await userService.uploadMyAvatar(selectedAvatarFile);
+        clearAvatarObjectUrl();
       }
-      hydrateFromProfile(updated);
+
+      hydrateFromProfile(updated, preferences);
       setSelectedAvatarFile(null);
-      persistPreferences();
+      persistPreferences(preferences);
       setNotice({
         type: "info",
         message:
@@ -313,9 +543,13 @@ export default function UserProfileSettingsPage() {
       return;
     }
     const stored = readStoredPreferences(profile);
+    clearAvatarObjectUrl();
     setName(profile.name);
     setEmail(profile.email);
+    setPhone(profile.phone ?? "");
+    setBirthDate(profile.birthDate ?? "");
     setPreferences(stored);
+    setInitialPreferences(stored);
     setAvatarPreviewUrl(profile.avatarUrl || stored.avatarUrl || DEFAULT_AVATAR);
     setSelectedAvatarFile(null);
     setPasswordForm({ currentPassword: "", nextPassword: "", confirmPassword: "" });
@@ -333,7 +567,15 @@ export default function UserProfileSettingsPage() {
       return;
     }
 
+    const allowedAvatarTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedAvatarTypes.includes(file.type)) {
+      setNotice({ type: "error", message: "Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, PNG, GIF hoặc WEBP." });
+      return;
+    }
+
+    clearAvatarObjectUrl();
     const objectUrl = URL.createObjectURL(file);
+    avatarObjectUrlRef.current = objectUrl;
     setPreferences((prev) => ({ ...prev, avatarUrl: objectUrl }));
     setAvatarPreviewUrl(objectUrl);
     setSelectedAvatarFile(file);
@@ -358,11 +600,24 @@ export default function UserProfileSettingsPage() {
 
   return (
     <div className="space-y-8 pb-6">
-      <header className="space-y-2">
+      <header className="space-y-4">
         <h1 className="text-3xl font-extrabold text-[var(--ink-900)]">Cài đặt tài khoản</h1>
         <p className="text-[var(--ink-600)]">
           Cập nhật thông tin cá nhân và thiết lập bảo mật cho hành trình học tập của bạn.
         </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+            Đồng bộ backend qua /api/v1/users/me
+          </span>
+          <span className="rounded-full border border-[var(--line-soft)] bg-white px-3 py-1 text-xs font-semibold text-[var(--ink-600)]">
+            Lần đồng bộ gần nhất: {lastSyncedAt}
+          </span>
+          {hasUnsavedChanges ? (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              Bạn có thay đổi chưa lưu
+            </span>
+          ) : null}
+        </div>
       </header>
 
       {notice ? (
@@ -394,19 +649,23 @@ export default function UserProfileSettingsPage() {
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                      profileErrors.name ? "border-rose-300" : "border-[var(--line-soft)]"
+                    }`}
                   />
+                  {profileErrors.name ? <p className="text-xs text-rose-600">{profileErrors.name}</p> : null}
                 </label>
 
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-[var(--ink-600)]">Tên hiển thị / Username</span>
                   <input
                     value={preferences.username}
-                    onChange={(event) =>
-                      setPreferences((prev) => ({ ...prev, username: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    readOnly
+                    className="w-full cursor-not-allowed rounded-xl border border-[var(--line-soft)] bg-slate-100 px-3 py-2.5 text-[var(--ink-500)] outline-none"
                   />
+                  <p className="text-xs text-[var(--ink-500)]">
+                    Username đồng bộ theo email và hiện chưa có endpoint chỉnh sửa riêng từ backend.
+                  </p>
                 </label>
               </div>
 
@@ -416,9 +675,40 @@ export default function UserProfileSettingsPage() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                  className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                    profileErrors.email ? "border-rose-300" : "border-[var(--line-soft)]"
+                  }`}
                 />
+                {profileErrors.email ? <p className="text-xs text-rose-600">{profileErrors.email}</p> : null}
               </label>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-1.5 text-sm">
+                  <span className="font-semibold text-[var(--ink-600)]">Số điện thoại</span>
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="Ví dụ: 0901234567"
+                    className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                      profileErrors.phone ? "border-rose-300" : "border-[var(--line-soft)]"
+                    }`}
+                  />
+                  {profileErrors.phone ? <p className="text-xs text-rose-600">{profileErrors.phone}</p> : null}
+                </label>
+
+                <label className="space-y-1.5 text-sm">
+                  <span className="font-semibold text-[var(--ink-600)]">Ngày sinh</span>
+                  <input
+                    type="date"
+                    value={birthDate}
+                    onChange={(event) => setBirthDate(event.target.value)}
+                    className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                      profileErrors.birthDate ? "border-rose-300" : "border-[var(--line-soft)]"
+                    }`}
+                  />
+                  {profileErrors.birthDate ? <p className="text-xs text-rose-600">{profileErrors.birthDate}</p> : null}
+                </label>
+              </div>
 
               <label className="space-y-1.5 text-sm">
                 <span className="font-semibold text-[var(--ink-600)]">Tiểu sử (Bio)</span>
@@ -435,7 +725,7 @@ export default function UserProfileSettingsPage() {
               <button
                 type="button"
                 onClick={() => void handleSaveProfile()}
-                disabled={savingProfile}
+                disabled={!canSaveProfile}
                 className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <Save size={15} />
@@ -459,14 +749,14 @@ export default function UserProfileSettingsPage() {
               <input
                 ref={avatarFileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/gif"
+                accept="image/png,image/jpeg,image/gif,image/webp"
                 className="hidden"
                 onChange={handleAvatarFileChange}
               />
             </div>
 
             <p className="mt-4 text-sm font-semibold text-[var(--ink-900)]">Ảnh đại diện</p>
-            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF hoặc PNG. Tối đa 2MB.</p>
+            <p className="mt-1 text-xs text-[var(--ink-500)]">JPG, GIF, PNG hoặc WEBP. Tối đa 2MB.</p>
           </div>
 
           <div className="mt-6 rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-page)] p-3 text-left text-xs text-[var(--ink-600)]">
@@ -474,6 +764,8 @@ export default function UserProfileSettingsPage() {
             <p className="mt-1">ID: {profile.id}</p>
             <p>Vai trò: {profile.roles.join(", ")}</p>
             <p>Trạng thái: {profile.status}</p>
+            <p>Số điện thoại: {profile.phone || "Chưa cập nhật"}</p>
+            <p>Ngày sinh: {profile.birthDate || "Chưa cập nhật"}</p>
             <p>XP: {profile.xp}</p>
           </div>
         </aside>
@@ -497,8 +789,13 @@ export default function UserProfileSettingsPage() {
                 onChange={(event) =>
                   setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))
                 }
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                  passwordErrors.currentPassword ? "border-rose-300" : "border-[var(--line-soft)]"
+                }`}
               />
+              {passwordErrors.currentPassword ? (
+                <p className="text-xs text-rose-600">{passwordErrors.currentPassword}</p>
+              ) : null}
             </label>
 
             <label className="space-y-1 text-sm">
@@ -509,8 +806,15 @@ export default function UserProfileSettingsPage() {
                 onChange={(event) =>
                   setPasswordForm((prev) => ({ ...prev, nextPassword: event.target.value }))
                 }
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                  passwordErrors.nextPassword ? "border-rose-300" : "border-[var(--line-soft)]"
+                }`}
               />
+              {passwordErrors.nextPassword ? (
+                <p className="text-xs text-rose-600">{passwordErrors.nextPassword}</p>
+              ) : (
+                <p className="text-xs text-[var(--ink-500)]">Mật khẩu nên có tối thiểu 8 ký tự.</p>
+              )}
             </label>
 
             <label className="space-y-1 text-sm">
@@ -521,14 +825,19 @@ export default function UserProfileSettingsPage() {
                 onChange={(event) =>
                   setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
                 }
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                className={`w-full rounded-xl border bg-[var(--bg-page)] px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)] ${
+                  passwordErrors.confirmPassword ? "border-rose-300" : "border-[var(--line-soft)]"
+                }`}
               />
+              {passwordErrors.confirmPassword ? (
+                <p className="text-xs text-rose-600">{passwordErrors.confirmPassword}</p>
+              ) : null}
             </label>
 
             <button
               type="button"
               onClick={() => void handleSavePassword()}
-              disabled={savingPassword}
+              disabled={!canSavePassword}
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Shield size={15} />
@@ -715,7 +1024,7 @@ export default function UserProfileSettingsPage() {
         <button
           type="button"
           onClick={() => void handleSaveAll()}
-          disabled={savingAll}
+          disabled={!canSaveAll}
           className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-700)] px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Save size={15} />

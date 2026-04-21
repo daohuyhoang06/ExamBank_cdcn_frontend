@@ -22,6 +22,7 @@ import { syncStoredAuthUser } from "@/features/auth/services/auth.service";
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 import { userService } from "@/features/user/services/user.service";
 import type { UserProfile } from "@/features/user/types/user.type";
+import { extractApiErrorMessage } from "@/lib/error-utils";
 
 const initialAdminProfile = {
   fullName: "Nguyễn Văn Quản Trị",
@@ -181,25 +182,8 @@ const mapProfileToViewModel = (profile: UserProfile): AdminProfile => ({
   avatarUrl: profile.avatarUrl ?? "",
 });
 
-const extractErrorMessage = (error: unknown): string => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: unknown }).response === "object"
-  ) {
-    const response = (error as { response?: { data?: { message?: string } } }).response;
-    if (response?.data?.message) {
-      return response.data.message;
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Đã xảy ra lỗi không xác định.";
-};
+const extractErrorMessage = (error: unknown): string =>
+  extractApiErrorMessage(error, "Đã xảy ra lỗi không xác định.");
 
 const buildInitialProfile = (): AdminProfile => {
   const storedUser = getStoredAuthUser();

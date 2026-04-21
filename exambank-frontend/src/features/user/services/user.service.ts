@@ -56,7 +56,7 @@ type BackendDocument = {
   semesterYear?: string;
   semester?: string;
   type?: string;
-  lecturer?: string;
+  className?: string;
   fileUrl?: string;
   previewUrl?: string;
   averageRating?: number;
@@ -100,8 +100,22 @@ type BackendExam = {
   id: number;
   title: string;
   subjectId?: number | null;
-  subjectName?: string;
-  subject?: string;
+  subjectName?: string | null;
+  subject_name?: string | null;
+  subject?:
+    | string
+    | {
+        id?: number | string | null;
+        name?: string | null;
+        subjectName?: string | null;
+        subject_name?: string | null;
+        title?: string | null;
+      }
+    | null;
+  className?: string;
+  classLevel?: string;
+  grade?: string;
+  educationLevelName?: string;
   durationMinutes?: number | null;
   status?: string;
   createdAt?: string;
@@ -112,7 +126,22 @@ type BackendExamQuestion = {
   content: string;
   options?: string | null;
   answer?: string | null;
+  score?: number | string | null;
+  maxScore?: number | string | null;
+  max_score?: number | string | null;
+  point?: number | string | null;
+  points?: number | string | null;
   difficulty?: number | null;
+};
+
+type BackendQuestionDetail = {
+  id?: number;
+  maxScore?: number | string | null;
+  max_score?: number | string | null;
+  score?: number | string | null;
+  point?: number | string | null;
+  points?: number | string | null;
+  difficulty?: number | string | null;
 };
 
 type BackendStartExamSession = {
@@ -131,9 +160,14 @@ type BackendExamSessionStatus = {
 };
 
 type BackendQuestionResult = {
-  questionId: number;
+  questionId?: number;
+  question_id?: number;
   isCorrect?: boolean;
-  scoreEarned?: number;
+  is_correct?: boolean;
+  scoreEarned?: number | string;
+  score_earned?: number | string;
+  maxScore?: number | string;
+  max_score?: number | string;
 };
 
 type BackendExamSessionResult = {
@@ -169,6 +203,8 @@ type BackendUser = {
   coinBalance?: number;
   streak?: number;
   status?: string;
+  phone?: string;
+  birthDate?: string;
   createdAt?: string;
 };
 
@@ -199,6 +235,19 @@ const mapStartSession = (data: BackendStartExamSession): StartExamSessionRespons
   expiresAt: data.expiresAt,
 });
 
+const toFiniteNumberOrUndefined = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return undefined;
+};
+
 const mapSessionResult = (data: BackendExamSessionResult): ExamSessionResult => ({
   sessionId: data.sessionId,
   totalScore: data.totalScore,
@@ -207,9 +256,10 @@ const mapSessionResult = (data: BackendExamSessionResult): ExamSessionResult => 
   submittedAt: data.submittedAt,
   timeLimitMinutes: data.timeLimitMinutes,
   questionResults: (data.questionResults ?? []).map((item) => ({
-    questionId: item.questionId,
-    isCorrect: item.isCorrect,
-    scoreEarned: item.scoreEarned,
+    questionId: item.questionId ?? item.question_id ?? 0,
+    isCorrect: item.isCorrect ?? item.is_correct,
+    scoreEarned: toFiniteNumberOrUndefined(item.scoreEarned ?? item.score_earned),
+    maxScore: toFiniteNumberOrUndefined(item.maxScore ?? item.max_score),
   })),
 });
 
@@ -249,6 +299,28 @@ const toNonEmptyString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const resolveBackendExamSubjectName = (item: BackendExam): string | undefined => {
+  const direct = toNonEmptyString(item.subjectName) ?? toNonEmptyString(item.subject_name);
+  if (direct) {
+    return direct;
+  }
+
+  if (typeof item.subject === "string") {
+    return toNonEmptyString(item.subject);
+  }
+
+  if (!item.subject || typeof item.subject !== "object") {
+    return undefined;
+  }
+
+  return (
+    toNonEmptyString(item.subject.name) ??
+    toNonEmptyString(item.subject.subjectName) ??
+    toNonEmptyString(item.subject.subject_name) ??
+    toNonEmptyString(item.subject.title)
+  );
+};
+
 const resolveBackendAvatarUrl = (user: BackendUser): string | undefined => {
   return (
     toNonEmptyString(user.avatarUrl) ??
@@ -283,6 +355,8 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   avatarUrl: resolveBackendAvatarUrl(user),
   roles: normalizeRoles(user),
   status: toAccountStatus(user.status),
+  phone: toNonEmptyString(user.phone),
+  birthDate: toNonEmptyString(user.birthDate),
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
@@ -310,6 +384,8 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     avatarUrl: storedUser.avatarUrl,
     roles: resolvedRoles,
     status: "ACTIVE",
+    phone: undefined,
+    birthDate: undefined,
     xp: 0,
     coinBalance: 0,
     streak: 0,
@@ -517,7 +593,7 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   subject: doc.subject,
   semesterYear: doc.semesterYear ?? doc.semester,
   type: doc.type,
-  lecturer: doc.lecturer,
+  className: doc.className,
   fileUrl: doc.fileUrl ?? doc.previewUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
@@ -550,7 +626,7 @@ const toStoredBackendDocument = (doc: DocumentSummary): BackendDocument => ({
   semesterYear: doc.semesterYear,
   semester: doc.semesterYear,
   type: doc.type,
-  lecturer: doc.lecturer,
+  className: doc.className,
   fileUrl: doc.fileUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
@@ -578,7 +654,7 @@ const normalizeStoredDocument = (value: unknown): BackendDocument | null => {
     semesterYear: item.semesterYear ?? item.semester,
     semester: item.semester ?? item.semesterYear,
     type: item.type,
-    lecturer: item.lecturer,
+    className: item.className,
     fileUrl: item.fileUrl,
     previewUrl: item.previewUrl,
     averageRating: item.averageRating,
@@ -747,7 +823,17 @@ const mapDocumentToSubmission = (doc: DocumentSummary): Submission => {
 const mapQuestion = (item: BackendExamQuestion): Question => {
   const options = parseOptions(item.options);
   const answerText = (item.answer ?? "").trim();
-  const score = item.difficulty && item.difficulty > 0 ? item.difficulty : 1;
+  const scoreCandidates = [
+    item.score,
+    item.maxScore,
+    item.max_score,
+    item.point,
+    item.points,
+    item.difficulty,
+  ];
+  const score = scoreCandidates
+    .map((value) => toFiniteNumberOrUndefined(value))
+    .find((value): value is number => typeof value === "number" && value > 0) ?? 1;
 
   if (looksLikeTrueFalseOptions(options)) {
     return {
@@ -947,6 +1033,8 @@ export const userService = {
       email: payload.email,
       name: payload.name,
       status: payload.status ?? current.status ?? "ACTIVE",
+      phone: payload.phone,
+      birthDate: payload.birthDate,
     });
     return mapBackendUserToProfile(data);
   },
@@ -1032,7 +1120,7 @@ export const userService = {
       subject: payload.subject,
       semester: payload.semesterYear,
       type: payload.type,
-      lecturer: payload.lecturer,
+      className: payload.className,
     };
 
     formData.append("document", new Blob([JSON.stringify(uploadRequest)], { type: "application/json" }));
@@ -1046,6 +1134,22 @@ export const userService = {
 };
 
 export const examService = {
+  getQuestionScoreById: async (questionId: number): Promise<number | undefined> => {
+    try {
+      const { data } = await api.get<BackendQuestionDetail>(`/api/questions/${questionId}`);
+      return toFiniteNumberOrUndefined(
+        data.maxScore ??
+          data.max_score ??
+          data.score ??
+          data.point ??
+          data.points ??
+          data.difficulty,
+      );
+    } catch {
+      return undefined;
+    }
+  },
+
   getExamById: async (id: string): Promise<Exam | null> => {
     try {
       const examId = Number(id);
@@ -1081,7 +1185,9 @@ export const examService = {
           id: item.id,
           title: item.title,
           subjectId: item.subjectId,
-          subjectName: item.subjectName ?? item.subject,
+          subjectName: resolveBackendExamSubjectName(item),
+          className: item.className ?? item.classLevel ?? item.grade,
+          educationLevelName: item.educationLevelName,
           durationMinutes: item.durationMinutes,
           status: item.status,
           createdAt: item.createdAt,

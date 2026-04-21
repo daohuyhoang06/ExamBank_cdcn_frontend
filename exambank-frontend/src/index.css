@@ -26,10 +26,8 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(circle at 10% 12%, rgba(11, 59, 120, 0.09) 0%, transparent 34%),
-    radial-gradient(circle at 90% 14%, rgba(31, 99, 180, 0.06) 0%, transparent 30%),
-    var(--bg-page);
+  /* Layered Surface - Base Layer */
+  background: #F3F4F6;
 }
 
 h1,

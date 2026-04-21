@@ -44,9 +44,9 @@ export function Pagination({ currentPage, totalPages, onPageChange, className = 
         size="sm"
         disabled={safeCurrentPage <= 1}
         onClick={() => handlePageClick(safeCurrentPage - 1)}
-        className="h-8 w-8 rounded-lg p-0 text-[var(--ink-600)]"
+        className="h-9 w-9 rounded-lg p-0 text-[var(--ink-600)]"
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={16} />
       </Button>
 
       {items.map((item, index) => {
@@ -82,9 +82,9 @@ export function Pagination({ currentPage, totalPages, onPageChange, className = 
         size="sm"
         disabled={safeCurrentPage >= totalPages}
         onClick={() => handlePageClick(safeCurrentPage + 1)}
-        className="h-8 w-8 rounded-lg p-0 text-[var(--ink-600)]"
+        className="h-9 w-9 rounded-lg p-0 text-[var(--ink-600)]"
       >
-        <ChevronRight size={14} />
+        <ChevronRight size={16} />
       </Button>
     </div>
   );

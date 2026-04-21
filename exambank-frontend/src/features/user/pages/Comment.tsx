@@ -13,8 +13,47 @@ import {
   Verified,
   Award
 } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination/pagination';
 import type { Comment } from '../types/user.type';
 import { userService } from '../services/user.service';
+
+const COMMENTS_PER_PAGE = 5;
+
+const PREVIEW_MIME_EXTENSION_MAP: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+};
+
+const resolveExtensionFromMimeType = (mimeType: string): string => {
+  return PREVIEW_MIME_EXTENSION_MAP[mimeType] ?? 'pdf';
+};
+
+const sanitizeDownloadFileSegment = (value?: string): string => {
+  const safeValue = (value ?? '')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return safeValue;
+};
+
+const normalizeDownloadFileName = (
+  title: string,
+  subject: string | undefined,
+  semesterYear: string | undefined,
+  extension: string,
+): string => {
+  const segments = [
+    sanitizeDownloadFileSegment(title) || 'de-thi',
+    sanitizeDownloadFileSegment(subject) || 'da-mon',
+    sanitizeDownloadFileSegment(semesterYear) || 'khong-ro-nam',
+  ];
+
+  return `${segments.join('-')}.${extension}`;
+};
 
 const resolveDocumentPreviewUrl = (documentId?: number): string | null => {
   if (!documentId || Number.isNaN(documentId) || documentId <= 0) {
@@ -43,18 +82,20 @@ export default function DiscussionDetailPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [relatedDocuments, setRelatedDocuments] = useState<Array<{ id: number; title: string; subject?: string; averageRating?: number; semesterYear?: string }>>([]);
   const [documentTitle, setDocumentTitle] = useState('Chi tiết thảo luận');
+  const [documentSubject, setDocumentSubject] = useState<string | undefined>(undefined);
+  const [documentSemesterYear, setDocumentSemesterYear] = useState<string | undefined>(undefined);
   const [documentFileUrl, setDocumentFileUrl] = useState<string | null>(null);
   const [inlinePreviewUrl, setInlinePreviewUrl] = useState<string | null>(null);
   const [ratingAverage, setRatingAverage] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
   const [activeDocumentId, setActiveDocumentId] = useState<number | null>(null);
-  const [isDocumentPreviewOpen, setIsDocumentPreviewOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewLoadError, setPreviewLoadError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
+  const [commentPage, setCommentPage] = useState(1);
 
   useEffect(() => {
     return () => {
@@ -80,6 +121,8 @@ export default function DiscussionDetailPage() {
 
         if (!resolvedDocumentId) {
           setComments([]);
+          setDocumentSubject(undefined);
+          setDocumentSemesterYear(undefined);
           setDocumentFileUrl(null);
           setInlinePreviewUrl((current) => {
             if (current && current.startsWith('blob:')) {
@@ -87,9 +130,9 @@ export default function DiscussionDetailPage() {
             }
             return null;
           });
-          setIsDocumentPreviewOpen(false);
           setIsPreviewLoading(false);
           setPreviewLoadError(false);
+          setCommentPage(1);
           setIsLoading(false);
           return;
         }
@@ -102,7 +145,6 @@ export default function DiscussionDetailPage() {
           return null;
         });
         setPreviewLoadError(false);
-        setIsDocumentPreviewOpen(false);
         setIsPreviewLoading(false);
 
         const document = await userService.getDocumentById(resolvedDocumentId);
@@ -113,8 +155,11 @@ export default function DiscussionDetailPage() {
         ]);
 
         setDocumentTitle(document.title);
+        setDocumentSubject(document.subject);
+        setDocumentSemesterYear(document.semesterYear);
         setDocumentFileUrl(resolveDocumentPreviewUrl(resolvedDocumentId));
         setComments(commentList);
+        setCommentPage(1);
         setRatingAverage(stats.average);
         setRatingCount(stats.count);
         setRelatedDocuments(
@@ -138,34 +183,52 @@ export default function DiscussionDetailPage() {
     fetchData();
   }, [documentId, navigate]);
 
-  const handleOpenDocumentPreview = async () => {
+  useEffect(() => {
     if (!activeDocumentId) {
       return;
     }
-
-    setIsDocumentPreviewOpen(true);
-    setPreviewLoadError(false);
 
     if (inlinePreviewUrl) {
       return;
     }
 
-    setIsPreviewLoading(true);
-    try {
-      const previewBlob = await userService.getDocumentPreviewBlob(activeDocumentId);
-      const previewUrl = URL.createObjectURL(previewBlob);
-      setInlinePreviewUrl((current) => {
-        if (current && current.startsWith('blob:')) {
-          URL.revokeObjectURL(current);
+    let isCancelled = false;
+
+    const loadPreview = async () => {
+      setPreviewLoadError(false);
+      setIsPreviewLoading(true);
+      try {
+        const previewBlob = await userService.getDocumentPreviewBlob(activeDocumentId);
+        const previewUrl = URL.createObjectURL(previewBlob);
+
+        if (isCancelled) {
+          URL.revokeObjectURL(previewUrl);
+          return;
         }
-        return previewUrl;
-      });
-    } catch {
-      setPreviewLoadError(true);
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  };
+
+        setInlinePreviewUrl((current) => {
+          if (current && current.startsWith('blob:')) {
+            URL.revokeObjectURL(current);
+          }
+          return previewUrl;
+        });
+      } catch {
+        if (!isCancelled) {
+          setPreviewLoadError(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsPreviewLoading(false);
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeDocumentId, inlinePreviewUrl]);
 
   const handleOpenDocumentInNewTab = () => {
     if (inlinePreviewUrl) {
@@ -178,6 +241,34 @@ export default function DiscussionDetailPage() {
     }
 
     window.open(documentFileUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownloadDocument = async () => {
+    if (!activeDocumentId) {
+      return;
+    }
+
+    try {
+      const previewBlob = await userService.getDocumentPreviewBlob(activeDocumentId);
+      const downloadUrl = URL.createObjectURL(previewBlob);
+      const extension = resolveExtensionFromMimeType(previewBlob.type);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = normalizeDownloadFileName(
+        documentTitle,
+        documentSubject,
+        documentSemesterYear,
+        extension,
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch {
+      if (documentFileUrl) {
+        window.open(documentFileUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
   };
 
   const handleSubmitReview = async () => {
@@ -196,6 +287,7 @@ export default function DiscussionDetailPage() {
         userService.getDocumentRatingStats(activeDocumentId),
       ]);
       setComments(nextComments);
+      setCommentPage(1);
       setRatingAverage(nextStats.average);
       setRatingCount(nextStats.count);
       setReviewText('');
@@ -210,6 +302,13 @@ export default function DiscussionDetailPage() {
   if (isLoading) {
     return <div className="py-20 text-center text-slate-500 font-semibold">Đang tải thảo luận...</div>;
   }
+
+  const totalCommentPages = Math.max(1, Math.ceil(comments.length / COMMENTS_PER_PAGE));
+  const safeCommentPage = Math.min(commentPage, totalCommentPages);
+  const pagedComments = comments.slice(
+    (safeCommentPage - 1) * COMMENTS_PER_PAGE,
+    safeCommentPage * COMMENTS_PER_PAGE,
+  );
 
   return (
     <div className="w-full space-y-10 animate-in fade-in duration-500 pb-20">
@@ -238,71 +337,54 @@ export default function DiscussionDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleOpenDocumentPreview}
-            disabled={!documentFileUrl}
+            onClick={handleOpenDocumentInNewTab}
+            disabled={!documentFileUrl && !inlinePreviewUrl}
             className="px-8 py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all bg-white border border-[#003466] text-[#003466] hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
-            Xem đề
+            Mở đề thẻ mới
           </button>
           <button
-            onClick={() => navigate('/user/exambank')}
-            className="bg-gradient-to-br from-[#003466] to-[#1a4b84] text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-blue-900/10 active:scale-95 transition-all"
+            onClick={handleDownloadDocument}
+            disabled={!activeDocumentId}
+            className="px-8 py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
-            Làm lại đề thi
+            Download đề
           </button>
         </div>
       </div>
 
-      {isDocumentPreviewOpen && (
-        <section className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-2xl font-bold text-[#003466]">Xem nội dung đề thi</h2>
-            <div className="flex items-center gap-2">
+      <section className="space-y-4">
+        <h2 className="text-2xl font-bold text-[#003466]">Xem nội dung đề thi</h2>
+
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          {isPreviewLoading ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-600 font-semibold">Đang tải nội dung đề...</p>
+            </div>
+          ) : previewLoadError ? (
+            <div className="p-8 text-center space-y-3">
+              <p className="text-slate-600 font-semibold">Không thể hiển thị đề trực tiếp trong trang này.</p>
               <button
                 onClick={handleOpenDocumentInNewTab}
-                className="px-4 py-2 rounded-lg text-sm font-bold border border-[#003466] text-[#003466] hover:bg-blue-50"
+                className="px-5 py-2.5 rounded-xl bg-[#003466] text-white font-bold text-sm"
               >
-                Mở tab mới
-              </button>
-              <button
-                onClick={() => setIsDocumentPreviewOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm font-bold border border-slate-300 text-slate-600 hover:bg-slate-100"
-              >
-                Ẩn
+                Mở đề ở tab mới
               </button>
             </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            {isPreviewLoading ? (
-              <div className="p-8 text-center">
-                <p className="text-slate-600 font-semibold">Đang tải nội dung đề...</p>
-              </div>
-            ) : previewLoadError ? (
-              <div className="p-8 text-center space-y-3">
-                <p className="text-slate-600 font-semibold">Không thể hiển thị đề trực tiếp trong trang này.</p>
-                <button
-                  onClick={handleOpenDocumentInNewTab}
-                  className="px-5 py-2.5 rounded-xl bg-[#003466] text-white font-bold text-sm"
-                >
-                  Mở đề ở tab mới
-                </button>
-              </div>
-            ) : !inlinePreviewUrl ? (
-              <div className="p-8 text-center">
-                <p className="text-slate-600 font-semibold">Chưa có dữ liệu xem trước.</p>
-              </div>
-            ) : (
-              <iframe
-                src={inlinePreviewUrl}
-                title={`Noi dung de ${documentTitle}`}
-                className="w-full h-[70vh]"
-                onError={() => setPreviewLoadError(true)}
-              />
-            )}
-          </div>
-        </section>
-      )}
+          ) : !inlinePreviewUrl ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-600 font-semibold">Chưa có dữ liệu xem trước.</p>
+            </div>
+          ) : (
+            <iframe
+              src={inlinePreviewUrl}
+              title={`Noi dung de ${documentTitle}`}
+              className="w-full h-[70vh]"
+              onError={() => setPreviewLoadError(true)}
+            />
+          )}
+        </div>
+      </section>
 
       {/* 2. Bento Grid: Stats & Ratings */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -417,7 +499,7 @@ export default function DiscussionDetailPage() {
 
             {/* Comments List */}
             <div className="space-y-10">
-              {comments.map((comment) => (
+              {pagedComments.map((comment) => (
                 <div key={comment.id} className="group">
                   <div className="flex items-start gap-5">
                     <img src={comment.avatar} alt="avt" className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
@@ -457,6 +539,16 @@ export default function DiscussionDetailPage() {
                 </div>
               ))}
             </div>
+
+            {totalCommentPages > 1 && (
+              <div className="flex justify-center">
+                <Pagination
+                  currentPage={safeCommentPage}
+                  totalPages={totalCommentPages}
+                  onPageChange={setCommentPage}
+                />
+              </div>
+            )}
 
             <button className="w-full py-5 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all">
               Tổng cộng {comments.length} bình luận

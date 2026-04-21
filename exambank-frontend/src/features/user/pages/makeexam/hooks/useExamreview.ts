@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { examService, userService } from '../../../services/user.service';
 import type { TopicData, LeaderboardUser, ExamSessionResult } from '../../../types/user.type';
 
+const RESULT_POLL_INTERVAL_MS = 5000;
+
 export const useExamreview = (sessionId?: number) => {
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
@@ -11,8 +13,14 @@ export const useExamreview = (sessionId?: number) => {
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+    let pollTimer: number | undefined;
+
     const fetchData = async () => {
       const t = await userService.getTopics();
+      if (!isActive) {
+        return;
+      }
       setTopics(t);
 
       if (!sessionId) {
@@ -20,6 +28,9 @@ export const useExamreview = (sessionId?: number) => {
         setResultError(null);
         setLeaderboardError(null);
         const l = await userService.getLeaderboard();
+        if (!isActive) {
+          return;
+        }
         setLeaderboard(l);
         return;
       }
@@ -27,45 +38,111 @@ export const useExamreview = (sessionId?: number) => {
       setIsLoadingResult(true);
       setResultError(null);
       setLeaderboardError(null);
-      let loadedResult: ExamSessionResult | null = null;
-      try {
-        loadedResult = await examService.getExamSessionResult(sessionId);
-        setExamResult(loadedResult);
-      } catch {
-        setResultError('Chua lay duoc ket qua bai thi. Vui long thu lai sau.');
-        setLeaderboard([]);
-        return;
-      } finally {
-        setIsLoadingResult(false);
-      }
-
-      try {
-        const scopedLeaderboard = await examService.getExamLeaderboard(sessionId);
-        if (scopedLeaderboard.length > 0) {
-          setLeaderboard(scopedLeaderboard);
+      const loadCompletedResult = async () => {
+        if (!isActive) {
           return;
         }
-      } catch {
-        // Continue with fallback row so the ranking block is never blank for the taker.
-      }
 
-      try {
-        const profile = await userService.getMyProfile();
-        setLeaderboard([
-          {
-            rank: 1,
-            name: profile.name,
-            score: Math.round(loadedResult?.totalScore ?? 0),
-            isUser: true,
-          },
-        ]);
-      } catch {
-        setLeaderboard([]);
-      }
-      setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+        try {
+          const status = await examService.getExamSessionStatus(sessionId);
+          if (!isActive) {
+            return;
+          }
+
+          if (status.status === 'ABANDONED') {
+            setResultError('Bai thi da bi huy, vui long thu lai.');
+            setLeaderboard([]);
+            setIsLoadingResult(false);
+            return;
+          }
+
+          if (status.status !== 'COMPLETED') {
+            pollTimer = window.setTimeout(() => {
+              void loadCompletedResult();
+            }, RESULT_POLL_INTERVAL_MS);
+            return;
+          }
+
+          const loadedResult = await examService.getExamSessionResult(sessionId);
+          if (!isActive) {
+            return;
+          }
+
+          setExamResult(loadedResult);
+
+          try {
+            const scopedLeaderboard = await examService.getExamLeaderboard(sessionId);
+            if (!isActive) {
+              return;
+            }
+
+            if (scopedLeaderboard.length > 0) {
+              setLeaderboard(scopedLeaderboard);
+            } else {
+              const profile = await userService.getMyProfile();
+              if (!isActive) {
+                return;
+              }
+
+              setLeaderboard([
+                {
+                  rank: 1,
+                  name: profile.name,
+                  score: Math.round(loadedResult.totalScore ?? status.totalScore ?? 0),
+                  isUser: true,
+                },
+              ]);
+              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+            }
+          } catch {
+            try {
+              const profile = await userService.getMyProfile();
+              if (!isActive) {
+                return;
+              }
+
+              setLeaderboard([
+                {
+                  rank: 1,
+                  name: profile.name,
+                  score: Math.round(loadedResult.totalScore ?? status.totalScore ?? 0),
+                  isUser: true,
+                },
+              ]);
+              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+            } catch {
+              if (!isActive) {
+                return;
+              }
+
+              setLeaderboard([]);
+              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+            }
+          } finally {
+            if (isActive) {
+              setIsLoadingResult(false);
+            }
+          }
+        } catch {
+          if (!isActive) {
+            return;
+          }
+
+          setResultError('Chua lay duoc trang thai cham diem. Vui long thu lai sau.');
+          setIsLoadingResult(false);
+        }
+      };
+
+      void loadCompletedResult();
     };
 
     void fetchData();
+    return () => {
+      isActive = false;
+      if (pollTimer !== undefined) {
+        window.clearTimeout(pollTimer);
+      }
+    };
   }, [sessionId]);
 
   return { topics, leaderboard, examResult, isLoadingResult, resultError, leaderboardError };

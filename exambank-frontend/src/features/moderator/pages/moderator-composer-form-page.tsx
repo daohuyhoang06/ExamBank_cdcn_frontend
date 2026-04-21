@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { isAxiosError } from "axios";
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,6 +29,7 @@ import type {
   ComposerQuestionRecord,
   ComposerSubjectRecord,
 } from "@/features/moderator/types/moderator-composer.type";
+import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 type QuestionType =
   | "Trắc nghiệm (Multiple Choice)"
@@ -72,6 +72,7 @@ type SavedSnapshot = {
   examId: number | null;
   title: string;
   subject: string;
+  className: string;
   durationMinutes: number;
   questionSignature: string;
 };
@@ -102,6 +103,22 @@ const DEFAULT_EXAM_TITLE = "Kiểm tra cuối kỳ - Giải tích & Lịch sử"
 const DEFAULT_SUBJECT = "Toán học";
 const DEFAULT_DURATION_MINUTES = 90;
 const DRAFT_NOTICE_HIDE_SCROLL_Y = 320;
+const DEFAULT_CLASS_NAME = "Lớp 12";
+const CLASS_NAME_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
+const SUBJECT_DISPLAY_NAME_BY_CANONICAL: Record<string, string> = {
+  "toan hoc": "Toán học",
+  "vat ly": "Vật lý",
+  "hoa hoc": "Hóa học",
+  "sinh hoc": "Sinh học",
+  "ngu van": "Ngữ văn",
+  "tieng anh": "Tiếng Anh",
+  "lich su": "Lịch sử",
+  "dia ly": "Địa lý",
+  "tin hoc": "Tin học",
+  "giao duc cong dan": "Giáo dục công dân",
+  gdcd: "Giáo dục công dân",
+  "cong nghe": "Công nghệ",
+};
 
 const initialQuestions: QuestionDraft[] = [];
 
@@ -146,7 +163,19 @@ function buildQuestionSignature(source: QuestionDraft[]) {
 }
 
 function normalizeSubjectName(value: string) {
-  return value.trim().toLocaleLowerCase("vi-VN");
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("vi-VN");
+}
+
+function toDisplaySubjectName(value: string) {
+  const normalized = normalizeSubjectName(value);
+  return SUBJECT_DISPLAY_NAME_BY_CANONICAL[normalized] ?? value;
 }
 
 function findSubjectByName(subjects: ComposerSubjectRecord[], subjectName: string) {
@@ -161,28 +190,7 @@ function findSubjectByName(subjects: ComposerSubjectRecord[], subjectName: strin
 }
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
-  if (!isAxiosError(error)) {
-    return fallbackMessage;
-  }
-
-  const responseData = error.response?.data;
-  if (typeof responseData === "string" && responseData.trim()) {
-    return responseData;
-  }
-
-  if (responseData && typeof responseData === "object") {
-    const data = responseData as Record<string, unknown>;
-    const message = data.message ?? data.error ?? data.detail;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-  }
-
-  if (error.message) {
-    return error.message;
-  }
-
-  return fallbackMessage;
+  return extractSharedApiErrorMessage(error, fallbackMessage);
 }
 
 function parseOptionsJson(rawOptions: string | null): string[] {
@@ -362,6 +370,7 @@ export default function ModeratorComposerFormPage() {
 
   const [examTitle, setExamTitle] = useState(DEFAULT_EXAM_TITLE);
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
+  const [className, setClassName] = useState(DEFAULT_CLASS_NAME);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION_MINUTES);
   const [questions, setQuestions] = useState<QuestionDraft[]>(initialQuestions);
 
@@ -402,9 +411,10 @@ export default function ModeratorComposerFormPage() {
       questions.length > 0 ||
       examTitle.trim() !== DEFAULT_EXAM_TITLE ||
       subject !== DEFAULT_SUBJECT ||
+      className !== DEFAULT_CLASS_NAME ||
       durationMinutes !== DEFAULT_DURATION_MINUTES
     );
-  }, [durationMinutes, examTitle, questions.length, subject]);
+  }, [className, durationMinutes, examTitle, questions.length, subject]);
 
   const questionSignature = useMemo(() => buildQuestionSignature(questions), [questions]);
 
@@ -416,10 +426,11 @@ export default function ModeratorComposerFormPage() {
     return (
       examTitle.trim() !== savedSnapshot.title ||
       subject !== savedSnapshot.subject ||
+      className !== savedSnapshot.className ||
       durationMinutes !== savedSnapshot.durationMinutes ||
       questionSignature !== savedSnapshot.questionSignature
     );
-  }, [durationMinutes, examTitle, hasMeaningfulProgress, questionSignature, savedSnapshot, subject]);
+  }, [className, durationMinutes, examTitle, hasMeaningfulProgress, questionSignature, savedSnapshot, subject]);
 
   const loadInitialData = useCallback(async () => {
     setIsLoadingForm(true);
@@ -429,15 +440,19 @@ export default function ModeratorComposerFormPage() {
       const fetchedSubjects = await listComposerSubjects();
       setAvailableSubjects(fetchedSubjects);
 
-      const fallbackSubject =
-        fetchedSubjects.find((item) => item.name === DEFAULT_SUBJECT)?.name ??
-        fetchedSubjects[0]?.name ??
-        DEFAULT_SUBJECT;
+      const fallbackSubject = toDisplaySubjectName(
+        fetchedSubjects.find((item) => normalizeSubjectName(item.name) === normalizeSubjectName(DEFAULT_SUBJECT))?.name ??
+          fetchedSubjects[0]?.name ??
+          DEFAULT_SUBJECT
+      );
 
       if (!editingExamIdFromQuery) {
         setIsPublishedReadonly(false);
         setSubject((currentSubject) => {
           return currentSubject.trim().length === 0 ? fallbackSubject : currentSubject;
+        });
+        setClassName((currentClassName) => {
+          return currentClassName.trim().length === 0 ? DEFAULT_CLASS_NAME : currentClassName;
         });
         setSaveError("");
         return;
@@ -446,8 +461,10 @@ export default function ModeratorComposerFormPage() {
       const exam = await getComposerExamById(editingExamIdFromQuery);
       const publishedByStatus = String(exam.status ?? "").toUpperCase() === "PUBLISHED";
       const nextReadonly = isViewOnlyFromQuery || publishedByStatus;
-      const subjectFromExam =
-        fetchedSubjects.find((item) => item.id === exam.subjectId)?.name ?? fallbackSubject;
+      const subjectFromExam = toDisplaySubjectName(
+        fetchedSubjects.find((item) => item.id === exam.subjectId)?.name ?? fallbackSubject
+      );
+      const classNameFromExam = exam.className?.trim() || DEFAULT_CLASS_NAME;
       const linkedQuestions = await listComposerExamQuestions(exam.id);
       const questionRecords = await Promise.all(
         linkedQuestions.map((item) => getComposerQuestionById(item.questionId))
@@ -465,6 +482,7 @@ export default function ModeratorComposerFormPage() {
 
       setExamTitle(normalizedTitle);
       setSubject(subjectFromExam);
+      setClassName(classNameFromExam);
       setDurationMinutes(normalizedDuration);
       setQuestions(mappedQuestions);
       setActiveExamId(exam.id);
@@ -481,6 +499,7 @@ export default function ModeratorComposerFormPage() {
         examId: exam.id,
         title: normalizedTitle,
         subject: subjectFromExam,
+        className: classNameFromExam,
         durationMinutes: normalizedDuration,
         questionSignature: buildQuestionSignature(mappedQuestions),
       });
@@ -567,6 +586,7 @@ export default function ModeratorComposerFormPage() {
 
     const normalizedTitle = examTitle.trim() || "Đề chưa đặt tên";
     const normalizedSubject = subject.trim();
+    const normalizedClassName = className.trim() || DEFAULT_CLASS_NAME;
 
     if (!normalizedSubject) {
       setSaveError("Vui lòng nhập hoặc chọn môn học trước khi lưu.");
@@ -587,7 +607,7 @@ export default function ModeratorComposerFormPage() {
 
           return [...prev, createdSubject];
         });
-        setSubject(createdSubject.name);
+        setSubject(toDisplaySubjectName(createdSubject.name));
         resolvedSubjectRecord = createdSubject;
       } catch (error) {
         setSaveError(
@@ -622,6 +642,7 @@ export default function ModeratorComposerFormPage() {
       const examPayload = {
         title: normalizedTitle,
         subjectId: resolvedSubjectRecord.id,
+        className: normalizedClassName,
         durationMinutes: normalizedDuration,
         status: "DRAFT",
       } as const;
@@ -655,7 +676,8 @@ export default function ModeratorComposerFormPage() {
       setSavedSnapshot({
         examId: savedExam.id,
         title: normalizedTitle,
-        subject: resolvedSubjectRecord.name,
+        subject: toDisplaySubjectName(resolvedSubjectRecord.name),
+        className: normalizedClassName,
         durationMinutes: normalizedDuration,
         questionSignature: nextSignature,
       });
@@ -920,7 +942,7 @@ export default function ModeratorComposerFormPage() {
           <h2 className="text-xl font-extrabold text-[var(--ink-900)]">Cấu hình bài thi</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 rounded-2xl bg-[var(--bg-soft)] p-6 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 rounded-2xl bg-[var(--bg-soft)] p-6 md:grid-cols-5">
           <div className="space-y-2 md:col-span-2">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Tiêu đề bài thi
@@ -937,6 +959,27 @@ export default function ModeratorComposerFormPage() {
 
           <div className="space-y-2">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
+              Lớp học
+            </label>
+            <div className="relative">
+              <select
+                className="w-full appearance-none rounded-xl border border-transparent bg-white px-4 py-3 font-medium text-[var(--ink-900)] outline-none transition focus:border-[var(--brand-500)] focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)]"
+                value={className}
+                onChange={(event) => setClassName(event.target.value)}
+                disabled={isFormLocked}
+              >
+                {CLASS_NAME_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-3 text-[var(--ink-500)]">▾</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Môn học
             </label>
             <div className="relative">
@@ -947,9 +990,13 @@ export default function ModeratorComposerFormPage() {
                 disabled={isFormLocked}
               >
                 {availableSubjects.length === 0 ? (
-                  <option>{subject}</option>
+                  <option value={subject}>{toDisplaySubjectName(subject)}</option>
                 ) : (
-                  availableSubjects.map((item) => <option key={item.id}>{item.name}</option>)
+                  availableSubjects.map((item) => (
+                    <option key={item.id} value={toDisplaySubjectName(item.name)}>
+                      {toDisplaySubjectName(item.name)}
+                    </option>
+                  ))
                 )}
               </select>
               <span className="pointer-events-none absolute right-3 top-3 text-[var(--ink-500)]">▾</span>

@@ -12,34 +12,53 @@ import {
 } from 'lucide-react';
 import type { SelectedFile } from '../../types/user.type';
 import { userService } from '../../services/user.service';
+import { extractApiErrorMessage } from '@/lib/error-utils';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
 
+const normalizeText = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const SUBJECT_DISPLAY_MAP: Record<string, string> = {
+  'toan hoc': 'Toán học',
+  toan: 'Toán học',
+  'vat ly': 'Vật lý',
+  ly: 'Vật lý',
+  'hoa hoc': 'Hóa học',
+  hoa: 'Hóa học',
+  'sinh hoc': 'Sinh học',
+  sinh: 'Sinh học',
+  'ngu van': 'Ngữ văn',
+  van: 'Ngữ văn',
+  'tieng anh': 'Tiếng Anh',
+  anh: 'Tiếng Anh',
+  'lich su': 'Lịch sử',
+  'dia ly': 'Địa lý',
+  'tin hoc': 'Tin học',
+  gdcd: 'Giáo dục công dân',
+};
+
+const toTitleCase = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const formatSubjectLabel = (subject: string): string => {
+  const raw = subject.replace(/\s+/g, ' ').trim();
+  const key = normalizeText(raw);
+  return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
+};
+
 const extractUploadErrorMessage = (error: unknown): string => {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof (error as { response?: unknown }).response === 'object'
-  ) {
-    const response = (error as { response?: { status?: number; data?: { message?: string } } }).response;
-    if (response?.data?.message) {
-      return response.data.message;
-    }
-    if (response?.status === 401) {
-      return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi thử upload.';
-    }
-    if (response?.status === 413) {
-      return 'File vượt quá giới hạn cho phép (tối đa 50MB).';
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.';
+  return extractApiErrorMessage(error, 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.');
 };
 
 // Component phụ cho phần Tips
@@ -53,10 +72,10 @@ const Tip: React.FC<{ text: string }> = ({ text }) => (
 export default function SubmitExamPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const classOptions = Array.from({ length: 12 }, (_, index) => `L\u1edbp ${index + 1}`);
 
   // Quản lý State với Type cụ thể
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
-  const [difficulty, setDifficulty] = useState<'Dễ' | 'Vừa' | 'Khó'>('Vừa');
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -68,13 +87,20 @@ export default function SubmitExamPage() {
     type: 'final',
     school: '',
     subject: '',
-    lecturer: '',
+    className: '',
   });
 
   useEffect(() => {
     const fetchSubjects = async () => {
       const data = await userService.getSubjects();
-      const normalized = data.filter((item) => item !== 'Tất cả môn học');
+      const normalized = Array.from(
+        new Map(
+          data
+            .filter((item) => normalizeText(item) !== normalizeText('Tất cả môn học'))
+            .map((item) => formatSubjectLabel(item))
+            .map((item) => [normalizeText(item), item]),
+        ).values(),
+      );
       setSubjects(normalized);
 
       setFormData((prev) => {
@@ -158,7 +184,7 @@ export default function SubmitExamPage() {
           subject: formData.subject || undefined,
           semesterYear: formData.semesterYear || undefined,
           type: formData.type || undefined,
-          lecturer: formData.lecturer || undefined,
+          className: formData.className || undefined,
         },
         fileToUpload,
       );
@@ -355,32 +381,21 @@ export default function SubmitExamPage() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 block ml-1">Giảng viên</label>
-                <input
-                  type="text"
-                  value={formData.lecturer}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, lecturer: e.target.value }))}
-                  placeholder="VD: TS. Nguyễn Văn A"
-                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/10 outline-none text-sm"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-50">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 block ml-1">Độ khó ước tính</label>
-                <div className="flex gap-2">
-                  {(['Dễ', 'Vừa', 'Khó'] as const).map((lv) => (
-                    <button
-                      key={lv}
-                      onClick={() => setDifficulty(lv)}
-                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all border ${
-                        difficulty === lv 
-                        ? 'bg-[#1a4b84] border-[#1a4b84] text-white shadow-lg shadow-blue-900/20' 
-                        : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
-                      }`}
-                    >
-                      {lv}
-                    </button>
-                  ))}
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 block ml-1">Lớp học</label>
+                <div className="relative">
+                  <select
+                    value={formData.className}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, className: e.target.value }))}
+                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/10 outline-none text-sm cursor-pointer appearance-none"
+                  >
+                    <option value="">Chọn lớp</option>
+                    {classOptions.map((classOption) => (
+                      <option key={classOption} value={classOption}>
+                        {classOption}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 </div>
               </div>
 
