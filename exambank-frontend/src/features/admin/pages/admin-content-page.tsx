@@ -144,7 +144,8 @@ export default function AdminContentPage() {
     <div className="space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="font-[var(--font-label)] text-3xl font-extrabold tracking-tight text-[var(--ink-900)]">
+          <h1
+           className="font-[var(--font-label)] text-3xl font-extrabold tracking-tight text-[var(--ink-900)]">
             Kiểm duyệt nội dung
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--ink-600)]">

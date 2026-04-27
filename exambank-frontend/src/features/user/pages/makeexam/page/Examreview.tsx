@@ -4,6 +4,7 @@ import { CheckCircle2, RotateCcw, Trophy } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Exam, Question, QuestionResult } from '@/features/user/types/user.type';
 import { examService } from '@/features/user/services/user.service';
+import { sanitizeRichHtml } from '@/features/user/utils/rich-text';
 import { useExamreview } from '../hooks/useExamreview';
 
 type ExamReviewRouteState = {
@@ -443,9 +444,12 @@ const Examreview = () => {
                       </span>
                     </div>
 
-                    <p className="mb-4 font-medium text-slate-800">
-                      {row.question?.question ?? `Câu hỏi #${row.result.questionId}`}
-                    </p>
+                    <div
+                      className="mb-4 font-medium text-slate-800 [&_img]:my-2 [&_img]:mx-auto [&_img]:block [&_img]:h-auto [&_img]:max-w-[min(100%,200px)] [&_img]:rounded-lg [&_figure.image]:my-2 [&_figure.image]:mx-auto [&_figure.image]:max-w-[min(100%,200px)]"
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeRichHtml(row.question?.question ?? `Câu hỏi #${row.result.questionId}`),
+                      }}
+                    />
 
                     {renderQuestionAnswers(row, hasJudgement, isCorrectQuestion)}
                   </article>

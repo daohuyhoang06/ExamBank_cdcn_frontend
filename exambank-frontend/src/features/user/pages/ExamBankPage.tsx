@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Star, Calendar, School, ChevronDown, Check, BookMarked } from 'lucide-react';
+import { isAxiosError } from 'axios';
 import { Pagination } from '@/components/ui/Pagination/pagination';
 
 import type { DocumentSummary, EducationLevel, Subject } from '../types/user.type';
@@ -170,6 +171,14 @@ export default function ExamBankPage() {
       setDocuments(mapped);
       setCurrentPage(1);
     } catch (error) {
+      if (isAxiosError(error)) {
+        const status = error.response?.status ?? error.status;
+        if (status === 401 || status === 403) {
+          setDocuments([]);
+          setDocumentsError('');
+          return;
+        }
+      }
       console.error('Fetch documents error:', error);
       setDocuments([]);
       setDocumentsError('Kh\u00f4ng th\u1ec3 t\u1ea3i \u0111\u1ec1 thi t\u1eeb h\u1ec7 th\u1ed1ng. Vui l\u00f2ng th\u1eed l\u1ea1i.');
