@@ -1,4 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Editor as TinyMceEditor } from "@tinymce/tinymce-react";
+import "tinymce/tinymce";
+import "tinymce/icons/default";
+import "tinymce/themes/silver";
+import "tinymce/models/dom";
+import "tinymce/plugins/advlist";
+import "tinymce/plugins/autoresize";
+import "tinymce/plugins/code";
+import "tinymce/plugins/image";
+import "tinymce/plugins/link";
+import "tinymce/plugins/lists";
+import "tinymce/plugins/table";
+import "tinymce/skins/ui/oxide/skin.min.css";
+import "tinymce/skins/content/default/content.min.css";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowDown,
@@ -22,6 +36,7 @@ import {
   listComposerExamQuestions,
   listComposerSubjects,
   removeComposerExamQuestion,
+  uploadComposerQuestionImage,
   updateComposerExam,
 } from "@/features/moderator/services/moderator-composer.service";
 import type {
@@ -42,6 +57,9 @@ type QuestionDraft = {
   type: QuestionType;
   subjectLine: string;
   content: string;
+  imageUrl?: string | null;
+  pendingImageFile?: File | null;
+  localImagePreviewUrl?: string | null;
   points: number;
   tags: string;
   options?: string[];
@@ -53,6 +71,9 @@ type QuestionDraft = {
 type NewQuestionForm = {
   subjectLine: string;
   content: string;
+  imageUrl: string | null;
+  pendingImageFile: File | null;
+  localImagePreviewUrl: string | null;
   points: string;
   tags: string;
   options: string[];
@@ -99,7 +120,7 @@ const questionTypeConfigs: QuestionTypeConfig[] = [
 ];
 
 const COMPOSER_FLASH_NOTICE_KEY = "moderator-composer-flash-notice";
-const DEFAULT_EXAM_TITLE = "Kiểm tra cuối kỳ - Giải tích & Lịch sử";
+const DEFAULT_EXAM_TITLE = "Kiểm tra cuối kỳ";
 const DEFAULT_SUBJECT = "Toán học";
 const DEFAULT_DURATION_MINUTES = 90;
 const DRAFT_NOTICE_HIDE_SCROLL_Y = 320;
@@ -126,10 +147,18 @@ function optionLabel(index: number) {
   return String.fromCharCode(65 + index);
 }
 
+function editorIdForQuestionType(type: QuestionType) {
+  const index = questionTypeConfigs.findIndex((item) => item.type === type);
+  return `question-content-editor-${Math.max(index, 0)}`;
+}
+
 function buildNewQuestionForm(subject: string): NewQuestionForm {
   return {
     subjectLine: subject,
     content: "",
+    imageUrl: null,
+    pendingImageFile: null,
+    localImagePreviewUrl: null,
     points: "1",
     tags: "",
     options: ["", "", "", ""],
@@ -151,6 +180,8 @@ function buildQuestionSignature(source: QuestionDraft[]) {
   const normalized = source.map((question) => ({
     type: question.type,
     content: question.content.trim(),
+    imageUrl: question.imageUrl?.trim() ?? null,
+    hasPendingImage: Boolean(question.pendingImageFile),
     points: question.points,
     tags: question.tags.trim(),
     options: question.options ? [...question.options.map((option) => option.trim())] : undefined,
@@ -191,6 +222,27 @@ function findSubjectByName(subjects: ComposerSubjectRecord[], subjectName: strin
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
   return extractSharedApiErrorMessage(error, fallbackMessage);
+}
+
+function hasMeaningfulEditorContent(value: string) {
+  const normalized = value.replace(/&nbsp;/g, " ").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (typeof document === "undefined") {
+    return normalized.replace(/<[^>]*>/g, "").trim().length > 0;
+  }
+
+  const container = document.createElement("div");
+  container.innerHTML = normalized;
+
+  const text = (container.textContent ?? "").replace(/\u00a0/g, " ").trim();
+  if (text.length > 0) {
+    return true;
+  }
+
+  return Boolean(container.querySelector("img,math,svg,table,iframe,video,audio"));
 }
 
 function parseOptionsJson(rawOptions: string | null): string[] {
@@ -267,6 +319,7 @@ function mapBackendQuestionToDraft(question: ComposerQuestionRecord, subjectName
       type: "Tự điền đáp án (Fill in blank)",
       subjectLine: subjectName,
       content: question.content,
+      imageUrl: question.imageUrl,
       points: question.maxScore ?? 1,
       tags: question.topicTag ?? "",
       answer: question.answer ?? "",
@@ -281,6 +334,7 @@ function mapBackendQuestionToDraft(question: ComposerQuestionRecord, subjectName
       type: "Đúng/Sai (True/False)",
       subjectLine: subjectName,
       content: question.content,
+      imageUrl: question.imageUrl,
       points: question.maxScore ?? 1,
       tags: question.topicTag ?? "",
       trueAnswer: resolveTrueFalseAnswer(question.answer),
@@ -294,6 +348,7 @@ function mapBackendQuestionToDraft(question: ComposerQuestionRecord, subjectName
     type: "Trắc nghiệm (Multiple Choice)",
     subjectLine: subjectName,
     content: question.content,
+    imageUrl: question.imageUrl,
     points: question.maxScore ?? 1,
     tags: question.topicTag ?? "",
     options: normalizedOptions,
@@ -314,6 +369,7 @@ function buildQuestionPayload(
       content: question.content.trim(),
       type: "MCQ",
       topicTag: question.tags.trim() || null,
+      imageUrl: question.imageUrl?.trim() || null,
       maxScore: question.points,
       options: JSON.stringify(["Đúng", "Sai"]),
       answer: question.trueAnswer ? "Đúng" : "Sai",
@@ -329,6 +385,7 @@ function buildQuestionPayload(
       content: question.content.trim(),
       type: "FILL_IN_BLANK",
       topicTag: question.tags.trim() || null,
+      imageUrl: question.imageUrl?.trim() || null,
       maxScore: question.points,
       options: null,
       answer: question.answer?.trim() || "",
@@ -346,12 +403,145 @@ function buildQuestionPayload(
     content: question.content.trim(),
     type: "MCQ",
     topicTag: question.tags.trim() || null,
+    imageUrl: question.imageUrl?.trim() || null,
     maxScore: question.points,
     options: JSON.stringify(normalizedOptions),
     answer: optionLabel(selectedCorrect),
     orderIndex,
     active: true,
   };
+}
+
+type TinyImageBlobInfo = {
+  blob: () => Blob;
+  filename: () => string;
+};
+
+const TEMPORARY_INLINE_IMAGE_SRC_PATTERN = /src=(["'])(blob:[^"']+|data:image\/[^"']+)\1/gi;
+const TEMPORARY_INLINE_IMAGE_FIGURE_PATTERN = /<figure\b[^>]*>\s*<img\b[^>]*\bsrc=(["'])(blob:[^"']+|data:image\/[^"']+)\1[^>]*>\s*<\/figure>/gi;
+const TEMPORARY_INLINE_IMAGE_TAG_PATTERN = /<img\b[^>]*\bsrc=(["'])(blob:[^"']+|data:image\/[^"']+)\1[^>]*>/gi;
+
+function replaceTemporaryInlineImageSources(content: string, imageUrl: string | null | undefined): string {
+  if (!imageUrl) {
+    return content;
+  }
+
+  const escapedUrl = imageUrl.replace(/"/g, "&quot;");
+  return content.replace(TEMPORARY_INLINE_IMAGE_SRC_PATTERN, `src="${escapedUrl}"`);
+}
+
+function replaceExactImageSource(content: string, oldSource: string | null | undefined, nextSource: string | null | undefined): string {
+  if (!oldSource || !nextSource || oldSource === nextSource) {
+    return content;
+  }
+
+  return content.split(oldSource).join(nextSource);
+}
+
+function stripTemporaryInlineImageMarkup(content: string): string {
+  return content
+    .replace(TEMPORARY_INLINE_IMAGE_FIGURE_PATTERN, "")
+    .replace(TEMPORARY_INLINE_IMAGE_TAG_PATTERN, "");
+}
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof FileReader === "undefined") {
+      reject(new Error("FileReader is not available in this environment."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string" && result.startsWith("data:image/")) {
+        resolve(result);
+        return;
+      }
+      reject(new Error("Could not encode image preview."));
+    };
+    reader.onerror = () => {
+      reject(new Error("Could not read image file."));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function QuestionContentEditor({
+  id,
+  value,
+  disabled,
+  onChange,
+  onImagePicked,
+}: {
+  id: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onImagePicked: (file: File, previewUrl: string) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#c8ccd4] bg-white transition focus-within:border-[var(--brand-500)]">
+      <TinyMceEditor
+        id={id}
+        disabled={disabled}
+        value={value}
+        onEditorChange={onChange}
+        init={{
+          height: 170,
+          menubar: false,
+          statusbar: false,
+          branding: false,
+          resize: true,
+          automatic_uploads: true,
+          paste_data_images: true,
+          skin: false,
+          content_css: false,
+          plugins: "advlist autoresize code image link lists table",
+          images_upload_handler: (blobInfo: TinyImageBlobInfo) =>
+            new Promise((resolve, reject) => {
+              if (disabled || typeof window === "undefined") {
+                reject("Editor is currently disabled.");
+                return;
+              }
+
+              const blob = blobInfo.blob();
+              if (!blob.type.startsWith("image/")) {
+                reject("Only image files are supported.");
+                return;
+              }
+
+              const suggestedName = blobInfo.filename()?.trim();
+              const file =
+                blob instanceof File
+                  ? blob
+                  : new File([blob], suggestedName || `question-image-${Date.now()}.png`, {
+                      type: blob.type || "image/png",
+                    });
+              void readBlobAsDataUrl(file)
+                .then((previewUrl) => {
+                  onImagePicked(file, previewUrl);
+                  resolve(previewUrl);
+                })
+                .catch((error) => {
+                  const message = error instanceof Error ? error.message : "Could not process selected image.";
+                  reject(message);
+                });
+            }),
+          external_plugins: {
+            tiny_mce_wiris: "/tinymce-plugins/wiris/plugin.min.js",
+          },
+          toolbar:
+            "bold italic underline | tiny_mce_wiris_formulaEditor tiny_mce_wiris_formulaEditorChemistry | bullist numlist | alignleft aligncenter | image table link",
+          toolbar_mode: "wrap",
+          draggable_modal: true,
+          placeholder: "Nhập nội dung câu hỏi...",
+          content_style:
+            "body { font-family: Inter, Arial, sans-serif; font-size: 16px; line-height: 1.65; color: #191c1e; padding: 18px 24px; } p { margin: 0 0 10px; } img:not(.Wirisformula):not([class*='Wiris']) { display: block; max-width: min(100%, 360px); height: auto; margin: 10px auto; border-radius: 10px; } figure.image { max-width: min(100%, 360px); margin: 10px auto; } figure.image img:not(.Wirisformula):not([class*='Wiris']) { width: 100%; height: auto; } img.Wirisformula, img[class*='Wiris'] { display: inline-block; max-width: none; margin: 0; border-radius: 0; vertical-align: middle; }",
+        }}
+      />
+    </div>
+  );
 }
 
 export default function ModeratorComposerFormPage() {
@@ -389,9 +579,27 @@ export default function ModeratorComposerFormPage() {
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishedReadonly, setIsPublishedReadonly] = useState(false);
+  const objectPreviewUrlsRef = useRef<Set<string>>(new Set());
 
   const shouldShowDraftNotice = Boolean(draftNotice) && !isDraftNoticeHiddenByScroll;
   const isFormLocked = isLoadingForm || isSaving || isPublishedReadonly;
+
+  const registerObjectPreviewUrl = useCallback((url: string | null | undefined) => {
+    if (!url || !url.startsWith("blob:")) {
+      return;
+    }
+    objectPreviewUrlsRef.current.add(url);
+  }, []);
+
+  const revokeObjectPreviewUrl = useCallback((url: string | null | undefined) => {
+    if (!url || !url.startsWith("blob:")) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.URL.revokeObjectURL(url);
+    }
+    objectPreviewUrlsRef.current.delete(url);
+  }, []);
 
   const activeSubjectRecord = useMemo(() => {
     return findSubjectByName(availableSubjects, subject);
@@ -484,7 +692,12 @@ export default function ModeratorComposerFormPage() {
       setSubject(subjectFromExam);
       setClassName(classNameFromExam);
       setDurationMinutes(normalizedDuration);
-      setQuestions(mappedQuestions);
+      setQuestions((previousQuestions) => {
+        previousQuestions.forEach((question) => {
+          revokeObjectPreviewUrl(question.localImagePreviewUrl);
+        });
+        return mappedQuestions;
+      });
       setActiveExamId(exam.id);
       setIsPublishedReadonly(nextReadonly);
       setSaveError("");
@@ -494,7 +707,12 @@ export default function ModeratorComposerFormPage() {
           ? `Đề #${exam.id} đang ở chế độ chỉ xem vì đã xuất bản.`
           : `Đang chỉnh sửa đề đã lưu trên hệ thống (ID: ${exam.id}).`
       );
-      setNewQuestionForms(buildQuestionForms(subjectFromExam));
+      setNewQuestionForms((previousForms) => {
+        Object.values(previousForms).forEach((form) => {
+          revokeObjectPreviewUrl(form.localImagePreviewUrl);
+        });
+        return buildQuestionForms(subjectFromExam);
+      });
       setSavedSnapshot({
         examId: exam.id,
         title: normalizedTitle,
@@ -510,7 +728,7 @@ export default function ModeratorComposerFormPage() {
     } finally {
       setIsLoadingForm(false);
     }
-  }, [editingExamIdFromQuery, isViewOnlyFromQuery]);
+  }, [editingExamIdFromQuery, isViewOnlyFromQuery, revokeObjectPreviewUrl]);
 
   useEffect(() => {
     void loadInitialData();
@@ -534,6 +752,19 @@ export default function ModeratorComposerFormPage() {
     };
   }, [draftNotice]);
 
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      objectPreviewUrlsRef.current.forEach((url) => {
+        window.URL.revokeObjectURL(url);
+      });
+      objectPreviewUrlsRef.current.clear();
+    };
+  }, []);
+
   function updateCreateForm(type: QuestionType, patch: Partial<NewQuestionForm>) {
     setNewQuestionForms((prev) => ({
       ...prev,
@@ -544,11 +775,27 @@ export default function ModeratorComposerFormPage() {
     }));
   }
 
-  function resetCreateForm(type: QuestionType) {
+  function handleCreateFormEditorImage(type: QuestionType, file: File, previewUrl: string) {
+    registerObjectPreviewUrl(previewUrl);
     setNewQuestionForms((prev) => ({
       ...prev,
-      [type]: buildNewQuestionForm(subject),
+      [type]: {
+        ...prev[type],
+        imageUrl: null,
+        pendingImageFile: file,
+        localImagePreviewUrl: previewUrl,
+      },
     }));
+  }
+
+  function resetCreateForm(type: QuestionType) {
+    setNewQuestionForms((prev) => {
+      revokeObjectPreviewUrl(prev[type].localImagePreviewUrl);
+      return {
+        ...prev,
+        [type]: buildNewQuestionForm(subject),
+      };
+    });
     setFormErrors((prev) => ({
       ...prev,
       [type]: "",
@@ -664,15 +911,45 @@ export default function ModeratorComposerFormPage() {
         );
       }
 
+      let normalizedQuestions = questions;
       if (questions.length > 0) {
-        const payloads = questions.map((question, index) =>
+        const questionsForCreate = questions.map((question) => ({
+          ...question,
+          content: stripTemporaryInlineImageMarkup(question.content),
+        }));
+        const payloads = questionsForCreate.map((question, index) =>
           buildQuestionPayload(question, resolvedSubjectRecord.id, savedExam.id, index + 1)
         );
+        const createdQuestions = await Promise.all(payloads.map((payload) => createComposerQuestion(payload)));
+        const finalizedQuestions = await Promise.all(
+          createdQuestions.map(async (createdQuestion, index) => {
+            const sourceQuestion = questions[index];
+            if (!sourceQuestion.pendingImageFile) {
+              return createdQuestion;
+            }
+            return uploadComposerQuestionImage(createdQuestion.id, sourceQuestion.pendingImageFile);
+          })
+        );
 
-        await Promise.all(payloads.map((payload) => createComposerQuestion(payload)));
+        normalizedQuestions = questions.map((question, index) => {
+          const finalizedQuestion = finalizedQuestions[index];
+          revokeObjectPreviewUrl(question.localImagePreviewUrl);
+          const normalizedContent = stripTemporaryInlineImageMarkup(
+            replaceTemporaryInlineImageSources(question.content, finalizedQuestion.imageUrl ?? null)
+          );
+          return {
+            ...question,
+            content: normalizedContent,
+            persistedQuestionId: finalizedQuestion.id,
+            imageUrl: finalizedQuestion.imageUrl ?? null,
+            pendingImageFile: null,
+            localImagePreviewUrl: null,
+          };
+        });
+        setQuestions(normalizedQuestions);
       }
 
-      const nextSignature = buildQuestionSignature(questions);
+      const nextSignature = buildQuestionSignature(normalizedQuestions);
       setSavedSnapshot({
         examId: savedExam.id,
         title: normalizedTitle,
@@ -760,10 +1037,20 @@ export default function ModeratorComposerFormPage() {
       }
 
       const current = prev[currentIndex];
+      const duplicatedPendingFile = current.pendingImageFile ?? null;
+      const duplicatedPreviewUrl = duplicatedPendingFile ? current.localImagePreviewUrl ?? null : null;
+      const duplicatedContent =
+        duplicatedPendingFile && duplicatedPreviewUrl
+          ? replaceExactImageSource(current.content, current.localImagePreviewUrl, duplicatedPreviewUrl)
+          : current.content;
       const duplicated: QuestionDraft = {
         ...current,
         id: `Q-${Date.now()}`,
         persistedQuestionId: undefined,
+        content: duplicatedContent,
+        imageUrl: duplicatedPendingFile ? null : current.imageUrl ?? null,
+        pendingImageFile: duplicatedPendingFile,
+        localImagePreviewUrl: duplicatedPreviewUrl ?? null,
         options: current.options ? [...current.options] : undefined,
       };
 
@@ -774,7 +1061,13 @@ export default function ModeratorComposerFormPage() {
   }
 
   function removeQuestion(questionId: string) {
-    setQuestions((prev) => prev.filter((item) => item.id !== questionId));
+    setQuestions((prev) => {
+      const toRemove = prev.find((item) => item.id === questionId);
+      if (toRemove) {
+        revokeObjectPreviewUrl(toRemove.localImagePreviewUrl);
+      }
+      return prev.filter((item) => item.id !== questionId);
+    });
   }
 
   function updateQuestion(questionId: string, patch: Partial<QuestionDraft>) {
@@ -811,7 +1104,7 @@ export default function ModeratorComposerFormPage() {
     const content = currentForm.content.trim();
     const points = Number(currentForm.points);
 
-    if (content.length === 0) {
+    if (!hasMeaningfulEditorContent(content)) {
       setFormErrors((prev) => ({
         ...prev,
         [type]: "Vui lòng nhập nội dung câu hỏi.",
@@ -854,6 +1147,9 @@ export default function ModeratorComposerFormPage() {
       type,
       subjectLine: currentForm.subjectLine.trim() || subject,
       content,
+      imageUrl: currentForm.imageUrl,
+      pendingImageFile: currentForm.pendingImageFile,
+      localImagePreviewUrl: currentForm.localImagePreviewUrl,
       points,
       tags: currentForm.tags.trim(),
       ...(type === "Trắc nghiệm (Multiple Choice)"
@@ -875,7 +1171,14 @@ export default function ModeratorComposerFormPage() {
     };
 
     setQuestions((prev) => [...prev, nextQuestion]);
-    resetCreateForm(type);
+    setNewQuestionForms((prev) => ({
+      ...prev,
+      [type]: buildNewQuestionForm(subject),
+    }));
+    setFormErrors((prev) => ({
+      ...prev,
+      [type]: "",
+    }));
   }
 
   return (
@@ -1092,19 +1395,23 @@ export default function ModeratorComposerFormPage() {
                     </label>
                   </div>
 
-                  <label className="mt-4 block space-y-2">
+                  <div className="mt-4 block space-y-2">
                     <span className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Nội dung câu hỏi</span>
-                    <textarea
-                      className="h-24 w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
+                    <QuestionContentEditor
+                      id={editorIdForQuestionType(config.type)}
                       value={currentForm.content}
-                      onChange={(event) => updateCreateForm(config.type, { content: event.target.value })}
+                      onChange={(content) => updateCreateForm(config.type, { content })}
+                      onImagePicked={(file, previewUrl) =>
+                        handleCreateFormEditorImage(config.type, file, previewUrl)
+                      }
                       disabled={isFormLocked}
                     />
-                  </label>
+                  </div>
+
 
                   {config.type === "Trắc nghiệm (Multiple Choice)" ? (
                     <div className="mt-4 space-y-3">
-                      <p className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Phương án trả lời</p>
+                      <span className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Phương án trả lời</span>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         {currentForm.options.map((option, index) => (
                           <label key={`new-option-${config.type}-${index}`} className="flex items-center gap-2 rounded-lg bg-[var(--bg-soft)] p-2">
@@ -1255,8 +1562,12 @@ export default function ModeratorComposerFormPage() {
 
                         <div className="space-y-5">
                           <div className="rounded-xl bg-[var(--bg-soft)] p-4">
-                            <p className="font-medium leading-relaxed text-[var(--ink-900)]">{question.content}</p>
+                            <div
+                              className="prose max-w-none font-medium leading-relaxed text-[var(--ink-900)] [&_img]:my-2 [&_img]:mx-auto [&_img]:block [&_img]:h-auto [&_img]:max-w-[min(100%,360px)] [&_img]:rounded-lg [&_figure.image]:my-2 [&_figure.image]:mx-auto [&_figure.image]:max-w-[min(100%,360px)]"
+                              dangerouslySetInnerHTML={{ __html: question.content }}
+                            />
                           </div>
+
 
                           {question.type === "Trắc nghiệm (Multiple Choice)" && question.options ? (
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1397,4 +1708,5 @@ export default function ModeratorComposerFormPage() {
     </div>
   );
 }
+
 

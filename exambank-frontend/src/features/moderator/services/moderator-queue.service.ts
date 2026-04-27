@@ -547,26 +547,43 @@ export async function rejectModeratorQueueItem(record: ModeratorQueueRecord, rej
 }
 
 export async function getModeratorDocumentPreview(documentId: number): Promise<ModeratorDocumentPreview> {
-  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
-    ...buildAuthConfig(),
-    params: {
-      docId1: documentId,
-      docId2: documentId,
-    },
-  });
+  try {
+    // Use dedicated preview endpoint that returns proper public/presigned URL
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/${documentId}/preview`, buildAuthConfig());
 
-  const payload = toObject(unwrapPayload(response.data));
-  const left = payload ? toObject(payload.left) : null;
-  const target = left ?? payload;
+    const payload = toObject(unwrapPayload(response.data)) ?? toObject(response.data);
 
-  if (!target) {
-    return { fileUrl: null, fileType: null };
+    if (!payload) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(payload.previewUrl ?? payload.fileUrl),
+      fileType: toStringOrNull(payload.fileType),
+    };
+  } catch {
+    // Fallback: use compare endpoint for backward compatibility
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
+      ...buildAuthConfig(),
+      params: {
+        docId1: documentId,
+        docId2: documentId,
+      },
+    });
+
+    const payload = toObject(unwrapPayload(response.data));
+    const left = payload ? toObject(payload.left) : null;
+    const target = left ?? payload;
+
+    if (!target) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
+      fileType: toStringOrNull(target.fileType),
+    };
   }
-
-  return {
-    fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
-    fileType: toStringOrNull(target.fileType),
-  };
 }
 
 

@@ -1,0 +1,237 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: avatar-test.test.js >> Avatar upload flow
+- Location: avatar-test.test.js:4:1
+
+# Error details
+
+```
+Test timeout of 60000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - button "Thu gon sidebar" [ref=e6]:
+      - img [ref=e7]
+    - generic [ref=e10]:
+      - img [ref=e12]
+      - generic [ref=e16]:
+        - paragraph [ref=e17]: Scholarly Sanctuar
+        - paragraph [ref=e18]: Admin Control Panel
+    - navigation [ref=e19]:
+      - link "Dashboard" [ref=e20] [cursor=pointer]:
+        - /url: /admin/dashboard
+        - img [ref=e21]
+        - generic [ref=e24]: Dashboard
+      - link "User Management" [ref=e25] [cursor=pointer]:
+        - /url: /admin/users
+        - img [ref=e26]
+        - generic [ref=e38]: User Management
+      - link "Content Moderation" [ref=e39] [cursor=pointer]:
+        - /url: /admin/content
+        - img [ref=e40]
+        - generic [ref=e43]: Content Moderation
+      - link "Exam Management" [ref=e44] [cursor=pointer]:
+        - /url: /admin/exams
+        - img [ref=e45]
+        - generic [ref=e47]: Exam Management
+      - link "Question Bank" [ref=e48] [cursor=pointer]:
+        - /url: /admin/question-bank
+        - img [ref=e49]
+        - generic [ref=e52]: Question Bank
+      - link "Financials" [ref=e53] [cursor=pointer]:
+        - /url: /admin/financial
+        - img [ref=e54]
+        - generic [ref=e57]: Financials
+      - link "System Configuration" [ref=e58] [cursor=pointer]:
+        - /url: /admin/system
+        - img [ref=e59]
+        - generic [ref=e62]: System Configuration
+    - generic [ref=e64]:
+      - button "Mở thông báo" [ref=e66]:
+        - generic [ref=e67]:
+          - img [ref=e68]
+          - generic [ref=e71]: "1"
+        - generic [ref=e72]: Thông báo
+      - generic [ref=e73]:
+        - button "Mở menu tài khoảnS" [ref=e75]: "N"
+        - generic [ref=e76]:
+          - paragraph [ref=e77]: Nguoi dung
+          - paragraph [ref=e78]: Tài khoản
+  - main [ref=e80]:
+    - generic [ref=e82]:
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e87]:
+            - img [ref=e88]
+            - img [ref=e91]
+          - generic [ref=e94]:
+            - heading "Nguyễn Văn Quản Trị" [level=1] [ref=e95]
+            - generic [ref=e96]:
+              - generic [ref=e97]: "ID: ADM-8821094"
+              - generic [ref=e98]: Quản trị viên
+        - button "Chỉnh sửa hồ sơ" [ref=e100]
+      - generic [ref=e101]:
+        - generic [ref=e102]:
+          - heading "Thông tin cá nhân" [level=3] [ref=e103]
+          - paragraph [ref=e104]: Dữ liệu cá nhân của quản trị viên
+        - generic [ref=e105]:
+          - generic [ref=e106]: Request failed with status code 401
+          - generic [ref=e107]:
+            - generic [ref=e108]:
+              - generic [ref=e109]: Họ và tên
+              - textbox "Họ và tên" [ref=e110]: Nguyễn Văn Quản Trị
+            - generic [ref=e111]:
+              - generic [ref=e112]: Vai trò
+              - textbox "Vai trò" [ref=e113]: Quản trị viên
+            - generic [ref=e114]:
+              - generic [ref=e115]: Email
+              - textbox "Email" [ref=e116]: quantri@scholarly.vn
+            - generic [ref=e117]:
+              - generic [ref=e118]: Số điện thoại
+              - textbox "Số điện thoại" [ref=e119]: +84 987 123 456
+            - generic [ref=e120]:
+              - generic [ref=e121]: Trạng thái tài khoản
+              - combobox [disabled] [ref=e122]:
+                - option "Hoạt động" [selected]
+                - option "Bị khóa"
+                - option "Tạm ngưng"
+            - generic [ref=e123]:
+              - generic [ref=e124]: Ngày tạo tài khoản
+              - textbox "Ngày tạo tài khoản" [ref=e125]: 15/01/2023
+            - generic [ref=e126]:
+              - generic [ref=e127]: Đơn vị
+              - textbox "Đơn vị" [ref=e128]: Admin Control Center
+            - generic [ref=e129]:
+              - generic [ref=e130]: IP hiện tại
+              - textbox "IP hiện tại" [ref=e131]: 192.168.1.45
+      - generic [ref=e132]:
+        - generic [ref=e133]:
+          - heading "Nhật ký hoạt động" [level=3] [ref=e134]
+          - paragraph [ref=e135]: Theo dõi thao tác và hành động nhạy cảm của quản trị viên
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - img [ref=e140]
+                - combobox [ref=e142]:
+                  - option "Tất cả" [selected]
+                  - option "Hôm nay"
+                  - option "7 ngày"
+                  - option "30 ngày"
+              - combobox [ref=e143]:
+                - option "Tất cả" [selected]
+                - option "Duyệt nội dung"
+                - option "Quản lý user"
+                - option "Cấu hình hệ thống"
+                - option "Dữ liệu"
+            - button "Xem toàn bộ log" [ref=e144]
+          - table [ref=e146]:
+            - rowgroup [ref=e147]:
+              - row "Hành động Đối tượng Thời gian IP Address" [ref=e148]:
+                - columnheader "Hành động" [ref=e149]
+                - columnheader "Đối tượng" [ref=e150]
+                - columnheader "Thời gian" [ref=e151]
+                - columnheader "IP Address" [ref=e152]
+            - rowgroup [ref=e153]:
+              - 'row "Phê duyệt kỳ thi #Q-10492 10:45 AM, 24/05/2024 192.168.1.45" [ref=e154]':
+                - cell "Phê duyệt kỳ thi" [ref=e155]:
+                  - generic [ref=e156]: Phê duyệt kỳ thi
+                - cell "#Q-10492" [ref=e158]
+                - cell "10:45 AM, 24/05/2024" [ref=e159]
+                - cell "192.168.1.45" [ref=e160]
+              - 'row "Khóa người dùng #U-8821 09:12 AM, 24/05/2024 192.168.1.45" [ref=e161]':
+                - cell "Khóa người dùng" [ref=e162]:
+                  - generic [ref=e163]: Khóa người dùng
+                - cell "#U-8821" [ref=e165]
+                - cell "09:12 AM, 24/05/2024" [ref=e166]
+                - cell "192.168.1.45" [ref=e167]
+              - row "Cập nhật policy Quy định bảo mật v2.4 Hôm qua, 17:30 172.16.0.104" [ref=e168]:
+                - cell "Cập nhật policy" [ref=e169]:
+                  - generic [ref=e170]: Cập nhật policy
+                - cell "Quy định bảo mật v2.4" [ref=e172]
+                - cell "Hôm qua, 17:30" [ref=e173]
+                - cell "172.16.0.104" [ref=e174]
+              - row "Xuất báo cáo tài chính Tháng 04/2024 22/05/2024, 14:05 10.0.0.12" [ref=e175]:
+                - cell "Xuất báo cáo tài chính" [ref=e176]:
+                  - generic [ref=e177]: Xuất báo cáo tài chính
+                - cell "Tháng 04/2024" [ref=e179]
+                - cell "22/05/2024, 14:05" [ref=e180]
+                - cell "10.0.0.12" [ref=e181]
+              - 'row "Xóa dữ liệu đề thi #EX-70091 08:10 AM, 24/05/2024 192.168.1.45" [ref=e182]':
+                - cell "Xóa dữ liệu đề thi" [ref=e183]:
+                  - generic [ref=e184]: Xóa dữ liệu đề thi
+                - cell "#EX-70091" [ref=e186]
+                - cell "08:10 AM, 24/05/2024" [ref=e187]
+                - cell "192.168.1.45" [ref=e188]
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - heading "Bảo mật" [level=3] [ref=e191]
+          - paragraph [ref=e192]: Dữ liệu hệ thống liên quan đến truy cập và an toàn tài khoản
+        - generic [ref=e193]:
+          - generic [ref=e194]:
+            - generic [ref=e195]:
+              - paragraph [ref=e196]:
+                - img [ref=e197]
+                - text: Xác thực 2 yếu tố (2FA)
+              - generic [ref=e200]: Đã kích hoạt
+            - paragraph [ref=e201]: "Lần đổi mật khẩu gần nhất: 12/03/2026 09:10"
+          - generic [ref=e202]:
+            - paragraph [ref=e203]: Phiên đăng nhập đang hoạt động
+            - article [ref=e204]:
+              - generic [ref=e205]:
+                - paragraph [ref=e206]:
+                  - img [ref=e207]
+                  - text: MacBook Pro - Chrome
+                - paragraph [ref=e211]: Hà Nội, Việt Nam • 192.168.1.45
+              - generic [ref=e212]:
+                - paragraph [ref=e213]: Đang hoạt động
+                - paragraph [ref=e214]: Vừa xong
+            - article [ref=e215]:
+              - generic [ref=e216]:
+                - paragraph [ref=e217]:
+                  - img [ref=e218]
+                  - text: iPhone 15 - Safari
+                - paragraph [ref=e222]: Hà Nội, Việt Nam • 172.16.0.10
+              - generic [ref=e223]:
+                - paragraph [ref=e224]: Đăng nhập gần đây
+                - paragraph [ref=e225]: 10 phút trước
+            - article [ref=e226]:
+              - generic [ref=e227]:
+                - paragraph [ref=e228]:
+                  - img [ref=e229]
+                  - text: Windows PC - Edge
+                - paragraph [ref=e233]: Đà Nẵng, Việt Nam • 10.0.1.12
+              - generic [ref=e234]:
+                - paragraph [ref=e235]: Đăng nhập gần đây
+                - paragraph [ref=e236]: Hôm qua, 22:16
+          - generic [ref=e237]:
+            - button "Đổi mật khẩu" [ref=e238]:
+              - img [ref=e240]
+              - text: Đổi mật khẩu
+            - button "Đăng xuất khỏi tất cả thiết bị" [ref=e243]:
+              - img [ref=e245]
+              - text: Đăng xuất khỏi tất cả thiết bị
+            - button "Khóa tài khoản khẩn cấp" [ref=e248]:
+              - img [ref=e250]
+              - text: Khóa tài khoản khẩn cấp
+          - generic [ref=e252]:
+            - paragraph [ref=e253]:
+              - img [ref=e254]
+              - text: "Lần đăng nhập cuối: Hôm nay, 14:22"
+            - paragraph [ref=e256]:
+              - img [ref=e257]
+              - text: "Vị trí: Hà Nội, Việt Nam"
+            - paragraph [ref=e260]:
+              - img [ref=e261]
+              - text: "Thiết bị: MacBook Pro (Chrome)"
+```

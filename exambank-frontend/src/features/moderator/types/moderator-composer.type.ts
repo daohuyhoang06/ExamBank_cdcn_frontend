@@ -49,6 +49,7 @@ export type ComposerQuestionRecord = {
   options: string | null;
   answer: string | null;
   answerExplanation: string | null;
+  imageUrl: string | null;
   difficulty: number | null;
   orderIndex: number | null;
   active: boolean;
@@ -64,6 +65,7 @@ export type ComposerQuestionPayload = {
   options?: string | null;
   answer?: string | null;
   answerExplanation?: string | null;
+  imageUrl?: string | null;
   difficulty?: number | null;
   orderIndex?: number | null;
   active?: boolean;

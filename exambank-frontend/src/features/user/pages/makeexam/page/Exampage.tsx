@@ -2,6 +2,8 @@
 import { Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SubmitReason } from '@/features/user/types/user.type';
+import { useMemo } from 'react';
+import { sanitizeRichHtml } from '@/features/user/utils/rich-text';
 import { useExam } from '../hooks/useExam';
 import ExamHeader from '../components/exam/ExamHeader';
 import ExamSidebar from '../components/exam/ExamSidebar';
@@ -70,6 +72,12 @@ const Exampage = () => {
       [currentIndex]: !prev[currentIndex],
     }));
   };
+
+  const questionHtmlSource = exam?.questions[currentIndex]?.question ?? '';
+  const sanitizedQuestionHtml = useMemo(
+    () => sanitizeRichHtml(questionHtmlSource),
+    [questionHtmlSource],
+  );
 
   if (isLoadingExam) {
     return (
@@ -149,7 +157,10 @@ const Exampage = () => {
               </div>
 
               <div className="space-y-6">
-                <p className="text-lg leading-relaxed text-[#191c1e]">{currentQuestion.question}</p>
+                <div
+                  className="text-lg leading-relaxed text-[#191c1e] [&_img]:my-2 [&_img]:mx-auto [&_img]:block [&_img]:h-auto [&_img]:max-w-[min(100%,200px)] [&_img]:rounded-lg [&_figure.image]:my-2 [&_figure.image]:mx-auto [&_figure.image]:max-w-[min(100%,200px)]"
+                  dangerouslySetInnerHTML={{ __html: sanitizedQuestionHtml }}
+                />
 
                 <QuestionRenderer
                   question={currentQuestion}

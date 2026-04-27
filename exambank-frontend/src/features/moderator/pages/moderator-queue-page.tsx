@@ -100,7 +100,10 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
-  return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+  // R2 public dev URLs (pub-XXX.r2.dev) are bucket-scoped: do NOT include bucket name.
+  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
+  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
+  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
 }
 
 function detectPreviewKind(fileType: string | null | undefined, previewUrl: string | null) {
@@ -399,7 +402,14 @@ export default function ModeratorQueuePage() {
           return;
         }
 
-        setPreviewUrl(toMinioPublicUrl(preview.fileUrl ?? fallbackFileUrl));
+        // Backend now returns proper public/presigned URLs in previewUrl.
+        // Use directly if it's already an HTTP URL; only fallback through toMinioPublicUrl for raw storage paths.
+        const resolvedUrl = preview.fileUrl ?? fallbackFileUrl;
+        const finalUrl = resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))
+          ? resolvedUrl
+          : toMinioPublicUrl(resolvedUrl);
+
+        setPreviewUrl(finalUrl);
         setPreviewFileType(preview.fileType);
       } catch (error) {
         if (cancelled) {
