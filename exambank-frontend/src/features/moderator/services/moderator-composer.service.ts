@@ -250,6 +250,7 @@ function normalizeQuestion(value: unknown): ComposerQuestionRecord | null {
     options: toStringOrNull(objectValue.options),
     answer: toStringOrNull(objectValue.answer),
     answerExplanation: toStringOrNull(objectValue.answerExplanation),
+    imageUrl: toStringOrNull(objectValue.imageUrl),
     difficulty: toNumber(objectValue.difficulty),
     orderIndex: toNumber(objectValue.orderIndex),
     active: toBoolean(objectValue.active, true),
@@ -379,6 +380,27 @@ export async function updateComposerQuestion(
 
 export async function deleteComposerQuestion(questionId: number): Promise<void> {
   await apiClient.delete(`${QUESTIONS_PATH}/${questionId}`, buildAuthConfig());
+}
+
+export async function uploadComposerQuestionImage(
+  questionId: number,
+  file: File
+): Promise<ComposerQuestionRecord> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await apiClient.post(`${QUESTIONS_PATH}/${questionId}/image`, formData, buildAuthConfig());
+  try {
+    return ensureQuestion(response.data);
+  } catch {
+    // Some backend builds return a partial DTO for image upload.
+    // Re-fetch canonical question data to keep frontend flow stable.
+    return getComposerQuestionById(questionId);
+  }
+}
+
+export async function removeComposerQuestionImage(questionId: number): Promise<ComposerQuestionRecord> {
+  const response = await apiClient.delete(`${QUESTIONS_PATH}/${questionId}/image`, buildAuthConfig());
+  return ensureQuestion(response.data);
 }
 
 export async function listComposerExamQuestions(examId: number): Promise<ComposerExamQuestionLink[]> {

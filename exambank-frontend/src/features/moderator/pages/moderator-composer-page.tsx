@@ -2,8 +2,6 @@ import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } f
 import { useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import {
-  ArrowLeft,
-  ArrowRight,
   BookOpen,
   CheckCircle2,
   Eye,
@@ -18,6 +16,7 @@ import {
 } from "lucide-react";
 import { ComposerJsonImportModal } from "@/features/moderator/components/composer-json-import-modal";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
+import { Pagination } from "@/components/ui/Pagination/pagination";
 import {
   createComposerExam,
   createComposerQuestion,
@@ -110,31 +109,6 @@ const JSON_IMPORT_API_EXAMPLE = {
 const JSON_IMPORT_API_EXAMPLE_TEXT = JSON.stringify(JSON_IMPORT_API_EXAMPLE, null, 2);
 
 type JsonImportObject = Record<string, unknown>;
-
-function buildPaginationItems(currentPage: number, totalPages: number) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const items: Array<number | "ellipsis-left" | "ellipsis-right"> = [1];
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) {
-    items.push("ellipsis-left");
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page);
-  }
-
-  if (end < totalPages - 1) {
-    items.push("ellipsis-right");
-  }
-
-  items.push(totalPages);
-  return items;
-}
 
 function statusBadgeClassName(status: OverviewExamStatus) {
   if (status === "PUBLISHED") {
@@ -553,10 +527,6 @@ export default function ModeratorComposerPage() {
     const startIndex = (currentPage - 1) * OVERVIEW_PAGE_SIZE;
     return filteredOverviewRows.slice(startIndex, startIndex + OVERVIEW_PAGE_SIZE);
   }, [currentPage, filteredOverviewRows]);
-
-  const paginationItems = useMemo(() => {
-    return buildPaginationItems(currentPage, totalPages);
-  }, [currentPage, totalPages]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1124,15 +1094,15 @@ export default function ModeratorComposerPage() {
         ) : null}
 
         {!loadError && !isLoadingRows && filteredOverviewRows.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto px-4 md:px-6">
             <table className="min-w-full text-left">
               <thead>
                 <tr className="bg-[var(--bg-soft)]/35">
-                  <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Đề thi / Thông tin</th>
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Trạng thái</th>
-                  <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Số câu</th>
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Ngày cập nhật</th>
-                  <th className="px-6 py-3 text-right text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Thao tác</th>
+                  <th className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Đề thi / Thông tin</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Trạng thái</th>
+                  <th className="px-5 py-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Số câu</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Ngày cập nhật</th>
+                  <th className="px-8 py-3 text-right text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-soft)]">
@@ -1142,7 +1112,7 @@ export default function ModeratorComposerPage() {
 
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-[var(--bg-soft)]/45">
-                      <td className="px-6 py-4 align-top">
+                      <td className="px-8 py-4 align-top">
                         <p className="max-w-[30rem] text-[1.05rem] font-bold leading-snug text-[var(--ink-900)]">{item.title}</p>
                         <div className="mt-1.5 flex items-center gap-3 text-xs font-medium text-[var(--ink-500)]">
                           <span className="inline-flex items-center gap-1">
@@ -1152,21 +1122,21 @@ export default function ModeratorComposerPage() {
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-5 py-4 align-top">
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadgeClassName(item.status)}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusDotClassName(item.status)}`} />
                           {formatOverviewStatus(item.status)}
                         </span>
                       </td>
 
-                      <td className="px-4 py-4 text-center align-top text-sm font-bold text-[var(--ink-900)]">{item.questionCount}</td>
+                      <td className="px-5 py-4 text-center align-top text-sm font-bold text-[var(--ink-900)]">{item.questionCount}</td>
 
-                      <td className="px-4 py-4 align-top text-xs">
+                      <td className="px-5 py-4 align-top text-xs">
                         <p className="font-semibold text-[var(--ink-700)]">{updatedDate}</p>
                         <p className="text-[var(--ink-500)]">{updatedTime}</p>
                       </td>
 
-                      <td className="px-6 py-4 align-top">
+                      <td className="px-8 py-4 align-top">
                         <div className="flex items-center justify-end gap-1">
                           {item.status === "DRAFT" ? (
                             <>
@@ -1238,62 +1208,17 @@ export default function ModeratorComposerPage() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between border-t border-[var(--line-soft)] bg-[var(--bg-soft)]/25 px-6 py-4">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-              currentPage <= 1
-                ? "cursor-not-allowed text-slate-400"
-                : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-            }`}
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage <= 1 || filteredOverviewRows.length === 0}
-          >
-            <ArrowLeft size={14} /> Trước
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            {paginationItems.map((item) => {
-              if (typeof item !== "number") {
-                return (
-                  <span key={item} className="px-1 text-sm text-[var(--ink-500)]">
-                    ...
-                  </span>
-                );
-              }
-
-              const isCurrent = item === currentPage;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-semibold transition ${
-                    isCurrent
-                      ? "bg-[var(--brand-700)] font-bold text-white"
-                      : "text-[var(--ink-700)] hover:bg-[var(--bg-soft)]"
-                  }`}
-                  onClick={() => setCurrentPage(item)}
-                  disabled={isCurrent}
-                >
-                  {item}
-                </button>
-              );
-            })}
+        {filteredOverviewRows.length > 0 && totalPages > 1 ? (
+          <div className="border-t border-[var(--line-soft)] bg-[var(--bg-soft)]/25 px-6 py-4">
+            <div className="flex justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
           </div>
-
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-              currentPage >= totalPages || filteredOverviewRows.length === 0
-                ? "cursor-not-allowed text-slate-400"
-                : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-            }`}
-            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-            disabled={currentPage >= totalPages || filteredOverviewRows.length === 0}
-          >
-            Tiếp theo <ArrowRight size={14} />
-          </button>
-        </div>
+        ) : null}
       </section>
 
       <section className="grid gap-6 pt-2 lg:grid-cols-[1.15fr_0.85fr]">
