@@ -142,7 +142,6 @@ const SUBJECT_DISPLAY_NAME_BY_CANONICAL: Record<string, string> = {
 };
 
 const initialQuestions: QuestionDraft[] = [];
-
 function optionLabel(index: number) {
   return String.fromCharCode(65 + index);
 }
@@ -563,6 +562,7 @@ export default function ModeratorComposerFormPage() {
   const [className, setClassName] = useState(DEFAULT_CLASS_NAME);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION_MINUTES);
   const [questions, setQuestions] = useState<QuestionDraft[]>(initialQuestions);
+
 
   const [availableSubjects, setAvailableSubjects] = useState<ComposerSubjectRecord[]>([]);
   const [activeExamId, setActiveExamId] = useState<number | null>(null);
@@ -1408,7 +1408,6 @@ export default function ModeratorComposerFormPage() {
                     />
                   </div>
 
-
                   {config.type === "Trắc nghiệm (Multiple Choice)" ? (
                     <div className="mt-4 space-y-3">
                       <span className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Phương án trả lời</span>
@@ -1567,7 +1566,6 @@ export default function ModeratorComposerFormPage() {
                               dangerouslySetInnerHTML={{ __html: question.content }}
                             />
                           </div>
-
 
                           {question.type === "Trắc nghiệm (Multiple Choice)" && question.options ? (
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

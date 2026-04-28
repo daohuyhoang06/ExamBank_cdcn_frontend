@@ -368,6 +368,23 @@ const Examreview = () => {
     navigate('/user/exambank');
   };
 
+  const handleExit = () => {
+    navigate('/user/online-exam', { replace: true });
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      navigate('/user/online-exam', { replace: true });
+    };
+
+    window.history.pushState({ examReviewBackGuard: true }, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
+
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans">
       <main className="mx-auto flex w-full max-w-[1400px] overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-xl">
@@ -379,13 +396,21 @@ const Examreview = () => {
               </h1>
               <p className="mt-1 text-sm text-slate-400">Hoàn thành lúc: {formatDateTime(submittedAt)}</p>
             </div>
-            <button
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold transition-all hover:bg-blue-700"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Làm lại bài
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleExit}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-700 px-6 py-2 text-sm font-bold transition-all hover:bg-slate-600"
+              >
+                Thoát
+              </button>
+              <button
+                onClick={handleRetry}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold transition-all hover:bg-blue-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Làm lại bài
+              </button>
+            </div>
           </header>
 
           {(isLoadingResult || resultError) && (

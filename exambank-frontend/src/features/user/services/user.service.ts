@@ -203,6 +203,17 @@ type BackendUser = {
   createdAt?: string;
 };
 
+type BackendSelfUser = {
+  id?: number;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+  avatar?: string;
+  imageUrl?: string;
+  photoUrl?: string;
+  profileImageUrl?: string;
+};
+
 const isPublishedExamStatus = (status?: string): boolean => {
   return (status ?? "").trim().toUpperCase() === "PUBLISHED";
 };
@@ -355,7 +366,9 @@ const resolveBackendExamSubjectName = (item: BackendExam): string | undefined =>
   );
 };
 
-const resolveBackendAvatarUrl = (user: BackendUser): string | undefined => {
+const resolveBackendAvatarUrl = (
+  user: Pick<BackendUser, "avatarUrl" | "avatar" | "imageUrl" | "photoUrl" | "profileImageUrl">,
+): string | undefined => {
   return (
     toNonEmptyString(user.avatarUrl) ??
     toNonEmptyString(user.avatar) ??
@@ -426,6 +439,46 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     createdAt: undefined,
   };
 };
+
+const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => {
+  const storedFallback = mapStoredAuthUserToProfile();
+  const id = selfUser.id ?? storedFallback?.id ?? 0;
+  const email = toNonEmptyString(selfUser.email) ?? storedFallback?.email ?? "";
+  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "Nguoi dung");
+  const roles = storedFallback?.roles?.length ? storedFallback.roles : ["USER"];
+
+  return {
+    id,
+    name,
+    email,
+    username: deriveUsername(email, id),
+    avatarUrl: resolveBackendAvatarUrl(selfUser) ?? storedFallback?.avatarUrl,
+    roles,
+    status: storedFallback?.status ?? "ACTIVE",
+    phone: storedFallback?.phone,
+    birthDate: storedFallback?.birthDate,
+    xp: storedFallback?.xp ?? 0,
+    coinBalance: storedFallback?.coinBalance ?? 0,
+    streak: storedFallback?.streak ?? 0,
+    createdAt: storedFallback?.createdAt,
+  };
+};
+
+const getHttpStatus = (error: unknown): number | undefined => {
+  if (isAxiosError(error)) {
+    const status = error.response?.status ?? error.status;
+    return typeof status === "number" ? status : undefined;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const status = (error as { response?: { status?: unknown } }).response?.status;
+    return typeof status === "number" ? status : undefined;
+  }
+
+  return undefined;
+};
+
+const isLegacyMeFallbackStatus = (status?: number): boolean => status === 404 || status === 405;
 
 const toRelativeTime = (isoDate?: string): string => {
   if (!isoDate) {
@@ -750,26 +803,6 @@ const upsertStoredSubmission = (summary: DocumentSummary): void => {
   saveStoredSubmissions(next);
 };
 
-const syncStoredSubmissionsWithApproved = (approvedSummaries: DocumentSummary[]): BackendDocument[] => {
-  const approvedById = new Map(approvedSummaries.map((item) => [item.id, item]));
-  const synced = loadStoredSubmissions().map((item) => {
-    const approved = approvedById.get(item.id);
-    if (!approved) {
-      return item;
-    }
-
-    return {
-      ...item,
-      ...toStoredBackendDocument(approved),
-      status: "APPROVED",
-      moderatorNote: approved.moderatorNote,
-    };
-  });
-
-  saveStoredSubmissions(synced);
-  return synced;
-};
-
 const normalizeSortByValue = (value: string): string => {
   const normalized = value.trim().toUpperCase();
   if (normalized === "MOST_DOWNLOADED") {
@@ -934,21 +967,32 @@ export const userService = {
   },
 
   getSubjects: async (): Promise<Subject[]> => {
+    const supplementalSubjects: Subject[] = [
+      "Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n",
+      "C\u00f4ng ngh\u1ec7",
+      "Qu\u1ed1c ph\u00f2ng an ninh",
+      "Khoa h\u1ecdc t\u1ef1 nhi\u00ean",
+      "Khoa h\u1ecdc x\u00e3 h\u1ed9i",
+    ];
+    const allSubjectsOption = "Tất cả môn học";
+    const normalizeSubjectKey = (value: string): string => value.trim().toLowerCase();
+    const mergeSubjects = (dynamicSubjects: string[]): Subject[] => {
+      const merged = [...DEFAULT_SUBJECTS, ...supplementalSubjects, ...dynamicSubjects]
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+      const deduped = Array.from(new Map(merged.map((item) => [normalizeSubjectKey(item), item])).values());
+      return [allSubjectsOption, ...deduped];
+    };
+
     try {
       const { data } = await api.get<BackendSubject[]>("/api/subjects");
       const names = data
         .map((item) => item.name)
         .filter((item) => item.trim().length > 0)
         .map((item) => item.trim());
-
-      const unique = Array.from(new Set(names));
-      if (unique.length === 0) {
-        return ["Tất cả môn học", ...DEFAULT_SUBJECTS];
-      }
-
-      return ["Tất cả môn học", ...unique];
+      return mergeSubjects(names);
     } catch {
-      return ["Tất cả môn học", ...DEFAULT_SUBJECTS];
+      return mergeSubjects([]);
     }
   },
 
@@ -1022,35 +1066,18 @@ export const userService = {
           .map(mapDocumentToSummary)
           .map(mapDocumentToSubmission);
       } catch {
-        // Fallback for older backend versions that do not expose current-user documents yet.
+        return loadStoredSubmissions()
+          .sort((left, right) => {
+            const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : left.createdAt ? new Date(left.createdAt).getTime() : 0;
+            const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : right.createdAt ? new Date(right.createdAt).getTime() : 0;
+            if (leftTime !== rightTime) {
+              return rightTime - leftTime;
+            }
+            return right.id - left.id;
+          })
+          .map(mapDocumentToSummary)
+          .map(mapDocumentToSubmission);
       }
-
-      let approvedDocuments: DocumentSummary[] = [];
-      try {
-        const { data } = await api.get<BackendDocument[]>("/api/v1/documents", {
-          params: {
-            sortBy: "NEWEST",
-            size: 200,
-          },
-        });
-        approvedDocuments = data.map(mapDocumentToSummary);
-      } catch {
-        approvedDocuments = [];
-      }
-
-      const syncedSubmissions = syncStoredSubmissionsWithApproved(approvedDocuments)
-        .sort((left, right) => {
-          const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : left.createdAt ? new Date(left.createdAt).getTime() : 0;
-          const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : right.createdAt ? new Date(right.createdAt).getTime() : 0;
-          if (leftTime !== rightTime) {
-            return rightTime - leftTime;
-          }
-          return right.id - left.id;
-        })
-        .map(mapDocumentToSummary)
-        .map(mapDocumentToSubmission);
-
-      return syncedSubmissions;
     } catch {
       return [];
     }
@@ -1065,6 +1092,14 @@ export const userService = {
       const { data } = await api.get<BackendUser>("/api/v1/users/me");
       return mapBackendUserToProfile(data);
     } catch (error) {
+      const status = getHttpStatus(error);
+      if (isLegacyMeFallbackStatus(status)) {
+        const fallbackProfile = mapStoredAuthUserToProfile();
+        if (fallbackProfile) {
+          return fallbackProfile;
+        }
+      }
+
       const hasToken = Boolean(getStoredAuthToken());
       if (!hasToken) {
         const fallbackProfile = mapStoredAuthUserToProfile();
@@ -1078,15 +1113,27 @@ export const userService = {
   },
 
   updateMyProfile: async (payload: UpdateUserProfilePayload): Promise<UserProfile> => {
-    const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
-    const { data } = await api.put<BackendUser>("/api/v1/users/me", {
-      email: payload.email,
-      name: payload.name,
-      status: payload.status ?? current.status ?? "ACTIVE",
-      phone: payload.phone,
-      birthDate: payload.birthDate,
-    });
-    return mapBackendUserToProfile(data);
+    try {
+      const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
+      const { data } = await api.put<BackendUser>("/api/v1/users/me", {
+        email: payload.email,
+        name: payload.name,
+        status: payload.status ?? current.status ?? "ACTIVE",
+        phone: payload.phone,
+        birthDate: payload.birthDate,
+      });
+      return mapBackendUserToProfile(data);
+    } catch (error) {
+      const status = getHttpStatus(error);
+      if (!isLegacyMeFallbackStatus(status)) {
+        throw error;
+      }
+
+      const { data } = await api.patch<BackendSelfUser>("/api/v1/me/profile", {
+        name: payload.name,
+      });
+      return mapBackendSelfUserToProfile(data);
+    }
   },
 
   updateMyPassword: async (payload: ChangePasswordPayload): Promise<void> => {
@@ -1094,30 +1141,60 @@ export const userService = {
       throw new Error("Mat khau moi phai co it nhat 8 ky tu.");
     }
 
-    await api.put("/api/v1/users/me/password", {
-      currentPassword: payload.currentPassword,
-      newPassword: payload.newPassword,
-      confirmPassword: payload.confirmPassword,
-    });
+    try {
+      await api.put("/api/v1/users/me/password", {
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+        confirmPassword: payload.confirmPassword,
+      });
+    } catch (error) {
+      const status = getHttpStatus(error);
+      if (!isLegacyMeFallbackStatus(status)) {
+        throw error;
+      }
+
+      await api.post("/api/v1/me/change-password", {
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+        confirmNewPassword: payload.confirmPassword,
+      });
+    }
   },
 
   updateMyStatus: async (status: AccountStatus): Promise<UserProfile> => {
-    const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
-    const { data } = await api.put<BackendUser>("/api/v1/users/me", {
-      email: current.email,
-      name: current.name,
-      status,
-    });
-    return mapBackendUserToProfile(data);
+    try {
+      const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
+      const { data } = await api.put<BackendUser>("/api/v1/users/me", {
+        email: current.email,
+        name: current.name,
+        status,
+      });
+      return mapBackendUserToProfile(data);
+    } catch (error) {
+      const responseStatus = getHttpStatus(error);
+      if (isLegacyMeFallbackStatus(responseStatus)) {
+        throw new Error("Backend hien tai chua ho tro cap nhat trang thai tai khoan qua endpoint profile.");
+      }
+      throw error;
+    }
   },
 
   uploadMyAvatar: async (file: File): Promise<UserProfile> => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const { data } = await api.put<BackendUser>("/api/v1/users/me/avatar", formData);
+    try {
+      const { data } = await api.put<BackendUser>("/api/v1/users/me/avatar", formData);
+      return mapBackendUserToProfile(data);
+    } catch (error) {
+      const status = getHttpStatus(error);
+      if (!isLegacyMeFallbackStatus(status)) {
+        throw error;
+      }
 
-    return mapBackendUserToProfile(data);
+      const { data } = await api.post<BackendSelfUser>("/api/v1/me/avatar", formData);
+      return mapBackendSelfUserToProfile(data);
+    }
   },
 
   getDocuments: async (params?: Record<string, string | number | undefined>): Promise<DocumentSummary[]> => {
@@ -1244,14 +1321,31 @@ export const examService = {
 
   getAllExams: async (): Promise<ExamListItem[]> => {
     try {
-      const { data } = await api.get<BackendExam[]>("/api/exams");
-      return data
+      const [{ data: exams }, subjectsResponse] = await Promise.all([
+        api.get<BackendExam[]>("/api/exams"),
+        api.get<BackendSubject[]>("/api/subjects").catch(() => null),
+      ]);
+
+      const subjectNameById = new Map<number, string>();
+      for (const subject of subjectsResponse?.data ?? []) {
+        const normalizedName = subject.name?.trim();
+        if (!normalizedName) {
+          continue;
+        }
+        subjectNameById.set(subject.id, normalizedName);
+      }
+
+      return exams
         .filter((item) => isPublishedExamStatus(item.status))
         .map((item) => ({
           id: item.id,
           title: item.title,
           subjectId: item.subjectId,
-          subjectName: resolveBackendExamSubjectName(item),
+          subjectName:
+            resolveBackendExamSubjectName(item) ??
+            (item.subjectId !== null && item.subjectId !== undefined
+              ? subjectNameById.get(item.subjectId)
+              : undefined),
           className: item.className ?? item.classLevel ?? item.grade,
           educationLevelName: item.educationLevelName,
           durationMinutes: item.durationMinutes,
@@ -1318,3 +1412,4 @@ export const examService = {
     }
   },
 };
+

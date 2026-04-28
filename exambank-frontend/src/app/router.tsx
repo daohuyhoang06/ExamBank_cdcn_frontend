@@ -28,6 +28,7 @@ import ModeratorComposerPage from "@/features/moderator/pages/moderator-composer
 import ModeratorComposerFormPage from "@/features/moderator/pages/moderator-composer-form-page";
 import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
 import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
+import ModeratorExamSessionManagementPage from "@/features/moderator/pages/moderator-exam-session-management-page";
 
 
 
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
       { path: "composer/form", element: <ModeratorComposerFormPage /> },
       { path: "editorial", element: <ModeratorEditorialPage /> },
       { path: "submit-review", element: <ModeratorSubmitReviewPage /> },
+      { path: "exam-sessions", element: <ModeratorExamSessionManagementPage /> },
     ],
   },
 

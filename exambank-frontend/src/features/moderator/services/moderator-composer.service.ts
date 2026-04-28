@@ -315,6 +315,13 @@ export async function listComposerExams(): Promise<ComposerExamRecord[]> {
     .filter((item): item is ComposerExamRecord => Boolean(item));
 }
 
+export async function listComposerOwnedExams(): Promise<ComposerExamRecord[]> {
+  const response = await apiClient.get(`${EXAMS_PATH}/mine`, buildAuthConfig());
+  return extractArray(response.data)
+    .map(normalizeExam)
+    .filter((item): item is ComposerExamRecord => Boolean(item));
+}
+
 export async function getComposerExamById(examId: number): Promise<ComposerExamRecord> {
   const response = await apiClient.get(`${EXAMS_PATH}/${examId}`, buildAuthConfig());
   return ensureExam(response.data);

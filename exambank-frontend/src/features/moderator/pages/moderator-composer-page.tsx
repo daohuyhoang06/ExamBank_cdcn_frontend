@@ -22,7 +22,7 @@ import {
   createComposerQuestion,
   createComposerSubject,
   deleteComposerExam,
-  listComposerExams,
+  listComposerOwnedExams,
   listComposerQuestions,
   listComposerSubjects,
   updateComposerExam,
@@ -580,7 +580,7 @@ export default function ModeratorComposerPage() {
 
     try {
       const [exams, questions, subjects] = await Promise.all([
-        listComposerExams(),
+        listComposerOwnedExams(),
         listComposerQuestions(),
         listComposerSubjects(),
       ]);

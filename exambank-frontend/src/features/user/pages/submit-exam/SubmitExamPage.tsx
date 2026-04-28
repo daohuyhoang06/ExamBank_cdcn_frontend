@@ -25,22 +25,27 @@ const normalizeText = (value?: string): string =>
     .trim();
 
 const SUBJECT_DISPLAY_MAP: Record<string, string> = {
-  'toan hoc': 'Toán học',
-  toan: 'Toán học',
-  'vat ly': 'Vật lý',
-  ly: 'Vật lý',
-  'hoa hoc': 'Hóa học',
-  hoa: 'Hóa học',
-  'sinh hoc': 'Sinh học',
-  sinh: 'Sinh học',
-  'ngu van': 'Ngữ văn',
-  van: 'Ngữ văn',
-  'tieng anh': 'Tiếng Anh',
-  anh: 'Tiếng Anh',
-  'lich su': 'Lịch sử',
-  'dia ly': 'Địa lý',
-  'tin hoc': 'Tin học',
-  gdcd: 'Giáo dục công dân',
+  'toan hoc': 'To\u00e1n h\u1ecdc',
+  toan: 'To\u00e1n h\u1ecdc',
+  'vat ly': 'V\u1eadt l\u00fd',
+  ly: 'V\u1eadt l\u00fd',
+  'hoa hoc': 'H\u00f3a h\u1ecdc',
+  hoa: 'H\u00f3a h\u1ecdc',
+  'sinh hoc': 'Sinh h\u1ecdc',
+  sinh: 'Sinh h\u1ecdc',
+  'ngu van': 'Ng\u1eef v\u0103n',
+  van: 'Ng\u1eef v\u0103n',
+  'tieng anh': 'Ti\u1ebfng Anh',
+  anh: 'Ti\u1ebfng Anh',
+  'lich su': 'L\u1ecbch s\u1eed',
+  'dia ly': '\u0110\u1ecba l\u00fd',
+  'tin hoc': 'Tin h\u1ecdc',
+  gdcd: 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'giao duc cong dan': 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'cong nghe': 'C\u00f4ng ngh\u1ec7',
+  'quoc phong an ninh': 'Qu\u1ed1c ph\u00f2ng an ninh',
+  'khoa hoc tu nhien': 'Khoa h\u1ecdc t\u1ef1 nhi\u00ean',
+  'khoa hoc xa hoi': 'Khoa h\u1ecdc x\u00e3 h\u1ed9i',
 };
 
 const toTitleCase = (text: string): string =>
@@ -440,3 +445,4 @@ export default function SubmitExamPage() {
     </div>
   );
 }
+
