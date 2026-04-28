@@ -106,8 +106,8 @@ const buildCardAccent = (subject?: string): string => {
   return "from-[#2f3a46] via-[#3f4d5c] to-[#56677a]";
 };
 
-const resolveExamCardImage = (exam: ExamListItem, index: number): string => {
-  const normalizedSubject = normalizeSearchText(exam.subjectName);
+const resolveExamCardImage = (subjectName: string | undefined, index: number): string => {
+  const normalizedSubject = normalizeSearchText(subjectName);
   if (normalizedSubject.includes("toan") || normalizedSubject.includes("math")) {
     return "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=1400&q=80";
   }
@@ -295,7 +295,7 @@ export default function OnlineExamPage() {
           </button>
 
           {isSubjectOpen && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl bg-white shadow-lg">
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-xl bg-white shadow-lg">
               {subjectFilterOptions.map((subject) => (
                 <div
                   key={subject}
@@ -335,7 +335,8 @@ export default function OnlineExamPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {paginatedExams.map((exam, index) => {
-              const cardImage = resolveExamCardImage(exam, (safeCurrentPage - 1) * EXAMS_PER_PAGE + index);
+              const subjectLabel = exam.subjectName?.trim() ? exam.subjectName : "Đa môn";
+              const cardImage = resolveExamCardImage(subjectLabel, (safeCurrentPage - 1) * EXAMS_PER_PAGE + index);
               const duration = exam.durationMinutes ?? 30;
 
               return (
@@ -343,7 +344,7 @@ export default function OnlineExamPage() {
                   key={exam.id}
                   className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div className={`relative h-28 bg-gradient-to-br ${buildCardAccent(exam.subjectName)} p-3 text-white`}>
+                  <div className={`relative h-28 bg-gradient-to-br ${buildCardAccent(subjectLabel)} p-3 text-white`}>
                     <img
                       src={cardImage}
                       alt={exam.title}
@@ -354,7 +355,7 @@ export default function OnlineExamPage() {
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
                     <div className="relative flex items-start justify-between gap-3">
                       <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
-                        {exam.subjectName ?? "\u0110a m\u00f4n"}
+                        {subjectLabel}
                       </span>
                       <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
                         {exam.className ?? exam.educationLevelName ?? "T\u1ef1 do"}

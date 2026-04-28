@@ -1,8 +1,7 @@
-﻿import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SubmitReason } from '@/features/user/types/user.type';
-import { useMemo } from 'react';
 import { sanitizeRichHtml } from '@/features/user/utils/rich-text';
 import { useExam } from '../hooks/useExam';
 import ExamHeader from '../components/exam/ExamHeader';
@@ -23,14 +22,73 @@ const Exampage = () => {
     userAnswers,
     setUserAnswers,
     timeLeft,
+    sessionId,
+    isResumedAttempt,
     submitExam,
     isSubmitting,
     submitError,
   } = useExam(examId);
 
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Record<number, boolean>>({});
+  const allowExitRef = useRef(false);
+  const timeoutAutoSubmitRef = useRef(false);
+  const shouldWarnOnExit = Boolean(exam && sessionId !== null && timeLeft > 0 && !isSubmitting);
 
-  const handleSubmit = async (reason: SubmitReason = 'MANUAL') => {
+  useEffect(() => {
+    allowExitRef.current = false;
+    timeoutAutoSubmitRef.current = false;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!shouldWarnOnExit) {
+      return;
+    }
+
+    const warningMessage = 'Bạn đang làm bài thi. Nếu rời trang, bài làm sẽ được giữ lại nếu quay lại trước khi hết giờ.';
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowExitRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = warningMessage;
+      return warningMessage;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [shouldWarnOnExit]);
+
+  useEffect(() => {
+    if (!shouldWarnOnExit) {
+      return;
+    }
+
+    const warningMessage = 'Bạn đang làm bài thi. Bạn có chắc muốn quay lại không?';
+    const handlePopState = () => {
+      if (allowExitRef.current) {
+        return;
+      }
+
+      const shouldLeave = window.confirm(warningMessage);
+      if (shouldLeave) {
+        allowExitRef.current = true;
+        navigate(-1);
+        return;
+      }
+
+      window.history.pushState({ examBackGuard: true }, '', window.location.href);
+    };
+
+    window.history.pushState({ examBackGuard: true }, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate, shouldWarnOnExit]);
+
+  const handleSubmit = useCallback(async (reason: SubmitReason = 'MANUAL') => {
     if (!exam || isSubmitting) {
       return;
     }
@@ -59,12 +117,23 @@ const Exampage = () => {
       // Ignore storage errors and continue navigating with route state.
     }
 
+    allowExitRef.current = true;
     navigate(`/user/exambank/examreview?sessionId=${status.sessionId}&examId=${exam.id}`, {
+      replace: true,
       state: {
         ...reviewSnapshot,
       },
     });
-  };
+  }, [exam, isSubmitting, navigate, submitExam, userAnswers]);
+
+  useEffect(() => {
+    if (!exam || sessionId === null || isSubmitting || timeLeft > 0 || timeoutAutoSubmitRef.current) {
+      return;
+    }
+
+    timeoutAutoSubmitRef.current = true;
+    void handleSubmit('TIMEOUT');
+  }, [exam, handleSubmit, isSubmitting, sessionId, timeLeft]);
 
   const toggleBookmark = () => {
     setBookmarkedQuestions((prev) => ({
@@ -130,9 +199,15 @@ const Exampage = () => {
 
         <div className="flex flex-col gap-8 lg:flex-row">
           <section className="flex-1 space-y-6">
+            {isResumedAttempt ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+                Đã khôi phục bài làm trước đó của bạn vì phiên thi vẫn còn thời gian.
+              </div>
+            ) : null}
+
             {timeLeft === 0 && !isSubmitting ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-                Đã hết thời gian làm bài. Hệ thống sẽ không tự nộp, bạn hãy bấm "Nộp bài" khi sẵn sàng.
+                Đã hết thời gian làm bài. Hệ thống đang tự nộp bài của bạn.
               </div>
             ) : null}
 

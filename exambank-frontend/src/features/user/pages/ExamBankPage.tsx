@@ -72,6 +72,11 @@ const SUBJECT_DISPLAY_MAP: Record<string, string> = {
   'dia ly': '\u0110\u1ecba l\u00fd',
   'tin hoc': 'Tin h\u1ecdc',
   gdcd: 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'giao duc cong dan': 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'cong nghe': 'C\u00f4ng ngh\u1ec7',
+  'quoc phong an ninh': 'Qu\u1ed1c ph\u00f2ng an ninh',
+  'khoa hoc tu nhien': 'Khoa h\u1ecdc t\u1ef1 nhi\u00ean',
+  'khoa hoc xa hoi': 'Khoa h\u1ecdc x\u00e3 h\u1ed9i',
 };
 
 const toTitleCase = (text: string): string =>
@@ -295,7 +300,7 @@ export default function ExamBankPage() {
           </button>
 
           {isSubjectOpen && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg z-50">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg max-h-80 overflow-y-auto z-50">
               {[ALL_SUBJECTS, ...subjects].map((subject) => (
                 <div
                   key={subject}
