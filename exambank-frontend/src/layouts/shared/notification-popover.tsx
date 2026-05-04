@@ -4,6 +4,7 @@ export type NotificationType = "moderation" | "financial" | "system" | "communit
 
 export type NotificationItem = {
   id: string;
+  notificationId?: number;
   title: string;
   description: string;
   time: string;
@@ -56,18 +57,18 @@ export function NotificationPopover({
   onViewAll,
 }: Props) {
   return (
-    <div className="absolute bottom-12 right-0 z-30 w-[22rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]">
+    <div className="absolute bottom-12 left-full z-30 ml-3 w-[22rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
         <h3 className="text-sm font-semibold text-[var(--brand-700)]">
-          ThÃƒÂ´ng bÃƒÂ¡o
+          Thông báo
         </h3>
 
         <button
           onClick={onMarkAllAsRead}
           className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800"
         >
-          Ã„ÂÃƒÂ¡nh dÃ¡ÂºÂ¥u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã¡Â»Âc
+          Đánh dấu đã đọc
         </button>
       </div>
 
@@ -76,10 +77,10 @@ export function NotificationPopover({
         {items.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <p className="text-sm font-medium text-[var(--ink-700)]">
-              ChÃ†Â°a cÃƒÂ³ thÃƒÂ´ng bÃƒÂ¡o
+              Chưa có thông báo
             </p>
             <p className="mt-1 text-xs text-[var(--ink-500)]">
-              CÃƒÂ¡c cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t mÃ¡Â»â€ºi sÃ¡ÂºÂ½ hiÃ¡Â»Æ’n thÃ¡Â»â€¹ tÃ¡ÂºÂ¡i Ã„â€˜ÃƒÂ¢y
+              Các cập nhật mới sẽ hiển thị tại đây
             </p>
           </div>
         ) : (
@@ -139,7 +140,7 @@ export function NotificationPopover({
           onClick={onViewAll}
           className="w-full rounded-lg bg-[var(--brand-700)] px-3 py-2 text-xs font-semibold text-white hover:brightness-110"
         >
-          Xem tÃ¡ÂºÂ¥t cÃ¡ÂºÂ£
+          Xem tất cả
         </button>
       </div>
     </div>
