@@ -1,4 +1,6 @@
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirm, alert as showAlert } from "@/lib/dialog";
+import { useToast } from "@/components/ui/Toast/toast-system";
 import { useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import {
@@ -457,21 +459,10 @@ function buildExamUpdatePayload(
 
 export default function ModeratorComposerPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [overviewStatus, setOverviewStatus] = useState<OverviewFilterStatus>("ALL");
   const [overviewSubject, setOverviewSubject] = useState<OverviewFilterSubject>("Tất cả môn học");
   const [overviewExamRows, setOverviewExamRows] = useState<OverviewExamRow[]>([]);
-  const [flashNotice, setFlashNotice] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    const noticeMessage = window.sessionStorage.getItem(COMPOSER_FLASH_NOTICE_KEY) ?? "";
-    if (noticeMessage) {
-      window.sessionStorage.removeItem(COMPOSER_FLASH_NOTICE_KEY);
-    }
-
-    return noticeMessage;
-  });
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [busyExamId, setBusyExamId] = useState<number | null>(null);
@@ -497,18 +488,23 @@ export default function ModeratorComposerPage() {
   }, [overviewSubject, subjectFilterOptions]);
 
   useEffect(() => {
-    if (!flashNotice) {
+    if (typeof window === "undefined") {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setFlashNotice("");
-    }, 2400);
+    const noticeMessage = window.sessionStorage.getItem(COMPOSER_FLASH_NOTICE_KEY) ?? "";
+    if (!noticeMessage) {
+      return;
+    }
 
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [flashNotice]);
+    window.sessionStorage.removeItem(COMPOSER_FLASH_NOTICE_KEY);
+    toast.success({
+      title: "Hệ thống",
+      message: noticeMessage,
+      duration: 3600,
+      showProgress: true,
+    });
+  }, [toast]);
 
   const filteredOverviewRows = useMemo(() => {
     return overviewExamRows.filter((item) => {
@@ -652,17 +648,22 @@ export default function ModeratorComposerPage() {
   ) {
     const requestPayload = buildExamUpdatePayload(row.source, patch);
     if (!requestPayload) {
-      window.alert("Đề thi này chưa có môn học hợp lệ nên chưa thể cập nhật.");
+      await showAlert("Đề thi này chưa có môn học hợp lệ nên chưa thể cập nhật.");
       return;
     }
 
     setBusyExamId(row.examId);
     try {
       await updateComposerExam(row.examId, requestPayload);
-      setFlashNotice(successMessage);
+      toast.success({
+        title: "Hệ thống",
+        message: successMessage,
+        duration: 3600,
+        showProgress: true,
+      });
       await refreshOverviewData();
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Cập nhật trạng thái đề thi thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Cập nhật trạng thái đề thi thất bại."));
     } finally {
       setBusyExamId(null);
     }
@@ -675,14 +676,20 @@ export default function ModeratorComposerPage() {
     }
 
     if (targetExam.questionCount <= 0) {
-      window.alert(
+      await showAlert(
         `Đề "${targetExam.title}" chưa có câu hỏi trên hệ thống. Vui lòng mở form tạo đề, thêm câu hỏi và bấm "Lưu bản nháp" trước khi xuất bản.`
       );
       return;
     }
 
-    const shouldPublish = window.confirm(
-      `Xuất bản đề "${targetExam.title}" để người dùng có thể truy cập ngay bây giờ?`
+    const shouldPublish = await confirm(
+      `Xuất bản đề "${targetExam.title}" để người dùng có thể truy cập ngay bây giờ?`,
+      {
+        title: "Xuất bản đề thi",
+        type: "info",
+        confirmText: "Xuất bản",
+        cancelText: "Hủy",
+      }
     );
     if (!shouldPublish) {
       return;
@@ -704,8 +711,14 @@ export default function ModeratorComposerPage() {
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `Xóa đề "${targetExam.title}"? Hành động này không thể hoàn tác.`
+    const shouldDelete = await confirm(
+      `Xóa đề "${targetExam.title}"? Hành động này không thể hoàn tác.`,
+      {
+        title: "Xóa đề thi",
+        type: "danger",
+        confirmText: "Xóa",
+        cancelText: "Hủy",
+      }
     );
     if (!shouldDelete) {
       return;
@@ -714,10 +727,15 @@ export default function ModeratorComposerPage() {
     setBusyExamId(examId);
     try {
       await deleteComposerExam(examId);
-      setFlashNotice("Đã xóa đề thi.");
+      toast.success({
+        title: "Hệ thống",
+        message: "Đã xóa đề thi.",
+        duration: 3600,
+        showProgress: true,
+      });
       await refreshOverviewData();
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Xóa đề thi thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Xóa đề thi thất bại."));
     } finally {
       setBusyExamId(null);
     }
@@ -921,15 +939,21 @@ export default function ModeratorComposerPage() {
         setJsonImportUiError(
           `Có ${summary.failedExamCount} đề import lỗi. Chi tiết từ backend:\n${detailLines}${moreLine}`
         );
-        setFlashNotice(
-          `Đã nhập ${summary.importedExamCount} đề (${summary.importedQuestionCount} câu hỏi), ${summary.failedExamCount} đề lỗi.`
-        );
+        toast.warning({
+          title: "Nhập JSON",
+          message: `Đã nhập ${summary.importedExamCount} đề (${summary.importedQuestionCount} câu hỏi), ${summary.failedExamCount} đề lỗi.`,
+          duration: 5200,
+          showProgress: true,
+        });
         return;
       }
 
-      setFlashNotice(
-        `Đã nhập thành công ${summary.importedExamCount} đề và ${summary.importedQuestionCount} câu hỏi từ JSON.`
-      );
+      toast.success({
+        title: "Nhập JSON",
+        message: `Đã nhập thành công ${summary.importedExamCount} đề và ${summary.importedQuestionCount} câu hỏi từ JSON.`,
+        duration: 3800,
+        showProgress: true,
+      });
 
       setIsJsonImportModalOpen(false);
     } catch (error) {
@@ -951,12 +975,6 @@ export default function ModeratorComposerPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7 px-1 pb-20">
-      {flashNotice ? (
-        <div className="fixed right-6 top-24 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-700 shadow-[0_8px_24px_rgba(16,21,38,0.12)]">
-          {flashNotice}
-        </div>
-      ) : null}
-
       <ComposerJsonImportModal
         open={isJsonImportModalOpen}
         isImporting={isImportingJson}

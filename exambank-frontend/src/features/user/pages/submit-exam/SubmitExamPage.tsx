@@ -4,7 +4,6 @@ import {
   FileText, 
   UploadCloud, 
   Search, 
-  CheckCircle2, 
   Trash2,
   Sparkles,
   Info,
@@ -13,9 +12,11 @@ import {
 import type { SelectedFile } from '../../types/user.type';
 import { userService } from '../../services/user.service';
 import { extractApiErrorMessage } from '@/lib/error-utils';
+import { useToast } from '@/components/ui/Toast/toast-system';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
+const SEMESTER_YEAR_OPTIONS = Array.from({ length: 9 }, (_, index) => String(2026 - index));
 
 const normalizeText = (value?: string): string =>
   (value ?? '')
@@ -76,6 +77,7 @@ const Tip: React.FC<{ text: string }> = ({ text }) => (
 
 export default function SubmitExamPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const classOptions = Array.from({ length: 12 }, (_, index) => `L\u1edbp ${index + 1}`);
 
@@ -84,11 +86,9 @@ export default function SubmitExamPage() {
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState('');
-  const [uploadError, setUploadError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
-    semesterYear: '2024',
+    semesterYear: SEMESTER_YEAR_OPTIONS[0],
     type: 'final',
     school: '',
     subject: '',
@@ -118,20 +118,6 @@ export default function SubmitExamPage() {
     void fetchSubjects();
   }, []);
 
-  useEffect(() => {
-    if (!uploadSuccess) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setUploadSuccess('');
-    }, 1000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [uploadSuccess]);
-
   const handleChooseFile = () => {
     fileInputRef.current?.click();
   };
@@ -144,12 +130,22 @@ export default function SubmitExamPage() {
 
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_FILE_EXTENSIONS.includes(extension)) {
-      setUploadError('Định dạng file không hợp lệ. Chỉ hỗ trợ PDF, DOC, DOCX, PNG, JPG, JPEG.');
+      toast.warning({
+        title: 'Định dạng chưa hỗ trợ',
+        message: 'Chỉ hỗ trợ PDF, DOC, DOCX, PNG, JPG, JPEG.',
+        duration: 4200,
+        showProgress: true,
+      });
       return;
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError('File vượt quá 50MB. Vui lòng chọn file nhỏ hơn.');
+      toast.warning({
+        title: 'Kích thước quá lớn',
+        message: 'File vượt quá 50MB. Vui lòng chọn file nhỏ hơn.',
+        duration: 4200,
+        showProgress: true,
+      });
       return;
     }
 
@@ -158,29 +154,41 @@ export default function SubmitExamPage() {
       name: file.name,
       size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
     });
-    setUploadError('');
   };
 
   const handleUpload = async () => {
     if (!formData.title.trim()) {
-      setUploadError('Vui lòng nhập tên đề thi.');
+      toast.warning({
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng nhập tên đề thi.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     if (!formData.subject.trim()) {
-      setUploadError('Vui lòng chọn môn học trước khi gửi đề.');
+      toast.warning({
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng chọn môn học trước khi gửi đề.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     if (!fileToUpload) {
-      setUploadError('Vui lòng chọn file trước khi gửi đề.');
+      toast.warning({
+        title: 'Thiếu tệp đính kèm',
+        message: 'Vui lòng chọn file trước khi gửi đề.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     try {
       setUploading(true);
-      setUploadError('');
-      setUploadSuccess('');
 
       await userService.uploadDocument(
         {
@@ -194,13 +202,27 @@ export default function SubmitExamPage() {
         fileToUpload,
       );
 
-      setUploadSuccess('Bạn đã up đề thành công và chờ duyệt.');
+      toast.success({
+        title: 'Hệ thống',
+        message: 'Đã lưu đề thành công và đang chờ duyệt.',
+        duration: 3800,
+        showProgress: true,
+      });
       setSelectedFile(null);
       setFileToUpload(null);
       setFormData((prev) => ({ ...prev, title: '' }));
     } catch (error) {
       console.error(error);
-      setUploadError(extractUploadErrorMessage(error));
+      toast.error({
+        title: 'Cảnh báo hệ thống',
+        message: extractUploadErrorMessage(error),
+        duration: 6200,
+        showProgress: false,
+        actionText: 'Thử lại',
+        onAction: () => {
+          void handleUpload();
+        },
+      });
     } finally {
       setUploading(false);
     }
@@ -208,24 +230,6 @@ export default function SubmitExamPage() {
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
-      {/* Success Notification Banner */}
-      {uploadSuccess && (
-        <div className="mb-8 flex items-center gap-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl shadow-sm">
-          <div className="flex-shrink-0 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <CheckCircle2 size={22} />
-          </div>
-          <div>
-            <p className="text-emerald-900 font-bold text-sm">{uploadSuccess}</p>
-          </div>
-        </div>
-      )}
-
-      {uploadError && (
-        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-sm font-semibold text-red-700">
-          {uploadError}
-        </div>
-      )}
-
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -262,9 +266,11 @@ export default function SubmitExamPage() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, semesterYear: e.target.value }))}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3.5 focus:bg-white appearance-none outline-none text-sm cursor-pointer transition-all"
                     >
-                      <option value="2024">2024</option>
-                      <option value="2023">2023</option>
-                      <option value="2022">2022</option>
+                      {SEMESTER_YEAR_OPTIONS.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>

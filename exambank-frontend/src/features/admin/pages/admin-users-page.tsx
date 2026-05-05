@@ -4,16 +4,19 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  FilePenLine,
   Filter,
-  MoreVertical,
+  Loader2,
   Plus,
   Search,
   Shield,
+  Trash2,
   TrendingUp,
   UserRound,
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { confirm, alert as showAlert } from "@/lib/dialog";
 import { Button } from "@/components/ui/Button/button";
 import { Input } from "@/components/ui/Input/input";
 import { Modal } from "@/components/ui/Modal/modal";
@@ -49,7 +52,6 @@ type UserRow = {
   idDisplay: string;
   role: "Sinh viên" | "Giảng viên" | "Cộng tác viên" | "Quản trị viên";
   joinedAt: string;
-  lastActive: string;
   status: "Đang hoạt động" | "Chờ duyệt" | "Đã khóa";
 };
 
@@ -237,7 +239,6 @@ function mapUsersToRows(items: AdminUserRecord[]): UserRow[] {
       idDisplay: item.id != null ? `#${item.id}` : "--",
       role: normalizeRole(item.primaryRole, item.roles),
       joinedAt: formatDisplayDate(item.createdAt),
-      lastActive: "--",
       status: normalizeStatus(item.status),
     };
   });
@@ -301,7 +302,6 @@ export default function AdminUsersPage() {
   const [createUserErrors, setCreateUserErrors] = useState<CreateUserFormErrors>({});
   const [createUserSubmitError, setCreateUserSubmitError] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
-  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [isDeletingUserId, setIsDeletingUserId] = useState<string | null>(null);
 
   async function loadUsersPageData() {
@@ -347,12 +347,17 @@ export default function AdminUsersPage() {
       userId: user.id,
     });
     setIsEditMode(true);
-    setActionMenuOpenId(null);
     setIsCreateModalOpen(true);
   }
 
   async function handleDeleteUser(userId: string | number) {
-    if (!window.confirm("Bạn có chắc muốn xóa người dùng này?")) {
+    const confirmed = await confirm("Bạn có chắc muốn xóa người dùng này?", {
+      title: "Xóa người dùng",
+      type: "danger",
+      confirmText: "Xóa",
+      cancelText: "Hủy",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -360,17 +365,12 @@ export default function AdminUsersPage() {
     try {
       await deleteAdminUser(userId);
       await loadUsersPageData();
-      setActionMenuOpenId(null);
     } catch (error) {
       const errorMsg = getApiErrorMessage(error);
-      alert(`Lỗi xóa người dùng: ${errorMsg}`);
+      await showAlert(`Lỗi xóa người dùng: ${errorMsg}`);
     } finally {
       setIsDeletingUserId(null);
     }
-  }
-
-  function toggleActionMenu(userId: string) {
-    setActionMenuOpenId(actionMenuOpenId === userId ? null : userId);
   }
 
   useEffect(() => {
@@ -749,7 +749,6 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-4 font-semibold">ID</th>
                 <th className="px-4 py-4 font-semibold">Vai trò</th>
                 <th className="px-4 py-4 font-semibold">Ngày tham gia</th>
-                <th className="px-4 py-4 font-semibold">Hoạt động cuối</th>
                 <th className="px-4 py-4 font-semibold">Trạng thái</th>
                 <th className="px-6 py-4 text-right font-semibold">Thao tác</th>
               </tr>
@@ -757,7 +756,7 @@ export default function AdminUsersPage() {
             <tbody>
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td className="px-6 py-10 text-center text-sm text-[var(--ink-500)]" colSpan={7}>
+                  <td className="px-6 py-10 text-center text-sm text-[var(--ink-500)]" colSpan={6}>
                     {userRows.length === 0
                       ? "Chưa có dữ liệu người dùng."
                       : "Không có người dùng phù hợp bộ lọc hiện tại."}
@@ -796,9 +795,6 @@ export default function AdminUsersPage() {
                       <td className="px-4 py-4 text-sm text-[var(--ink-600)]">
                         {user.joinedAt}
                       </td>
-                      <td className="px-4 py-4 text-sm text-[var(--ink-600)]">
-                        {user.lastActive}
-                      </td>
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full ${status.dot}`} />
@@ -808,60 +804,48 @@ export default function AdminUsersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="relative">
+                        <div className="inline-flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)]"
-                            onClick={() => toggleActionMenu(String(user.userId ?? user.idDisplay))}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--brand-700)]"
+                            onClick={() =>
+                              openEditUserModal({
+                                id: user.userId,
+                                name: user.name,
+                                email: user.email,
+                                primaryRole:
+                                  user.role === "Quản trị viên"
+                                    ? "ADMIN"
+                                    : user.role === "Cộng tác viên"
+                                      ? "MODERATOR"
+                                      : "USER",
+                                status:
+                                  user.status === "Đang hoạt động"
+                                    ? "ACTIVE"
+                                    : user.status === "Đã khóa"
+                                      ? "BANNED"
+                                      : "INACTIVE",
+                              })
+                            }
+                            title="Chỉnh sửa người dùng"
+                            aria-label="Chỉnh sửa người dùng"
                           >
-                            <MoreVertical size={16} />
+                            <FilePenLine size={16} />
                           </button>
-                          {actionMenuOpenId === String(user.userId ?? user.idDisplay) && (
-                            <div className="absolute right-0 top-full mt-1 z-10 rounded-lg border border-[var(--line-soft)] bg-white shadow-lg">
-                              <button
-                                type="button"
-                                className="block w-full px-4 py-2 text-left text-sm text-[var(--ink-700)] hover:bg-[var(--bg-soft)] first:rounded-t-lg"
-                                onClick={() =>
-                                  openEditUserModal({
-                                    id: user.userId,
-                                    name: user.name,
-                                    email: user.email,
-                                    primaryRole:
-                                      user.role === "Quản trị viên"
-                                        ? "ADMIN"
-                                        : user.role === "Cộng tác viên"
-                                          ? "MODERATOR"
-                                          : "USER",
-                                    status:
-                                      user.status === "Đang hoạt động"
-                                        ? "ACTIVE"
-                                        : user.status === "Đã khóa"
-                                          ? "BANNED"
-                                          : "INACTIVE",
-                                  })
-                                }
-                              >
-                                Chỉnh sửa
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-4 py-2 text-left text-sm text-rose-700 hover:bg-rose-50"
-                                onClick={() => handleDeleteUser(user.userId ?? user.idDisplay)}
-                                disabled={isDeletingUserId === String(user.userId ?? user.idDisplay)}
-                              >
-                                {isDeletingUserId === String(user.userId ?? user.idDisplay)
-                                  ? "Đang xóa..."
-                                  : "Xóa"}
-                              </button>
-                              <button
-                                type="button"
-                                className="block w-full px-4 py-2 text-left text-sm text-[var(--ink-700)] hover:bg-[var(--bg-soft)] last:rounded-b-lg"
-                                onClick={() => setActionMenuOpenId(null)}
-                              >
-                                Đóng
-                              </button>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => handleDeleteUser(user.userId ?? user.idDisplay)}
+                            disabled={isDeletingUserId === String(user.userId ?? user.idDisplay)}
+                            title="Xóa người dùng"
+                            aria-label="Xóa người dùng"
+                          >
+                            {isDeletingUserId === String(user.userId ?? user.idDisplay) ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>

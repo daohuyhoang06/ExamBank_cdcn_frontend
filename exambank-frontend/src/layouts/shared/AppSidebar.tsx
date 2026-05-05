@@ -1,48 +1,239 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Bell, Building2, ChevronLeft, ChevronRight, Headset, LogOut, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { NotificationPopover } from './notification-popover';
-import type { NotificationItem } from './notification-popover';
+import type { NotificationItem, NotificationType } from './notification-popover';
 import { AUTH_USER_UPDATED_EVENT, clearStoredAuthUser, getStoredAuthUser } from '@/features/auth/services/auth.service';
-import { setAuthToken } from '@/lib/api-client';
+import { getStoredAuthToken, setAuthToken } from '@/lib/api-client';
+import {
+  getUnreadNotificationCount,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationView,
+} from '@/features/system/services/notification.service';
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    title: '3 new exams in your queue',
-    description:
-      'Advanced Calculus and Quantum Physics modules require your immediate academic verification.',
-    time: '2 minutes ago',
-    type: 'moderation',
-    unread: true,
-  },
-  {
-    id: 'notif-2',
-    title: 'You earned 50 credits for a top-rated exam',
-    description:
-      "Your 'Late Renaissance History' exam has been rated 5 stars by 12 students this week.",
-    time: '1 hour ago',
-    type: 'financial',
-  },
-  {
-    id: 'notif-3',
-    title: 'New exam version 2.4 released',
-    description:
-      'The grading engine has been optimized for improved LaTeX support in mathematical equations.',
-    time: '4 hours ago',
-    type: 'system',
-  },
-  {
-    id: 'notif-4',
-    title: 'Someone replied to your comment',
-    description:
-      'Professor Higgins mentioned you in the discussion thread about mock exam structure.',
-    time: '1 day ago',
-    type: 'community',
-  },
-];
+const NOTIFICATIONS_PAGE_SIZE = 20;
+
+const normalizeRoles = (user: { role?: string; roles?: string[] } | null): string[] => {
+  return [user?.role, ...(user?.roles ?? [])]
+    .filter((role): role is string => Boolean(role))
+    .map((role) => role.toUpperCase().replace('ROLE_', ''));
+};
+
+const normalizeNotificationType = (value?: string | null): string => {
+  return (value ?? '').trim().toUpperCase();
+};
+
+const extractQuotedTitle = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/'([^']+)'/);
+  return match ? match[1].trim() : null;
+};
+
+const extractNote = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/note:\s*(.+)$/i);
+  return match ? match[1].trim() : null;
+};
+
+const mapNotificationCategory = (type?: string | null): NotificationType => {
+  const normalized = normalizeNotificationType(type);
+  if (
+    normalized === 'DOC_APPROVED' ||
+    normalized === 'DOC_REJECTED' ||
+    normalized === 'DOC_SUBMITTED_FOR_REVIEW' ||
+    normalized === 'REPORT_HANDLED'
+  ) {
+    return 'moderation';
+  }
+  if (normalized === 'COIN_EARNED') {
+    return 'financial';
+  }
+  if (normalized === 'DISCUSSION_ACTIVITY') {
+    return 'community';
+  }
+  return 'system';
+};
+
+const formatRelativeTime = (isoDate?: string | null): string => {
+  if (!isoDate) {
+    return 'Vừa xong';
+  }
+
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return 'Vừa xong';
+  }
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) {
+    return 'Vừa xong';
+  }
+  if (diffMins < 60) {
+    return `${diffMins} phút trước`;
+  }
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) {
+    return `${diffHours} giờ trước`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} ngày trước`;
+};
+
+const localizeNotificationContent = (
+  notification: NotificationView
+): { title: string; description: string } => {
+  const type = normalizeNotificationType(notification.type);
+  const rawTitle = (notification.title ?? '').trim();
+  const rawMessage = (notification.message ?? '').trim();
+  const docTitle = extractQuotedTitle(rawMessage) ?? extractQuotedTitle(rawTitle);
+  const note = extractNote(rawMessage);
+
+  if (type === 'DOC_APPROVED') {
+    return {
+      title: 'Tài liệu được duyệt',
+      description: docTitle
+        ? `Tài liệu '${docTitle}' đã được duyệt.`
+        : 'Tài liệu của bạn đã được duyệt.',
+    };
+  }
+
+  if (type === 'DOC_REJECTED') {
+    const base = docTitle
+      ? `Tài liệu '${docTitle}' đã bị từ chối.`
+      : 'Tài liệu của bạn đã bị từ chối.';
+    return {
+      title: 'Tài liệu bị từ chối',
+      description: note ? `${base} Ghi chú: ${note}` : base,
+    };
+  }
+
+  if (type === 'DOC_SUBMITTED_FOR_REVIEW') {
+    return {
+      title: 'Tài liệu chờ duyệt',
+      description: docTitle
+        ? `Tài liệu mới '${docTitle}' đang chờ duyệt.`
+        : 'Có tài liệu mới đang chờ duyệt.',
+    };
+  }
+
+  if (type === 'DISCUSSION_ACTIVITY') {
+    const normalized = rawMessage.toLowerCase();
+    let description = rawMessage;
+    if (!description) {
+      description = 'Có cập nhật mới trong thảo luận.';
+    } else if (normalized.includes('moderation visibility') || normalized.includes('discussion thread')) {
+      description = 'Có thảo luận mới cần theo dõi.';
+    } else if (normalized.includes('new reply') || normalized.includes('reply')) {
+      description = 'Thảo luận của bạn có phản hồi mới.';
+    }
+
+    return {
+      title: 'Hoạt động thảo luận',
+      description,
+    };
+  }
+
+  if (type === 'COIN_EARNED') {
+    return {
+      title: 'Xu thưởng',
+      description: rawMessage || 'Bạn vừa nhận được xu thưởng.',
+    };
+  }
+
+  if (type === 'SCORE_UPDATED') {
+    return {
+      title: 'Cập nhật điểm',
+      description: rawMessage || 'Điểm của bạn đã được cập nhật.',
+    };
+  }
+
+  if (type === 'REPORT_HANDLED') {
+    return {
+      title: 'Báo cáo đã xử lý',
+      description: docTitle
+        ? `Báo cáo về tài liệu '${docTitle}' đã được xử lý.`
+        : 'Báo cáo của bạn đã được xử lý.',
+    };
+  }
+
+  if (type === 'SR_REMINDER') {
+    return {
+      title: 'Nhắc nhở',
+      description: rawMessage || 'Bạn có một nhắc nhở mới.',
+    };
+  }
+
+  return {
+    title: rawTitle || 'Thông báo',
+    description: rawMessage || 'Bạn có một thông báo mới.',
+  };
+};
+
+const buildNotificationHref = (
+  notification: NotificationView,
+  roles: string[]
+): string | undefined => {
+  const normalizedTarget = normalizeNotificationType(notification.targetType);
+  const normalizedType = normalizeNotificationType(notification.type);
+  const isAdmin = roles.includes('ADMIN');
+  const isModerator = roles.includes('MODERATOR');
+
+  if (normalizedTarget === 'DOCUMENT') {
+    if (isAdmin) {
+      return '/admin/content';
+    }
+    if (isModerator) {
+      return '/moderator/queue';
+    }
+    return '/user/exambank';
+  }
+
+  if (normalizedTarget === 'DISCUSSION') {
+    if (notification.targetId) {
+      return `/user/comment/${notification.targetId}`;
+    }
+    return '/user/comment';
+  }
+
+  if (normalizedType === 'COIN_EARNED') {
+    return isAdmin ? '/admin/financial' : '/user/profile';
+  }
+
+  if (normalizedType === 'SCORE_UPDATED') {
+    return '/user/online-exam';
+  }
+
+  return undefined;
+};
+
+const toNotificationItem = (
+  notification: NotificationView,
+  roles: string[]
+): NotificationItem => {
+  const content = localizeNotificationContent(notification);
+
+  return {
+    id: String(notification.id),
+    notificationId: notification.id,
+    title: content.title,
+    description: content.description,
+    time: formatRelativeTime(notification.createdAt),
+    type: mapNotificationCategory(notification.type),
+    unread: !notification.read,
+    href: buildNotificationHref(notification, roles),
+  };
+};
 
 export type SidebarNavItem = {
   label: string;
@@ -67,9 +258,13 @@ export function AppSidebar({
   const navigate = useNavigate();
   const { isCollapsed, toggleSidebar } = useSidebar();
   const isExpanded = !isCollapsed;
+  const isNotificationOverride = notificationItemsProp !== undefined;
 
   const [notificationItems, setNotificationItems] = useState<NotificationItem[]>(
-    notificationItemsProp ?? initialNotifications
+    notificationItemsProp ?? []
+  );
+  const [unreadCount, setUnreadCount] = useState(() =>
+    (notificationItemsProp ?? []).filter((item) => item.unread).length
   );
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
@@ -98,8 +293,37 @@ export function AppSidebar({
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const unreadCount = notificationItems.filter((item) => item.unread).length;
   const avatarInitial = (currentUserDisplayName.trim().charAt(0) || 'A').toUpperCase();
+
+  const refreshNotifications = useCallback(async () => {
+    if (isNotificationOverride) {
+      return;
+    }
+
+    if (!getStoredAuthToken()) {
+      setNotificationItems([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    const roles = normalizeRoles(getStoredAuthUser() as { role?: string; roles?: string[] } | null);
+    const [listResult, countResult] = await Promise.allSettled([
+      listNotifications({ page: 0, size: NOTIFICATIONS_PAGE_SIZE }),
+      getUnreadNotificationCount(),
+    ]);
+
+    if (listResult.status === 'fulfilled') {
+      const items = listResult.value.items.map((item) => toNotificationItem(item, roles));
+      setNotificationItems(items);
+      if (countResult.status !== 'fulfilled') {
+        setUnreadCount(items.filter((item) => item.unread).length);
+      }
+    }
+
+    if (countResult.status === 'fulfilled') {
+      setUnreadCount(countResult.value);
+    }
+  }, [isNotificationOverride]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -122,6 +346,22 @@ export function AppSidebar({
   }, []);
 
   useEffect(() => {
+    if (isNotificationOverride) {
+      setNotificationItems(notificationItemsProp ?? []);
+      setUnreadCount((notificationItemsProp ?? []).filter((item) => item.unread).length);
+      return;
+    }
+
+    void refreshNotifications();
+  }, [isNotificationOverride, notificationItemsProp, refreshNotifications]);
+
+  useEffect(() => {
+    if (isNotificationOpen) {
+      void refreshNotifications();
+    }
+  }, [isNotificationOpen, refreshNotifications]);
+
+  useEffect(() => {
     function handleAuthUserUpdated() {
       const fallbackName = 'Nguoi dung';
       const currentUser = getStoredAuthUser() as
@@ -130,18 +370,21 @@ export function AppSidebar({
             name?: string;
             email?: string;
             avatarUrl?: string;
+            role?: string;
+            roles?: string[];
           }
         | null;
 
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
       setCurrentUserAvatarUrl(currentUser?.avatarUrl ?? '');
+      void refreshNotifications();
     }
 
     window.addEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
     return () => {
       window.removeEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
     };
-  }, []);
+  }, [refreshNotifications]);
 
   function handleOpenProfile() {
     if (location.pathname.startsWith('/admin')) {
@@ -167,29 +410,44 @@ export function AppSidebar({
     navigate('/', { replace: true });
   }
 
-  function handleNotificationItemClick(item: NotificationItem) {
-    setNotificationItems((prev) =>
-      prev.map((notification) =>
-        notification.id === item.id ? { ...notification, unread: false } : notification
-      )
-    );
+  async function handleNotificationItemClick(item: NotificationItem) {
+    const shouldMarkRead = Boolean(item.notificationId) && Boolean(item.unread);
+
+    if (item.unread) {
+      setNotificationItems((prev) =>
+        prev.map((notification) =>
+          notification.id === item.id ? { ...notification, unread: false } : notification
+        )
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
 
     setIsNotificationOpen(false);
+
+    if (shouldMarkRead) {
+      try {
+        await markNotificationRead(item.notificationId as number);
+      } catch {
+        // Ignore errors to keep the UI responsive.
+      }
+    }
 
     if (item.href) {
       navigate(item.href);
     }
   }
 
-  function handleViewAllNotifications() {
-    setIsNotificationOpen(false);
+  async function handleMarkAllAsRead() {
+    setNotificationItems((prev) =>
+      prev.map((item) => ({ ...item, unread: false }))
+    );
+    setUnreadCount(0);
 
-    if (location.pathname.startsWith('/admin')) {
-      navigate('/admin/notifications');
-      return;
+    try {
+      await markAllNotificationsRead();
+    } catch {
+      // Ignore errors to keep the UI responsive.
     }
-
-    navigate('/notifications');
   }
 
   const normalizePath = (path: string): string => {
@@ -372,13 +630,8 @@ export function AppSidebar({
             {isNotificationOpen ? (
               <NotificationPopover
                 items={notificationItems}
-                onMarkAllAsRead={() => {
-                  setNotificationItems((prev) =>
-                    prev.map((item) => ({ ...item, unread: false }))
-                  );
-                }}
+                onMarkAllAsRead={handleMarkAllAsRead}
                 onItemClick={handleNotificationItemClick}
-                onViewAll={handleViewAllNotifications}
               />
             ) : null}
           </div>

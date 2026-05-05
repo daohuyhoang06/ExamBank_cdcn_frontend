@@ -12,8 +12,10 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button/button";
+import { alert as showAlert } from "@/lib/dialog";
 import { Input } from "@/components/ui/Input/input";
 import { Modal } from "@/components/ui/Modal/modal";
+import { Popup } from "@/components/ui/Popup/popup";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import {
   ModeratorQueueItemCard,
@@ -245,6 +247,13 @@ export default function ModeratorQueuePage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [quickReason, setQuickReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmDescription, setConfirmDescription] = useState("");
+  const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
+  const [pendingRejectReason, setPendingRejectReason] = useState("");
 
   const [metadataTitle, setMetadataTitle] = useState("");
   const [metadataSchool, setMetadataSchool] = useState("");
@@ -449,7 +458,7 @@ export default function ModeratorQueuePage() {
     }
 
     if (!metadataTitle.trim()) {
-      window.alert("Vui lòng nhập tiêu đề tài liệu.");
+      await showAlert("Vui lòng nhập tiêu đề tài liệu.");
       return;
     }
 
@@ -468,7 +477,7 @@ export default function ModeratorQueuePage() {
 
       await refreshQueue(true);
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Lưu metadata thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Lưu metadata thất bại."));
     } finally {
       setIsMetadataSaving(false);
     }
@@ -481,7 +490,26 @@ export default function ModeratorQueuePage() {
 
     setQuickReason("");
     setRejectReason("");
+    setRejectError("");
     setRejectOpen(true);
+  }
+
+  function openConfirm(action: "approve" | "reject", title: string, description: string) {
+    setConfirmAction(action);
+    setConfirmTitle(title);
+    setConfirmDescription(description);
+    setConfirmOpen(true);
+  }
+
+  function closeConfirm() {
+    const shouldRestoreReject = confirmAction === "reject";
+    setConfirmOpen(false);
+    setConfirmAction(null);
+    setConfirmTitle("");
+    setConfirmDescription("");
+    if (shouldRestoreReject) {
+      setRejectOpen(true);
+    }
   }
 
   async function handleApprove() {
@@ -489,21 +517,7 @@ export default function ModeratorQueuePage() {
       return;
     }
 
-    const shouldApprove = window.confirm(`Duyệt tài liệu "${selected.title}"?`);
-    if (!shouldApprove) {
-      return;
-    }
-
-    setIsActionRunning(true);
-
-    try {
-      await approveModeratorQueueItem(selected, metadataModeratorNote);
-      await refreshQueue(true);
-    } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Duyệt tài liệu thất bại."));
-    } finally {
-      setIsActionRunning(false);
-    }
+    openConfirm("approve", "Duyệt tài liệu", `Bạn có chắc muốn duyệt **${selected.title}** không?`);
   }
 
   async function confirmReject() {
@@ -513,25 +527,42 @@ export default function ModeratorQueuePage() {
 
     const finalReason = rejectReason.trim() || quickReason.trim();
     if (!finalReason) {
-      window.alert("Vui lòng nhập lý do từ chối.");
+      setRejectError("Vui lòng nhập lý do từ chối.");
       return;
     }
 
-    const shouldReject = window.confirm(`Từ chối tài liệu "${selected.title}"?`);
-    if (!shouldReject) {
+    setRejectError("");
+    setPendingRejectReason(finalReason);
+    setRejectOpen(false);
+    openConfirm("reject", "Từ chối tài liệu", `Bạn có chắc muốn từ chối **${selected.title}** không?`);
+  }
+
+  async function handleConfirmAction() {
+    if (!selected || !confirmAction || isActionRunning) {
       return;
     }
 
     setIsActionRunning(true);
 
     try {
-      await rejectModeratorQueueItem(selected, finalReason);
+      if (confirmAction === "approve") {
+        await approveModeratorQueueItem(selected, metadataModeratorNote);
+      } else {
+        await rejectModeratorQueueItem(selected, pendingRejectReason);
+        setRejectOpen(false);
+        setQuickReason("");
+        setRejectReason("");
+        setPendingRejectReason("");
+      }
       await refreshQueue(true);
-      setRejectOpen(false);
-      setQuickReason("");
-      setRejectReason("");
+      setConfirmOpen(false);
+      setConfirmAction(null);
+      setConfirmTitle("");
+      setConfirmDescription("");
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Từ chối tài liệu thất bại."));
+      const fallback =
+        confirmAction === "approve" ? "Duyệt tài liệu thất bại." : "Từ chối tài liệu thất bại.";
+      setErrorMessage(extractApiErrorMessage(error, fallback));
     } finally {
       setIsActionRunning(false);
     }
@@ -938,6 +969,10 @@ export default function ModeratorQueuePage() {
         <div className="space-y-4">
           <p className="text-sm text-slate-500">Chọn nhanh lý do hoặc nhập lý do chi tiết.</p>
 
+          {rejectError ? (
+            <p className="text-xs font-semibold text-rose-600">{rejectError}</p>
+          ) : null}
+
           <div className="space-y-2">
             {quickReasons.map((item) => {
               const active = quickReason === item.title;
@@ -983,6 +1018,18 @@ export default function ModeratorQueuePage() {
           </div>
         </div>
       </Modal>
+
+      <Popup
+        open={confirmOpen}
+        onCancel={closeConfirm}
+        onConfirm={() => void handleConfirmAction()}
+        title={confirmTitle}
+        message={confirmDescription}
+        type={confirmAction === "approve" ? "success" : "danger"}
+        confirmText={confirmAction === "approve" ? "Duyệt" : "Từ chối"}
+        cancelText="Hủy"
+        confirmLoading={isActionRunning}
+      />
 
       {isRefreshing ? (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-white/50 backdrop-blur-[1px]">

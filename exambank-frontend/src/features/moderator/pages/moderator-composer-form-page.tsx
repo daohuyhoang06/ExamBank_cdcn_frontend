@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirm } from "@/lib/dialog";
+import { useToast } from "@/components/ui/Toast/toast-system";
 import { Editor as TinyMceEditor } from "@tinymce/tinymce-react";
 import "tinymce/tinymce";
 import "tinymce/icons/default";
@@ -123,7 +125,6 @@ const COMPOSER_FLASH_NOTICE_KEY = "moderator-composer-flash-notice";
 const DEFAULT_EXAM_TITLE = "Kiểm tra cuối kỳ";
 const DEFAULT_SUBJECT = "Toán học";
 const DEFAULT_DURATION_MINUTES = 90;
-const DRAFT_NOTICE_HIDE_SCROLL_Y = 320;
 const DEFAULT_CLASS_NAME = "Lớp 12";
 const CLASS_NAME_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
 const SUBJECT_DISPLAY_NAME_BY_CANONICAL: Record<string, string> = {
@@ -545,6 +546,7 @@ function QuestionContentEditor({
 
 export default function ModeratorComposerFormPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const isViewOnlyFromQuery = useMemo(() => searchParams.get("view") === "1", [searchParams]);
   const editingExamIdFromQuery = useMemo(() => {
@@ -572,16 +574,13 @@ export default function ModeratorComposerFormPage() {
     buildQuestionForms(DEFAULT_SUBJECT)
   );
   const [formErrors, setFormErrors] = useState<Partial<Record<QuestionType, string>>>({});
-  const [draftNotice, setDraftNotice] = useState("");
-  const [isDraftNoticeHiddenByScroll, setIsDraftNoticeHiddenByScroll] = useState(false);
-  const [saveError, setSaveError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishedReadonly, setIsPublishedReadonly] = useState(false);
   const objectPreviewUrlsRef = useRef<Set<string>>(new Set());
+  const lastNoticeKeyRef = useRef<string | null>(null);
 
-  const shouldShowDraftNotice = Boolean(draftNotice) && !isDraftNoticeHiddenByScroll;
   const isFormLocked = isLoadingForm || isSaving || isPublishedReadonly;
 
   const registerObjectPreviewUrl = useCallback((url: string | null | undefined) => {
@@ -662,7 +661,6 @@ export default function ModeratorComposerFormPage() {
         setClassName((currentClassName) => {
           return currentClassName.trim().length === 0 ? DEFAULT_CLASS_NAME : currentClassName;
         });
-        setSaveError("");
         return;
       }
 
@@ -700,13 +698,19 @@ export default function ModeratorComposerFormPage() {
       });
       setActiveExamId(exam.id);
       setIsPublishedReadonly(nextReadonly);
-      setSaveError("");
       setFormErrors({});
-      setDraftNotice(
-        nextReadonly
-          ? `Đề #${exam.id} đang ở chế độ chỉ xem vì đã xuất bản.`
-          : `Đang chỉnh sửa đề đã lưu trên hệ thống (ID: ${exam.id}).`
-      );
+      const noticeKey = `${exam.id}:${nextReadonly ? "view" : "edit"}`;
+      if (lastNoticeKeyRef.current !== noticeKey) {
+        lastNoticeKeyRef.current = noticeKey;
+        toast.info({
+          title: "Trạng thái đề thi",
+          message: nextReadonly
+            ? "Đề đang ở chế độ chỉ xem vì đã xuất bản."
+            : "Đang chỉnh sửa đề đã lưu trên hệ thống.",
+          duration: 4200,
+          showProgress: true,
+        });
+      }
       setNewQuestionForms((previousForms) => {
         Object.values(previousForms).forEach((form) => {
           revokeObjectPreviewUrl(form.localImagePreviewUrl);
@@ -728,29 +732,11 @@ export default function ModeratorComposerFormPage() {
     } finally {
       setIsLoadingForm(false);
     }
-  }, [editingExamIdFromQuery, isViewOnlyFromQuery, revokeObjectPreviewUrl]);
+  }, [editingExamIdFromQuery, isViewOnlyFromQuery, revokeObjectPreviewUrl, toast]);
 
   useEffect(() => {
     void loadInitialData();
   }, [loadInitialData]);
-
-  useEffect(() => {
-    if (!draftNotice || typeof window === "undefined") {
-      setIsDraftNoticeHiddenByScroll(false);
-      return;
-    }
-
-    const handleScroll = () => {
-      setIsDraftNoticeHiddenByScroll(window.scrollY > DRAFT_NOTICE_HIDE_SCROLL_Y);
-    };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [draftNotice]);
 
   useEffect(() => {
     return () => {
@@ -827,7 +813,12 @@ export default function ModeratorComposerFormPage() {
 
   async function saveDraft() {
     if (isPublishedReadonly) {
-      setSaveError("Đề đã xuất bản không thể chỉnh sửa. Bạn chỉ có thể xem hoặc xóa ở trang quản lý.");
+      toast.warning({
+        title: "Không thể lưu",
+        message: "Đề đã xuất bản không thể chỉnh sửa. Bạn chỉ có thể xem hoặc xóa ở trang quản lý.",
+        duration: 5200,
+        showProgress: true,
+      });
       return null;
     }
 
@@ -836,7 +827,12 @@ export default function ModeratorComposerFormPage() {
     const normalizedClassName = className.trim() || DEFAULT_CLASS_NAME;
 
     if (!normalizedSubject) {
-      setSaveError("Vui lòng nhập hoặc chọn môn học trước khi lưu.");
+      toast.warning({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập hoặc chọn môn học trước khi lưu.",
+        duration: 4200,
+        showProgress: true,
+      });
       return null;
     }
 
@@ -857,23 +853,31 @@ export default function ModeratorComposerFormPage() {
         setSubject(toDisplaySubjectName(createdSubject.name));
         resolvedSubjectRecord = createdSubject;
       } catch (error) {
-        setSaveError(
-          extractApiErrorMessage(
+        toast.error({
+          title: "Lỗi hệ thống",
+          message: extractApiErrorMessage(
             error,
             "Môn học hiện tại không hợp lệ và không thể tạo mới trên backend."
-          )
-        );
+          ),
+          duration: 6200,
+          showProgress: false,
+        });
         return null;
       }
     }
 
     if (!resolvedSubjectRecord) {
-      setSaveError("Không thể xác định môn học hợp lệ để lưu đề thi.");
+      toast.error({
+        title: "Lỗi hệ thống",
+        message: "Không thể xác định môn học hợp lệ để lưu đề thi.",
+        duration: 6200,
+        showProgress: false,
+      });
       return null;
     }
 
     if (questions.length === 0) {
-      const shouldContinue = window.confirm(
+      const shouldContinue = await confirm(
         "Đề thi này chưa có câu hỏi. Bạn vẫn muốn lưu bản nháp?"
       );
       if (!shouldContinue) {
@@ -882,7 +886,6 @@ export default function ModeratorComposerFormPage() {
     }
 
     setIsSaving(true);
-    setSaveError("");
 
     try {
       const normalizedDuration = durationMinutes > 0 ? durationMinutes : DEFAULT_DURATION_MINUTES;
@@ -958,14 +961,26 @@ export default function ModeratorComposerFormPage() {
         durationMinutes: normalizedDuration,
         questionSignature: nextSignature,
       });
-      setDraftNotice(
-        updatingExisting
+      toast.success({
+        title: "Hệ thống",
+        message: updatingExisting
           ? "Đã cập nhật bản nháp trên backend."
-          : "Đã lưu bản nháp mới lên backend."
-      );
+          : "Đã lưu bản nháp mới lên backend.",
+        duration: 3600,
+        showProgress: true,
+      });
       return savedExam.id;
     } catch (error) {
-      setSaveError(extractApiErrorMessage(error, "Không thể lưu bản nháp lên backend."));
+      toast.error({
+        title: "Cảnh báo hệ thống",
+        message: extractApiErrorMessage(error, "Không thể lưu bản nháp lên backend."),
+        duration: 6200,
+        showProgress: false,
+        actionText: "Thử lại",
+        onAction: () => {
+          void saveDraft();
+        },
+      });
       return null;
     } finally {
       setIsSaving(false);
@@ -989,9 +1004,9 @@ export default function ModeratorComposerFormPage() {
     navigate("/moderator/composer");
   }
 
-  function backToOverview() {
+  async function backToOverview() {
     if (hasUnsavedChanges) {
-      const shouldLeave = window.confirm(
+      const shouldLeave = await confirm(
         "Bạn đang có thay đổi chưa lưu. Quay lại màn hình quản lý đề thi có thể khiến bạn quên lưu bản nháp. Vẫn quay lại?"
       );
       if (!shouldLeave) {
@@ -1183,7 +1198,7 @@ export default function ModeratorComposerFormPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-10 px-1 pb-20">
-      <section className={`space-y-6 ${shouldShowDraftNotice ? "pt-14" : ""}`}>
+      <section className="space-y-6">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
@@ -1229,16 +1244,6 @@ export default function ModeratorComposerFormPage() {
               <RefreshCcw size={14} /> Tải lại dữ liệu
             </button>
           </div>
-        ) : null}
-
-        {shouldShowDraftNotice ? (
-          <div className="fixed left-1/2 top-24 z-50 w-[min(92vw,42rem)] -translate-x-1/2 rounded-xl border border-sky-200 bg-sky-50/95 px-4 py-2.5 text-sm font-semibold text-sky-800 shadow-[0_14px_34px_rgba(14,84,129,0.2)] backdrop-blur-sm">
-            {draftNotice}
-          </div>
-        ) : null}
-
-        {saveError ? (
-          <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{saveError}</p>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
