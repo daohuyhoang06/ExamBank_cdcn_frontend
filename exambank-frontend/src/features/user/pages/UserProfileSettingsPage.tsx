@@ -1,4 +1,5 @@
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirm } from "@/lib/dialog";
 import {
   AlertTriangle,
   BellRing,
@@ -517,9 +518,8 @@ export default function UserProfileSettingsPage() {
     if (!profile) {
       return;
     }
-
     if (typeof window !== "undefined") {
-      const confirmed = window.confirm("Bạn có chắc chắn muốn vô hiệu hóa tài khoản?");
+      const confirmed = await confirm("Bạn có chắc chắn muốn vô hiệu hóa tài khoản?");
       if (!confirmed) {
         return;
       }

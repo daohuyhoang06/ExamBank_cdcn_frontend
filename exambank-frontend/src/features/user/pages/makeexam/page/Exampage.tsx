@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirm } from '@/lib/dialog';
 import { Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SubmitReason } from '@/features/user/types/user.type';
@@ -70,14 +71,15 @@ const Exampage = () => {
         return;
       }
 
-      const shouldLeave = window.confirm(warningMessage);
-      if (shouldLeave) {
-        allowExitRef.current = true;
-        navigate(-1);
-        return;
-      }
+      void confirm(warningMessage).then((shouldLeave) => {
+        if (shouldLeave) {
+          allowExitRef.current = true;
+          navigate(-1);
+          return;
+        }
 
-      window.history.pushState({ examBackGuard: true }, '', window.location.href);
+        window.history.pushState({ examBackGuard: true }, '', window.location.href);
+      });
     };
 
     window.history.pushState({ examBackGuard: true }, '', window.location.href);

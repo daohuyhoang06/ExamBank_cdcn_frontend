@@ -450,17 +450,6 @@ export function AppSidebar({
     }
   }
 
-  function handleViewAllNotifications() {
-    setIsNotificationOpen(false);
-
-    if (location.pathname.startsWith('/admin')) {
-      navigate('/admin/notifications');
-      return;
-    }
-
-    navigate('/notifications');
-  }
-
   const normalizePath = (path: string): string => {
     if (!path) return '/';
     const normalized = path.replace(/\/+$/, '');
@@ -643,7 +632,6 @@ export function AppSidebar({
                 items={notificationItems}
                 onMarkAllAsRead={handleMarkAllAsRead}
                 onItemClick={handleNotificationItemClick}
-                onViewAll={handleViewAllNotifications}
               />
             ) : null}
           </div>

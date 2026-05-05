@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'soft' | 'danger' | 'success' | 'icon';
@@ -8,7 +8,7 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   rightIcon?: React.ReactNode;
 };
 
-export const Button: React.FC<ButtonProps> = ({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ 
   children,
   variant = 'primary',
   size = 'md',
@@ -17,7 +17,7 @@ export const Button: React.FC<ButtonProps> = ({
   rightIcon,
   className = '',
   ...props
-}) => {
+}, ref) => {
   const baseClass =
     'inline-flex items-center justify-center gap-2 rounded-[var(--radius-field)] border border-transparent font-semibold outline-none transition duration-200 active:translate-y-px motion-reduce:transition-none motion-reduce:active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2';
 
@@ -45,6 +45,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
+      ref={ref}
       className={`${baseClass} ${variantClass[variant]} ${sizeClass[size]} ${widthClass} ${className}`.trim()}
       {...props}
     >
@@ -53,4 +54,6 @@ export const Button: React.FC<ButtonProps> = ({
       {rightIcon ? <span className="inline-flex shrink-0">{rightIcon}</span> : null}
     </button>
   );
-};
+});
+
+Button.displayName = 'Button';
