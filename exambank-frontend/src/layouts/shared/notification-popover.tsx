@@ -47,14 +47,12 @@ type Props = {
   items: NotificationItem[];
   onMarkAllAsRead?: () => void;
   onItemClick?: (item: NotificationItem) => void;
-  onViewAll?: () => void;
 };
 
 export function NotificationPopover({
   items,
   onMarkAllAsRead,
   onItemClick,
-  onViewAll,
 }: Props) {
   return (
     <div className="absolute bottom-12 left-full z-30 ml-3 w-[22rem] overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-[#eef0f4] shadow-[var(--shadow-soft)]">
@@ -134,15 +132,6 @@ export function NotificationPopover({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-3 pb-3 pt-1">
-        <button
-          onClick={onViewAll}
-          className="w-full rounded-lg bg-[var(--brand-700)] px-3 py-2 text-xs font-semibold text-white hover:brightness-110"
-        >
-          Xem tất cả
-        </button>
-      </div>
     </div>
   );
 }
