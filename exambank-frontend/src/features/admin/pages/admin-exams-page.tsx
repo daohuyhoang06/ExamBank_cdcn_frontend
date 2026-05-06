@@ -328,8 +328,8 @@ export default function AdminExamsPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-lg p-0 text-blue-700 hover:bg-blue-100"
+                          size="icon"
+                          className="h-8 w-8 rounded-md text-blue-700 transition hover:bg-blue-50 hover:text-blue-800"
                           title="Chỉnh sửa"
                         >
                           <Edit3 size={15} />
@@ -337,8 +337,8 @@ export default function AdminExamsPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-lg p-0 text-[var(--ink-600)] hover:bg-[var(--bg-soft)]"
+                          size="icon"
+                          className="h-8 w-8 rounded-md text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--brand-700)]"
                           title="Thống kê"
                         >
                           <BarChart3 size={15} />
@@ -346,8 +346,8 @@ export default function AdminExamsPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-lg p-0 text-red-600 hover:bg-red-100"
+                          size="icon"
+                          className="h-8 w-8 rounded-md text-red-600 transition hover:bg-red-100 hover:text-red-700"
                           title="Xóa"
                         >
                           <Trash2 size={15} />
