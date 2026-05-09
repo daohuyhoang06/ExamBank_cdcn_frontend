@@ -59,11 +59,11 @@ export function StatCard({
       </div>
 
       {layout === 'stacked' ? (
-        <p className={`text-sm text-[var(--ink-600)] ${titleClassName}`.trim()}>{title}</p>
+        <div className={`text-sm text-[var(--ink-600)] ${titleClassName}`.trim()}>{title}</div>
       ) : null}
 
-      <p className={`mt-1 text-3xl font-extrabold leading-none ${valueClassName}`.trim()}>{value}</p>
-      {subtitle ? <p className={`mt-1 text-xs text-[var(--ink-500)] ${subtitleClassName}`.trim()}>{subtitle}</p> : null}
+      <div className={`mt-1 text-3xl font-extrabold leading-none ${valueClassName}`.trim()}>{value}</div>
+      {subtitle ? <div className={`mt-1 text-xs text-[var(--ink-500)] ${subtitleClassName}`.trim()}>{subtitle}</div> : null}
     </Card>
   );
 }

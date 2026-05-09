@@ -1,0 +1,509 @@
+﻿Classfile /D:/ExamBank_cdcn_frontend/ExamController.from.container.class
+  Last modified 6 thg 5, 2026; size 5501 bytes
+  SHA-256 checksum 807d3671bea862a7651b8d978c627b9ca0a478d9a34213724709affb9613f2e4
+  Compiled from "ExamController.java"
+public class com.exambank_monolith.exam.controller.ExamController
+  minor version: 0
+  major version: 61
+  flags: (0x0021) ACC_PUBLIC, ACC_SUPER
+  this_class: #2                          // com/exambank_monolith/exam/controller/ExamController
+  super_class: #61                        // java/lang/Object
+  interfaces: 0, fields: 2, methods: 7, attributes: 3
+Constant pool:
+    #1 = Fieldref           #2.#3         // com/exambank_monolith/exam/controller/ExamController.service:Lcom/exambank_monolith/exam/service/ExamService;
+    #2 = Class              #4            // com/exambank_monolith/exam/controller/ExamController
+    #3 = NameAndType        #5:#6         // service:Lcom/exambank_monolith/exam/service/ExamService;
+    #4 = Utf8               com/exambank_monolith/exam/controller/ExamController
+    #5 = Utf8               service
+    #6 = Utf8               Lcom/exambank_monolith/exam/service/ExamService;
+    #7 = Methodref          #8.#9         // com/exambank_monolith/exam/service/ExamService.findAll:()Ljava/util/List;
+    #8 = Class              #10           // com/exambank_monolith/exam/service/ExamService
+    #9 = NameAndType        #11:#12       // findAll:()Ljava/util/List;
+   #10 = Utf8               com/exambank_monolith/exam/service/ExamService
+   #11 = Utf8               findAll
+   #12 = Utf8               ()Ljava/util/List;
+   #13 = Methodref          #8.#14        // com/exambank_monolith/exam/service/ExamService.findMine:()Ljava/util/List;
+   #14 = NameAndType        #15:#12       // findMine:()Ljava/util/List;
+   #15 = Utf8               findMine
+   #16 = Methodref          #8.#17        // com/exambank_monolith/exam/service/ExamService.findById:(Ljava/lang/Integer;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #17 = NameAndType        #18:#19       // findById:(Ljava/lang/Integer;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #18 = Utf8               findById
+   #19 = Utf8               (Ljava/lang/Integer;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #20 = Fieldref           #21.#22       // org/springframework/http/HttpStatus.CREATED:Lorg/springframework/http/HttpStatus;
+   #21 = Class              #23           // org/springframework/http/HttpStatus
+   #22 = NameAndType        #24:#25       // CREATED:Lorg/springframework/http/HttpStatus;
+   #23 = Utf8               org/springframework/http/HttpStatus
+   #24 = Utf8               CREATED
+   #25 = Utf8               Lorg/springframework/http/HttpStatus;
+   #26 = Methodref          #27.#28       // org/springframework/http/ResponseEntity.status:(Lorg/springframework/http/HttpStatusCode;)Lorg/springframework/http/ResponseEntity$BodyBuilder;
+   #27 = Class              #29           // org/springframework/http/ResponseEntity
+   #28 = NameAndType        #30:#31       // status:(Lorg/springframework/http/HttpStatusCode;)Lorg/springframework/http/ResponseEntity$BodyBuilder;
+   #29 = Utf8               org/springframework/http/ResponseEntity
+   #30 = Utf8               status
+   #31 = Utf8               (Lorg/springframework/http/HttpStatusCode;)Lorg/springframework/http/ResponseEntity$BodyBuilder;
+   #32 = Methodref          #8.#33        // com/exambank_monolith/exam/service/ExamService.create:(Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #33 = NameAndType        #34:#35       // create:(Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #34 = Utf8               create
+   #35 = Utf8               (Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #36 = InterfaceMethodref #37.#38       // org/springframework/http/ResponseEntity$BodyBuilder.body:(Ljava/lang/Object;)Lorg/springframework/http/ResponseEntity;
+   #37 = Class              #39           // org/springframework/http/ResponseEntity$BodyBuilder
+   #38 = NameAndType        #40:#41       // body:(Ljava/lang/Object;)Lorg/springframework/http/ResponseEntity;
+   #39 = Utf8               org/springframework/http/ResponseEntity$BodyBuilder
+   #40 = Utf8               body
+   #41 = Utf8               (Ljava/lang/Object;)Lorg/springframework/http/ResponseEntity;
+   #42 = Methodref          #8.#43        // com/exambank_monolith/exam/service/ExamService.update:(Ljava/lang/Integer;Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #43 = NameAndType        #44:#45       // update:(Ljava/lang/Integer;Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #44 = Utf8               update
+   #45 = Utf8               (Ljava/lang/Integer;Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+   #46 = Methodref          #8.#47        // com/exambank_monolith/exam/service/ExamService.delete:(Ljava/lang/Integer;)V
+   #47 = NameAndType        #48:#49       // delete:(Ljava/lang/Integer;)V
+   #48 = Utf8               delete
+   #49 = Utf8               (Ljava/lang/Integer;)V
+   #50 = Methodref          #27.#51       // org/springframework/http/ResponseEntity.noContent:()Lorg/springframework/http/ResponseEntity$HeadersBuilder;
+   #51 = NameAndType        #52:#53       // noContent:()Lorg/springframework/http/ResponseEntity$HeadersBuilder;
+   #52 = Utf8               noContent
+   #53 = Utf8               ()Lorg/springframework/http/ResponseEntity$HeadersBuilder;
+   #54 = InterfaceMethodref #55.#56       // org/springframework/http/ResponseEntity$HeadersBuilder.build:()Lorg/springframework/http/ResponseEntity;
+   #55 = Class              #57           // org/springframework/http/ResponseEntity$HeadersBuilder
+   #56 = NameAndType        #58:#59       // build:()Lorg/springframework/http/ResponseEntity;
+   #57 = Utf8               org/springframework/http/ResponseEntity$HeadersBuilder
+   #58 = Utf8               build
+   #59 = Utf8               ()Lorg/springframework/http/ResponseEntity;
+   #60 = Methodref          #61.#62       // java/lang/Object."<init>":()V
+   #61 = Class              #63           // java/lang/Object
+   #62 = NameAndType        #64:#65       // "<init>":()V
+   #63 = Utf8               java/lang/Object
+   #64 = Utf8               <init>
+   #65 = Utf8               ()V
+   #66 = Utf8               BEARER_AUTH
+   #67 = Utf8               Ljava/lang/String;
+   #68 = Utf8               ConstantValue
+   #69 = String             #70           // bearerAuth
+   #70 = Utf8               bearerAuth
+   #71 = Utf8               Code
+   #72 = Utf8               LineNumberTable
+   #73 = Utf8               LocalVariableTable
+   #74 = Utf8               this
+   #75 = Utf8               Lcom/exambank_monolith/exam/controller/ExamController;
+   #76 = Utf8               Signature
+   #77 = Utf8               ()Ljava/util/List<Lcom/exambank_monolith/exam/dto/exam/ExamResponse;>;
+   #78 = Utf8               RuntimeVisibleAnnotations
+   #79 = Utf8               Lorg/springframework/web/bind/annotation/GetMapping;
+   #80 = Utf8               Lio/swagger/v3/oas/annotations/Operation;
+   #81 = Utf8               summary
+   #82 = Utf8               List exams
+   #83 = Utf8               description
+   #84 = Utf8               Returns all normalized exams available in the system.
+   #85 = Utf8               Lio/swagger/v3/oas/annotations/responses/ApiResponses;
+   #86 = Utf8               value
+   #87 = Utf8               Lio/swagger/v3/oas/annotations/responses/ApiResponse;
+   #88 = Utf8               responseCode
+   #89 = Utf8               200
+   #90 = Utf8               Exams returned successfully
+   #91 = Utf8               /mine
+   #92 = Utf8               Lorg/springframework/security/access/prepost/PreAuthorize;
+   #93 = Utf8               hasAnyRole(\'MODERATOR\', \'ADMIN\')
+   #94 = Utf8               List current moderator exams
+   #95 = Utf8               Returns exams created by the authenticated moderator/admin.
+   #96 = Utf8               Lio/swagger/v3/oas/annotations/security/SecurityRequirement;
+   #97 = Utf8               name
+   #98 = Utf8               401
+   #99 = Utf8               Authentication is required
+  #100 = Utf8               403
+  #101 = Utf8               Only moderators and admins can access this endpoint
+  #102 = Utf8               id
+  #103 = Utf8               Ljava/lang/Integer;
+  #104 = Utf8               MethodParameters
+  #105 = Utf8               /{id:\\d+}
+  #106 = Utf8               Get exam by id
+  #107 = Utf8               Returns a single exam by its identifier.
+  #108 = Utf8               Exam returned successfully
+  #109 = Utf8               404
+  #110 = Utf8               Exam not found
+  #111 = Utf8               RuntimeVisibleParameterAnnotations
+  #112 = Utf8               Lorg/springframework/web/bind/annotation/PathVariable;
+  #113 = Utf8               (Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lorg/springframework/http/ResponseEntity;
+  #114 = Utf8               payload
+  #115 = Utf8               Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;
+  #116 = Utf8               (Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lorg/springframework/http/ResponseEntity<Lcom/exambank_monolith/exam/dto/exam/ExamResponse;>;
+  #117 = Utf8               Lorg/springframework/web/bind/annotation/PostMapping;
+  #118 = Utf8               Create exam
+  #119 = Utf8               Creates a new exam record.
+  #120 = Utf8               201
+  #121 = Utf8               Exam created successfully
+  #122 = Utf8               Only moderators and admins can create exams
+  #123 = Utf8               Lorg/springframework/web/bind/annotation/RequestBody;
+  #124 = Utf8               Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;
+  #125 = Utf8               Lorg/springframework/web/bind/annotation/PutMapping;
+  #126 = Utf8               Update exam
+  #127 = Utf8               Updates an existing exam.
+  #128 = Utf8               Exam updated successfully
+  #129 = Utf8               Only moderators and admins can update exams
+  #130 = Utf8               (Ljava/lang/Integer;)Lorg/springframework/http/ResponseEntity;
+  #131 = Utf8               (Ljava/lang/Integer;)Lorg/springframework/http/ResponseEntity<Ljava/lang/Void;>;
+  #132 = Utf8               Lorg/springframework/web/bind/annotation/DeleteMapping;
+  #133 = Utf8               Delete exam
+  #134 = Utf8               Deletes an existing exam.
+  #135 = Utf8               204
+  #136 = Utf8               Exam deleted successfully
+  #137 = Utf8               Only moderators and admins can delete exams
+  #138 = Utf8               (Lcom/exambank_monolith/exam/service/ExamService;)V
+  #139 = Utf8               RuntimeInvisibleAnnotations
+  #140 = Utf8               Llombok/Generated;
+  #141 = Utf8               SourceFile
+  #142 = Utf8               ExamController.java
+  #143 = Utf8               Lorg/springframework/web/bind/annotation/RestController;
+  #144 = Utf8               Lorg/springframework/web/bind/annotation/RequestMapping;
+  #145 = Utf8               /api/exams
+  #146 = Utf8               Lio/swagger/v3/oas/annotations/tags/Tag;
+  #147 = Utf8               Exams
+  #148 = Utf8               Browse and manage normalized exams.
+  #149 = Utf8               InnerClasses
+  #150 = Utf8               BodyBuilder
+  #151 = Utf8               HeadersBuilder
+{
+  public java.util.List<com.exambank_monolith.exam.dto.exam.ExamResponse> findAll();
+    descriptor: ()Ljava/util/List;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         4: invokevirtual #7                  // Method com/exambank_monolith/exam/service/ExamService.findAll:()Ljava/util/List;
+         7: areturn
+      LineNumberTable:
+        line 43: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       8     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+    Signature: #77                          // ()Ljava/util/List<Lcom/exambank_monolith/exam/dto/exam/ExamResponse;>;
+    RuntimeVisibleAnnotations:
+      0: #79()
+        org.springframework.web.bind.annotation.GetMapping
+      1: #80(#81=s#82,#83=s#84)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="List exams"
+          description="Returns all normalized exams available in the system."
+        )
+      2: #85(#86=[@#87(#88=s#89,#83=s#90)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="200"
+            description="Exams returned successfully"
+          )]
+        )
+
+  public java.util.List<com.exambank_monolith.exam.dto.exam.ExamResponse> findMine();
+    descriptor: ()Ljava/util/List;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         4: invokevirtual #13                 // Method com/exambank_monolith/exam/service/ExamService.findMine:()Ljava/util/List;
+         7: areturn
+      LineNumberTable:
+        line 56: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       8     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+    Signature: #77                          // ()Ljava/util/List<Lcom/exambank_monolith/exam/dto/exam/ExamResponse;>;
+    RuntimeVisibleAnnotations:
+      0: #79(#86=[s#91])
+        org.springframework.web.bind.annotation.GetMapping(
+          value=["/mine"]
+        )
+      1: #92(#86=s#93)
+        org.springframework.security.access.prepost.PreAuthorize(
+          value="hasAnyRole(\'MODERATOR\', \'ADMIN\')"
+        )
+      2: #80(#81=s#94,#83=s#95)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="List current moderator exams"
+          description="Returns exams created by the authenticated moderator/admin."
+        )
+      3: #96(#97=s#70)
+        io.swagger.v3.oas.annotations.security.SecurityRequirement(
+          name="bearerAuth"
+        )
+      4: #85(#86=[@#87(#88=s#89,#83=s#90),@#87(#88=s#98,#83=s#99),@#87(#88=s#100,#83=s#101)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="200"
+            description="Exams returned successfully"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="401"
+            description="Authentication is required"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="403"
+            description="Only moderators and admins can access this endpoint"
+          )]
+        )
+
+  public com.exambank_monolith.exam.dto.exam.ExamResponse findById(java.lang.Integer);
+    descriptor: (Ljava/lang/Integer;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=2, locals=2, args_size=2
+         0: aload_0
+         1: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         4: aload_1
+         5: invokevirtual #16                 // Method com/exambank_monolith/exam/service/ExamService.findById:(Ljava/lang/Integer;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+         8: areturn
+      LineNumberTable:
+        line 66: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       9     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+            0       9     1    id   Ljava/lang/Integer;
+    MethodParameters:
+      Name                           Flags
+      id
+    RuntimeVisibleAnnotations:
+      0: #79(#86=[s#105])
+        org.springframework.web.bind.annotation.GetMapping(
+          value=["/{id:\\d+}"]
+        )
+      1: #80(#81=s#106,#83=s#107)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="Get exam by id"
+          description="Returns a single exam by its identifier."
+        )
+      2: #85(#86=[@#87(#88=s#89,#83=s#108),@#87(#88=s#109,#83=s#110)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="200"
+            description="Exam returned successfully"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="404"
+            description="Exam not found"
+          )]
+        )
+    RuntimeVisibleParameterAnnotations:
+      parameter 0:
+        0: #112()
+          org.springframework.web.bind.annotation.PathVariable
+
+  public org.springframework.http.ResponseEntity<com.exambank_monolith.exam.dto.exam.ExamResponse> create(com.exambank_monolith.exam.dto.exam.ExamCreateRequest);
+    descriptor: (Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lorg/springframework/http/ResponseEntity;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=3, locals=2, args_size=2
+         0: getstatic     #20                 // Field org/springframework/http/HttpStatus.CREATED:Lorg/springframework/http/HttpStatus;
+         3: invokestatic  #26                 // Method org/springframework/http/ResponseEntity.status:(Lorg/springframework/http/HttpStatusCode;)Lorg/springframework/http/ResponseEntity$BodyBuilder;
+         6: aload_0
+         7: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+        10: aload_1
+        11: invokevirtual #32                 // Method com/exambank_monolith/exam/service/ExamService.create:(Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+        14: invokeinterface #36,  2           // InterfaceMethod org/springframework/http/ResponseEntity$BodyBuilder.body:(Ljava/lang/Object;)Lorg/springframework/http/ResponseEntity;
+        19: areturn
+      LineNumberTable:
+        line 79: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      20     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+            0      20     1 payload   Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;
+    MethodParameters:
+      Name                           Flags
+      payload
+    Signature: #116                         // (Lcom/exambank_monolith/exam/dto/exam/ExamCreateRequest;)Lorg/springframework/http/ResponseEntity<Lcom/exambank_monolith/exam/dto/exam/ExamResponse;>;
+    RuntimeVisibleAnnotations:
+      0: #117()
+        org.springframework.web.bind.annotation.PostMapping
+      1: #92(#86=s#93)
+        org.springframework.security.access.prepost.PreAuthorize(
+          value="hasAnyRole(\'MODERATOR\', \'ADMIN\')"
+        )
+      2: #80(#81=s#118,#83=s#119)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="Create exam"
+          description="Creates a new exam record."
+        )
+      3: #96(#97=s#70)
+        io.swagger.v3.oas.annotations.security.SecurityRequirement(
+          name="bearerAuth"
+        )
+      4: #85(#86=[@#87(#88=s#120,#83=s#121),@#87(#88=s#98,#83=s#99),@#87(#88=s#100,#83=s#122)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="201"
+            description="Exam created successfully"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="401"
+            description="Authentication is required"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="403"
+            description="Only moderators and admins can create exams"
+          )]
+        )
+    RuntimeVisibleParameterAnnotations:
+      parameter 0:
+        0: #123()
+          org.springframework.web.bind.annotation.RequestBody
+
+  public com.exambank_monolith.exam.dto.exam.ExamResponse update(java.lang.Integer, com.exambank_monolith.exam.dto.exam.ExamUpdateRequest);
+    descriptor: (Ljava/lang/Integer;Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=3, locals=3, args_size=3
+         0: aload_0
+         1: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         4: aload_1
+         5: aload_2
+         6: invokevirtual #42                 // Method com/exambank_monolith/exam/service/ExamService.update:(Ljava/lang/Integer;Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;)Lcom/exambank_monolith/exam/dto/exam/ExamResponse;
+         9: areturn
+      LineNumberTable:
+        line 93: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      10     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+            0      10     1    id   Ljava/lang/Integer;
+            0      10     2 payload   Lcom/exambank_monolith/exam/dto/exam/ExamUpdateRequest;
+    MethodParameters:
+      Name                           Flags
+      id
+      payload
+    RuntimeVisibleAnnotations:
+      0: #125(#86=[s#105])
+        org.springframework.web.bind.annotation.PutMapping(
+          value=["/{id:\\d+}"]
+        )
+      1: #92(#86=s#93)
+        org.springframework.security.access.prepost.PreAuthorize(
+          value="hasAnyRole(\'MODERATOR\', \'ADMIN\')"
+        )
+      2: #80(#81=s#126,#83=s#127)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="Update exam"
+          description="Updates an existing exam."
+        )
+      3: #96(#97=s#70)
+        io.swagger.v3.oas.annotations.security.SecurityRequirement(
+          name="bearerAuth"
+        )
+      4: #85(#86=[@#87(#88=s#89,#83=s#128),@#87(#88=s#98,#83=s#99),@#87(#88=s#100,#83=s#129),@#87(#88=s#109,#83=s#110)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="200"
+            description="Exam updated successfully"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="401"
+            description="Authentication is required"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="403"
+            description="Only moderators and admins can update exams"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="404"
+            description="Exam not found"
+          )]
+        )
+    RuntimeVisibleParameterAnnotations:
+      parameter 0:
+        0: #112()
+          org.springframework.web.bind.annotation.PathVariable
+      parameter 1:
+        0: #123()
+          org.springframework.web.bind.annotation.RequestBody
+
+  public org.springframework.http.ResponseEntity<java.lang.Void> delete(java.lang.Integer);
+    descriptor: (Ljava/lang/Integer;)Lorg/springframework/http/ResponseEntity;
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=2, locals=2, args_size=2
+         0: aload_0
+         1: getfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         4: aload_1
+         5: invokevirtual #46                 // Method com/exambank_monolith/exam/service/ExamService.delete:(Ljava/lang/Integer;)V
+         8: invokestatic  #50                 // Method org/springframework/http/ResponseEntity.noContent:()Lorg/springframework/http/ResponseEntity$HeadersBuilder;
+        11: invokeinterface #54,  1           // InterfaceMethod org/springframework/http/ResponseEntity$HeadersBuilder.build:()Lorg/springframework/http/ResponseEntity;
+        16: areturn
+      LineNumberTable:
+        line 107: 0
+        line 108: 8
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      17     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+            0      17     1    id   Ljava/lang/Integer;
+    MethodParameters:
+      Name                           Flags
+      id
+    Signature: #131                         // (Ljava/lang/Integer;)Lorg/springframework/http/ResponseEntity<Ljava/lang/Void;>;
+    RuntimeVisibleAnnotations:
+      0: #132(#86=[s#105])
+        org.springframework.web.bind.annotation.DeleteMapping(
+          value=["/{id:\\d+}"]
+        )
+      1: #92(#86=s#93)
+        org.springframework.security.access.prepost.PreAuthorize(
+          value="hasAnyRole(\'MODERATOR\', \'ADMIN\')"
+        )
+      2: #80(#81=s#133,#83=s#134)
+        io.swagger.v3.oas.annotations.Operation(
+          summary="Delete exam"
+          description="Deletes an existing exam."
+        )
+      3: #96(#97=s#70)
+        io.swagger.v3.oas.annotations.security.SecurityRequirement(
+          name="bearerAuth"
+        )
+      4: #85(#86=[@#87(#88=s#135,#83=s#136),@#87(#88=s#98,#83=s#99),@#87(#88=s#100,#83=s#137),@#87(#88=s#109,#83=s#110)])
+        io.swagger.v3.oas.annotations.responses.ApiResponses(
+          value=[@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="204"
+            description="Exam deleted successfully"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="401"
+            description="Authentication is required"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="403"
+            description="Only moderators and admins can delete exams"
+          ),@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode="404"
+            description="Exam not found"
+          )]
+        )
+    RuntimeVisibleParameterAnnotations:
+      parameter 0:
+        0: #112()
+          org.springframework.web.bind.annotation.PathVariable
+
+  public com.exambank_monolith.exam.controller.ExamController(com.exambank_monolith.exam.service.ExamService);
+    descriptor: (Lcom/exambank_monolith/exam/service/ExamService;)V
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=2, locals=2, args_size=2
+         0: aload_0
+         1: invokespecial #60                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: aload_1
+         6: putfield      #1                  // Field service:Lcom/exambank_monolith/exam/service/ExamService;
+         9: return
+      LineNumberTable:
+        line 29: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0      10     0  this   Lcom/exambank_monolith/exam/controller/ExamController;
+            0      10     1 service   Lcom/exambank_monolith/exam/service/ExamService;
+    MethodParameters:
+      Name                           Flags
+      service                        final
+    RuntimeInvisibleAnnotations:
+      0: #140()
+        lombok.Generated
+}
+SourceFile: "ExamController.java"
+RuntimeVisibleAnnotations:
+  0: #143()
+    org.springframework.web.bind.annotation.RestController
+  1: #144(#86=[s#145])
+    org.springframework.web.bind.annotation.RequestMapping(
+      value=["/api/exams"]
+    )
+  2: #146(#97=s#147,#83=s#148)
+    io.swagger.v3.oas.annotations.tags.Tag(
+      name="Exams"
+      description="Browse and manage normalized exams."
+    )
+InnerClasses:
+  public static #150= #37 of #27;         // BodyBuilder=class org/springframework/http/ResponseEntity$BodyBuilder of class org/springframework/http/ResponseEntity
+  public static #151= #55 of #27;         // HeadersBuilder=class org/springframework/http/ResponseEntity$HeadersBuilder of class org/springframework/http/ResponseEntity
