@@ -3,7 +3,9 @@ import {
   FileText,
   BarChart3, 
   Settings,
-  MonitorPlay
+  MonitorPlay,
+  LockKeyhole,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -39,5 +41,15 @@ export const studentSidebarItems: SidebarNavItem[] = [
     label: "Thi online",
     path: "/user/online-exam",
     icon: MonitorPlay,
+  },
+  {
+    label: "Vào thi private",
+    path: "/user/private-competition",
+    icon: LockKeyhole,
+  },
+  {
+    label: "AI Premium",
+    path: "/user/premium/import",
+    icon: Sparkles,
   },
 ];
