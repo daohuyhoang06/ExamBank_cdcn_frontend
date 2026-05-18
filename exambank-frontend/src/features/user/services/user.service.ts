@@ -48,7 +48,12 @@ const DEFAULT_SUBJECTS: Subject[] = [
   "Tin học",
 ];
 const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ??
+  "http://localhost:8080"
+).replace(/\/+$/, "");
 
 type BackendDocument = {
   id: number;
@@ -269,11 +274,11 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
   }
 
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
   if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
   }
 
   const pathWithoutScheme = normalized.slice("storage://".length);
@@ -284,15 +289,7 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
 
   const bucket = pathWithoutScheme.slice(0, firstSlash);
   const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
-  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
-  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
 };
 
 const appendQuestionImageHtml = (content: string, imageUrl: string | null | undefined): string => {
