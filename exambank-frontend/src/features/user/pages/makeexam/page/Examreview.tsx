@@ -224,6 +224,7 @@ const Examreview = () => {
   const [fetchedQuestions, setFetchedQuestions] = useState<Exam['questions']>([]);
   const [fetchedExamTitle, setFetchedExamTitle] = useState<string | undefined>();
   const [questionScoreById, setQuestionScoreById] = useState<Record<number, number>>({});
+  const [isExamLocked, setIsExamLocked] = useState(false);
   const attemptedQuestionScoreIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
@@ -236,6 +237,7 @@ const Examreview = () => {
   }, [sessionId]);
 
   const fallbackExamId = routeState?.examId ?? storedRouteState?.examId ?? examIdParam;
+  const fallbackExamIdNumber = fallbackExamId ? Number(fallbackExamId) : Number.NaN;
 
   const localSnapshotQuestions =
     routeState?.questions && routeState.questions.length > 0
@@ -267,6 +269,37 @@ const Examreview = () => {
       isActive = false;
     };
   }, [localSnapshotQuestions.length, fallbackExamId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadExamLockState = async () => {
+      if (!fallbackExamIdNumber || Number.isNaN(fallbackExamIdNumber)) {
+        if (isActive) setIsExamLocked(false);
+        return;
+      }
+
+      try {
+        const examMeta = await examService.getExamListItemById(fallbackExamIdNumber);
+        if (!isActive || !examMeta?.endAt) {
+          if (isActive) setIsExamLocked(false);
+          return;
+        }
+
+        const endMs = new Date(examMeta.endAt).getTime();
+        if (!isActive) return;
+        setIsExamLocked(Number.isFinite(endMs) && Date.now() > endMs);
+      } catch {
+        if (isActive) setIsExamLocked(false);
+      }
+    };
+
+    void loadExamLockState();
+
+    return () => {
+      isActive = false;
+    };
+  }, [fallbackExamIdNumber]);
 
   const { topics, leaderboard, examResult, isLoadingResult, resultError, leaderboardError } = useExamreview(sessionId);
 
@@ -406,6 +439,10 @@ const Examreview = () => {
   const submittedAt = examResult?.submittedAt ?? effectiveSubmittedAt;
 
   const handleRetry = () => {
+    if (isExamLocked) {
+      return;
+    }
+
     if (fallbackExamId) {
       navigate(`/user/exam/${fallbackExamId}`);
       return;
@@ -414,11 +451,19 @@ const Examreview = () => {
   };
 
   const handleExit = () => {
+    if (fallbackExamId) {
+      navigate(`/user/exam/${fallbackExamId}/overview`, { replace: true });
+      return;
+    }
     navigate('/user/online-exam', { replace: true });
   };
 
   useEffect(() => {
     const handlePopState = () => {
+      if (fallbackExamId) {
+        navigate(`/user/exam/${fallbackExamId}/overview`, { replace: true });
+        return;
+      }
       navigate('/user/online-exam', { replace: true });
     };
 
@@ -428,7 +473,7 @@ const Examreview = () => {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [navigate]);
+  }, [navigate, fallbackExamId]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans">
@@ -448,13 +493,15 @@ const Examreview = () => {
               >
                 Thoát
               </button>
-              <button
-                onClick={handleRetry}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold transition-all hover:bg-blue-700"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Làm lại bài
-              </button>
+              {!isExamLocked ? (
+                <button
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold transition-all hover:bg-blue-700"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Làm lại bài
+                </button>
+              ) : null}
             </div>
           </header>
 

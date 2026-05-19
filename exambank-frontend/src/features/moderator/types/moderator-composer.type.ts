@@ -1,8 +1,17 @@
-export type BackendExamStatus = "DRAFT" | "PENDING_REVIEW" | "PUBLISHED" | "REJECTED" | string;
+export type BackendExamStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "PUBLISHED"
+  | "ONGOING"
+  | "CLOSED"
+  | "LOCKED"
+  | "REJECTED"
+  | string;
 
 export type ComposerExamRecord = {
   id: number;
   title: string;
+  description?: string | null;
   subjectId: number | null;
   className: string | null;
   uploadedBy: number | null;
@@ -10,12 +19,16 @@ export type ComposerExamRecord = {
   durationMinutes: number | null;
   status: BackendExamStatus;
   moderatorNote: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  updatedAt?: string | null;
   publishedAt: string | null;
   createdAt: string | null;
 };
 
 export type ComposerExamPayload = {
   title: string;
+  description?: string | null;
   subjectId: number;
   className?: string | null;
   uploadedBy?: number | null;
@@ -23,6 +36,9 @@ export type ComposerExamPayload = {
   durationMinutes?: number | null;
   status?: BackendExamStatus;
   moderatorNote?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  updatedAt?: string | null;
   publishedAt?: string | null;
   createdAt?: string | null;
 };

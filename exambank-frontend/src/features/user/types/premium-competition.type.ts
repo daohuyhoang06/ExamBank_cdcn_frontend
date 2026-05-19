@@ -4,6 +4,8 @@ export type ExamDraftQuestion = {
   options: string[];
   answer: string;
   answerExplanation?: string;
+  imageUrl?: string | null;
+  imageUrls?: string[];
   difficulty?: number;
   maxScore?: number;
   orderIndex?: number;
@@ -33,9 +35,25 @@ export type ExamImportJob = {
   draftJson?: string;
   errorMessage?: string;
   createdExamId?: number;
+  assets?: ExamImportAsset[];
   createdAt?: string;
   updatedAt?: string;
   completedAt?: string;
+};
+
+export type ExamImportAsset = {
+  id: number;
+  pageNo?: number | null;
+  bboxJson?: string | null;
+  sourceType: string;
+  confidence?: number | null;
+  fileUrl?: string | null;
+  previewUrl?: string | null;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  fileSize?: number | null;
+  linkedQuestionOrder?: number | null;
+  createdAt?: string;
 };
 
 export type PremiumCompetition = {

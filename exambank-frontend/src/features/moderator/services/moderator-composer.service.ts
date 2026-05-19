@@ -196,6 +196,7 @@ function normalizeExam(value: unknown): ComposerExamRecord | null {
   return {
     id,
     title,
+    description: toStringOrNull(objectValue.description),
     subjectId: toNumber(objectValue.subjectId),
     className: toStringOrNull(objectValue.className ?? objectValue.class_name),
     uploadedBy: toNumber(objectValue.uploadedBy),
@@ -203,6 +204,19 @@ function normalizeExam(value: unknown): ComposerExamRecord | null {
     durationMinutes: toNumber(objectValue.durationMinutes),
     status: toStringOrNull(objectValue.status) ?? "DRAFT",
     moderatorNote: toStringOrNull(objectValue.moderatorNote),
+    startAt: toIsoDateTimeOrNull(
+      objectValue.startAt ??
+      objectValue.start_at ??
+      objectValue.startTime ??
+      objectValue.start_time
+    ),
+    endAt: toIsoDateTimeOrNull(
+      objectValue.endAt ??
+      objectValue.end_at ??
+      objectValue.endTime ??
+      objectValue.end_time
+    ),
+    updatedAt: toIsoDateTimeOrNull(objectValue.updatedAt ?? objectValue.updated_at),
     publishedAt: toIsoDateTimeOrNull(objectValue.publishedAt ?? objectValue.published_at),
     createdAt: toIsoDateTimeOrNull(objectValue.createdAt ?? objectValue.created_at),
   };

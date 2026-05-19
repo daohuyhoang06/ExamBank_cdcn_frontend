@@ -55,7 +55,12 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
   ) {
     return 'moderation';
   }
-  if (normalized === 'COIN_EARNED') {
+  if (
+    normalized === 'COIN_EARNED' ||
+    normalized === 'PREMIUM_PAYMENT_PENDING_REVIEW' ||
+    normalized === 'PREMIUM_APPROVED' ||
+    normalized === 'PREMIUM_REJECTED'
+  ) {
     return 'financial';
   }
   if (normalized === 'DISCUSSION_ACTIVITY') {
@@ -212,6 +217,15 @@ const buildNotificationHref = (
 
   if (normalizedType === 'SCORE_UPDATED') {
     return '/user/online-exam';
+  }
+
+  if (
+    normalizedType === 'PREMIUM_PAYMENT_PENDING_REVIEW' ||
+    normalizedType === 'PREMIUM_APPROVED' ||
+    normalizedType === 'PREMIUM_REJECTED' ||
+    normalizedTarget === 'PREMIUM_ORDER'
+  ) {
+    return isAdmin ? '/admin/financial' : '/user/premium/upgrade';
   }
 
   return undefined;
@@ -487,19 +501,7 @@ export function AppSidebar({
       <button
         onClick={toggleSidebar}
         aria-label={isCollapsed ? 'Mo rong sidebar' : 'Thu gon sidebar'}
-        className={`
-          absolute top-20 -right-3
-          w-7 h-7 rounded-full
-          bg-white border border-[rgba(0,0,0,0.08)]
-          shadow-[0_4px_12px_rgba(0,0,0,0.08)]
-          flex items-center justify-center
-          transition-all duration-200 ease-in-out
-          hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)]
-          hover:text-[var(--brand-700)] hover:border-[var(--brand-200)]
-          active:scale-95
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)]
-          z-10
-        `}
+        className="sidebar-toggle-fab absolute top-20 -right-3 w-7 h-7 rounded-full bg-white border border-[rgba(0,0,0,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center transition-all duration-200 ease-in-out hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] hover:text-[var(--brand-700)] hover:border-[var(--brand-200)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>

@@ -30,6 +30,16 @@ import type {
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 
 const api = apiClient;
+const buildAuthConfig = () => {
+  const token = getStoredAuthToken();
+  return token
+    ? {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    : undefined;
+};
 
 const DEFAULT_EDUCATION_LEVELS: EducationLevel[] = [
   { id: "10", name: "Lớp 10", group: "THPT" },
@@ -50,7 +60,12 @@ const DEFAULT_SUBJECTS: Subject[] = [
   "Tin học",
 ];
 const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ??
+  ""
+).replace(/\/+$/, "");
 
 type BackendDocument = {
   id: number;
@@ -81,13 +96,29 @@ type BackendReview = {
   canDelete?: boolean;
 };
 
-type BackendLeaderBoard = {
-  id: number;
+type BackendLeaderBoardEntry = {
+  rank?: number;
+  userId?: number;
+  displayName?: string;
+  avatar?: string | null;
+  xp?: number;
+  streak?: number;
+  coinBalance?: number;
+  // Legacy shape fallback
+  id?: number;
   totalPoints?: number;
   user?: {
     id?: number;
     name?: string;
   };
+};
+
+type BackendLeaderBoardResponse = {
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+  items?: BackendLeaderBoardEntry[];
 };
 
 type BackendSubject = {
@@ -153,6 +184,8 @@ type BackendExam = {
   grade?: string;
   educationLevelName?: string;
   durationMinutes?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
   status?: string;
   createdAt?: string;
 };
@@ -217,6 +250,14 @@ type BackendExamSessionResult = {
   questionResults?: BackendQuestionResult[];
 };
 
+type BackendExamLeaderboardItem = {
+  rank?: number;
+  userId?: number;
+  userName?: string;
+  totalScore?: number;
+  currentUser?: boolean;
+};
+
 type BackendUser = {
   id: number;
   email: string;
@@ -234,8 +275,18 @@ type BackendUser = {
   status?: string;
   phone?: string;
   birthDate?: string;
+  premiumConfirmed?: boolean;
   createdAt?: string;
 };
+
+type UserExamAttempt = {
+  sessionId: number;
+  startedAt: string | null;
+  submittedAt: string | null;
+  totalScore: number;
+  durationSeconds: number | null;
+};
+
 
 type BackendSelfUser = {
   id?: number;
@@ -248,9 +299,61 @@ type BackendSelfUser = {
   profileImageUrl?: string;
 };
 
-const isPublishedExamStatus = (status?: string): boolean => {
-  return (status ?? "").trim().toUpperCase() === "PUBLISHED";
+const normalizeExamStatus = (status?: string): string => (status ?? "").trim().toUpperCase();
+
+const isUserVisibleExamStatus = (status?: string): boolean => {
+  const normalized = normalizeExamStatus(status);
+  return normalized === "PUBLISHED" || normalized === "ONGOING" || normalized === "CLOSED";
 };
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toStringOrNull = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toArrayPayload = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const objectValue = value as Record<string, unknown>;
+  const candidates = [
+    objectValue.data,
+    objectValue.content,
+    objectValue.items,
+    objectValue.sessions,
+    objectValue.payload,
+    objectValue.result,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+};
+
+const normalizeUserAttempt = (value: unknown): UserExamAttempt | null => {
+  if (!value || typeof value !== "object") return null;
+  const objectValue = value as Record<string, unknown>;
+  const sessionId = toNumberOrNull(objectValue.sessionId ?? objectValue.session_id ?? objectValue.id);
+  if (sessionId === null || sessionId <= 0) return null;
+
+  return {
+    sessionId,
+    startedAt: toStringOrNull(objectValue.startTime ?? objectValue.start_time),
+    submittedAt: toStringOrNull(objectValue.submittedAt ?? objectValue.submitted_at),
+    totalScore: toNumberOrNull(objectValue.totalScore ?? objectValue.total_score) ?? 0,
+    durationSeconds: toNumberOrNull(objectValue.durationSeconds ?? objectValue.duration_seconds),
+  };
+};
+
 
 const toExamSessionStatus = (status?: string): ExamSessionStatusResponse["status"] => {
   const normalized = (status ?? "").trim().toUpperCase();
@@ -343,11 +446,11 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
   }
 
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
   if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
   }
 
   const pathWithoutScheme = normalized.slice("storage://".length);
@@ -358,15 +461,7 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
 
   const bucket = pathWithoutScheme.slice(0, firstSlash);
   const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
-  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
-  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
 };
 
 const appendQuestionImageHtml = (content: string, imageUrl: string | null | undefined): string => {
@@ -443,13 +538,19 @@ const resolveBackendExamSubjectName = (item: BackendExam): string | undefined =>
 const resolveBackendAvatarUrl = (
   user: Pick<BackendUser, "avatarUrl" | "avatar" | "imageUrl" | "photoUrl" | "profileImageUrl">,
 ): string | undefined => {
-  return (
+  const rawAvatarUrl = (
     toNonEmptyString(user.avatarUrl) ??
     toNonEmptyString(user.avatar) ??
     toNonEmptyString(user.imageUrl) ??
     toNonEmptyString(user.photoUrl) ??
     toNonEmptyString(user.profileImageUrl)
   );
+
+  if (!rawAvatarUrl) {
+    return undefined;
+  }
+
+  return toPublicStorageUrl(rawAvatarUrl) ?? rawAvatarUrl;
 };
 
 const normalizeRoles = (user: BackendUser): string[] => {
@@ -481,6 +582,7 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
+  premiumConfirmed: Boolean(user.premiumConfirmed),
   createdAt: user.createdAt,
 });
 
@@ -510,6 +612,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     xp: 0,
     coinBalance: 0,
     streak: 0,
+    premiumConfirmed: false,
     createdAt: undefined,
   };
 };
@@ -534,6 +637,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
     xp: storedFallback?.xp ?? 0,
     coinBalance: storedFallback?.coinBalance ?? 0,
     streak: storedFallback?.streak ?? 0,
+    premiumConfirmed: storedFallback?.premiumConfirmed,
     createdAt: storedFallback?.createdAt,
   };
 };
@@ -916,29 +1020,53 @@ const normalizeDocumentQueryParams = (
   return normalized;
 };
 
-const mapLeaderBoards = (items: BackendLeaderBoard[]): Ranking[] => {
+const toLeaderboardEntries = (data: BackendLeaderBoardResponse | BackendLeaderBoardEntry[]): BackendLeaderBoardEntry[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data.items)) {
+    return data.items;
+  }
+
+  return [];
+};
+
+const toLeaderboardPoints = (item: BackendLeaderBoardEntry): number => {
+  return Math.round(item.xp ?? item.totalPoints ?? 0);
+};
+
+const toLeaderboardDisplayName = (item: BackendLeaderBoardEntry, index: number): string => {
+  return item.displayName ?? item.user?.name ?? `User ${item.userId ?? item.user?.id ?? index + 1}`;
+};
+
+const toLeaderboardAvatarSeed = (item: BackendLeaderBoardEntry, index: number): string => {
+  return String(item.userId ?? item.user?.id ?? item.id ?? index + 1);
+};
+
+const mapLeaderBoards = (items: BackendLeaderBoardEntry[]): Ranking[] => {
   return [...items]
-    .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
+    .sort((a, b) => toLeaderboardPoints(b) - toLeaderboardPoints(a))
     .slice(0, 5)
     .map((item, index) => {
-      const points = Math.round(item.totalPoints ?? 0);
+      const points = toLeaderboardPoints(item);
       return {
         rank: index + 1,
-        name: item.user?.name ?? `User ${item.user?.id ?? index + 1}`,
+        name: toLeaderboardDisplayName(item, index),
         score: `${points}/1200`,
-        avatar: String(item.user?.id ?? index + 1),
+        avatar: toLeaderboardAvatarSeed(item, index),
       };
     });
 };
 
-const mapLeaderBoardUsers = (items: BackendLeaderBoard[]): LeaderboardUser[] => {
+const mapLeaderBoardUsers = (items: BackendLeaderBoardEntry[]): LeaderboardUser[] => {
   return [...items]
-    .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
+    .sort((a, b) => toLeaderboardPoints(b) - toLeaderboardPoints(a))
     .slice(0, 10)
     .map((item, index) => ({
       rank: index + 1,
-      name: item.user?.name ?? `User ${item.user?.id ?? index + 1}`,
-      score: Math.round(item.totalPoints ?? 0),
+      name: toLeaderboardDisplayName(item, index),
+      score: toLeaderboardPoints(item),
       isUser: false,
     }));
 };
@@ -1072,8 +1200,15 @@ export const userService = {
 
   getRankings: async (): Promise<Ranking[]> => {
     try {
-      const { data } = await api.get<BackendLeaderBoard[]>("/api/leaderboards");
-      return mapLeaderBoards(data);
+      const { data } = await api.get<BackendLeaderBoardResponse | BackendLeaderBoardEntry[]>("/api/v1/leaderboard", {
+        ...buildAuthConfig(),
+        params: {
+          page: 0,
+          size: 20,
+          sortMode: "XP",
+        },
+      });
+      return mapLeaderBoards(toLeaderboardEntries(data));
     } catch {
       return [];
     }
@@ -1131,8 +1266,15 @@ export const userService = {
 
   getLeaderboard: async (): Promise<LeaderboardUser[]> => {
     try {
-      const { data } = await api.get<BackendLeaderBoard[]>("/api/leaderboards");
-      return mapLeaderBoardUsers(data);
+      const { data } = await api.get<BackendLeaderBoardResponse | BackendLeaderBoardEntry[]>("/api/v1/leaderboard", {
+        ...buildAuthConfig(),
+        params: {
+          page: 0,
+          size: 20,
+          sortMode: "XP",
+        },
+      });
+      return mapLeaderBoardUsers(toLeaderboardEntries(data));
     } catch {
       return [];
     }
@@ -1411,12 +1553,12 @@ export const examService = {
         return null;
       }
 
-      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`);
-      if (!isPublishedExamStatus(examData.status)) {
+      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`, buildAuthConfig());
+      if (!isUserVisibleExamStatus(examData.status)) {
         return null;
       }
 
-      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`);
+      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`, buildAuthConfig());
       return {
         id: String(examData.id),
         title: examData.title,
@@ -1433,7 +1575,7 @@ export const examService = {
   getAllExams: async (): Promise<ExamListItem[]> => {
     try {
       const [{ data: exams }, subjectsResponse] = await Promise.all([
-        api.get<BackendExam[]>("/api/exams"),
+        api.get<BackendExam[]>("/api/exams", buildAuthConfig()),
         api.get<BackendSubject[]>("/api/subjects").catch(() => null),
       ]);
 
@@ -1447,7 +1589,7 @@ export const examService = {
       }
 
       return exams
-        .filter((item) => isPublishedExamStatus(item.status))
+        .filter((item) => isUserVisibleExamStatus(item.status))
         .map((item) => ({
           id: item.id,
           title: item.title,
@@ -1460,6 +1602,8 @@ export const examService = {
           className: item.className ?? item.classLevel ?? item.grade,
           educationLevelName: item.educationLevelName,
           durationMinutes: item.durationMinutes,
+          startAt: item.startAt ?? null,
+          endAt: item.endAt ?? null,
           status: item.status,
           createdAt: item.createdAt,
         }));
@@ -1468,8 +1612,50 @@ export const examService = {
     }
   },
 
+  getExamListItemById: async (id: number): Promise<ExamListItem | null> => {
+    try {
+      const [{ data }, subjectsResponse] = await Promise.all([
+        api.get<BackendExam>(`/api/exams/${id}`, buildAuthConfig()),
+        api.get<BackendSubject[]>("/api/subjects").catch(() => null),
+      ]);
+      if (!isUserVisibleExamStatus(data.status)) {
+        return null;
+      }
+
+      const subjectNameById = new Map<number, string>();
+      for (const subject of subjectsResponse?.data ?? []) {
+        const normalizedName = subject.name?.trim();
+        if (!normalizedName) {
+          continue;
+        }
+        subjectNameById.set(subject.id, normalizedName);
+      }
+
+      return {
+        id: data.id,
+        title: data.title,
+        subjectId: data.subjectId,
+        subjectName:
+          resolveBackendExamSubjectName(data) ??
+          (data.subjectId !== null && data.subjectId !== undefined
+            ? subjectNameById.get(data.subjectId)
+            : undefined),
+        className: data.className ?? data.classLevel ?? data.grade,
+        educationLevelName: data.educationLevelName,
+        durationMinutes: data.durationMinutes,
+        startAt: data.startAt ?? null,
+        endAt: data.endAt ?? null,
+        status: data.status,
+        createdAt: data.createdAt,
+      };
+    } catch {
+      return null;
+    }
+  },
+
+
   startExamSession: async (examId: number): Promise<StartExamSessionResponse> => {
-    const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`);
+    const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`, undefined, buildAuthConfig());
     return mapStartSession(data);
   },
 
@@ -1497,30 +1683,57 @@ export const examService = {
   },
 
   getExamLeaderboard: async (sessionId: number): Promise<LeaderboardUser[]> => {
-    // Backend does not expose a per-session leaderboard endpoint.
-    // Use the public top-10-by-exam statistics and match by sessionId.
     try {
-      type TopSessionItem = { sessionId: number; totalScore: number; durationSeconds: number };
-      type TopByExamEntry = { examId: number; sessions: TopSessionItem[] };
-      const { data } = await api.get<TopByExamEntry[]>("/api/exam-sessions/statistics/top-10-by-exam");
-      const matchingExam = data.find((entry) =>
-        entry.sessions.some((s) => s.sessionId === sessionId),
-      );
-      if (!matchingExam || matchingExam.sessions.length === 0) {
-        return [];
-      }
-      return matchingExam.sessions
-        .sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0) || (a.durationSeconds ?? 0) - (b.durationSeconds ?? 0))
-        .slice(0, 10)
-        .map((s, index) => ({
-          rank: index + 1,
-          name: s.sessionId === sessionId ? "Bạn" : `Thí sinh ${index + 1}`,
-          score: Math.round(s.totalScore ?? 0),
-          isUser: s.sessionId === sessionId,
+      const { data } = await api.get<BackendExamLeaderboardItem[]>(`/api/exam-sessions/${sessionId}/leaderboard`);
+      return data
+        .map((item, index) => ({
+          rank: item.rank ?? index + 1,
+          name: item.userName?.trim() || `User ${item.userId ?? index + 1}`,
+          score: Math.round(item.totalScore ?? 0),
+          isUser: Boolean(item.currentUser),
         }));
     } catch {
       return [];
     }
   },
+
+  getMyExamAttempts: async (examId: number): Promise<UserExamAttempt[]> => {
+    try {
+      const response = await api.get(`/api/v1/me/exam-sessions?examId=${examId}&page=0&size=50`);
+      const attempts = toArrayPayload(response.data)
+        .map(normalizeUserAttempt)
+        .filter((item): item is UserExamAttempt => item !== null);
+
+      const enriched = await Promise.all(
+        attempts.map(async (attempt) => {
+          try {
+            const result = await examService.getExamSessionResult(attempt.sessionId);
+            return {
+              ...attempt,
+              startedAt: result.startTime ?? attempt.startedAt,
+              submittedAt: result.submittedAt ?? attempt.submittedAt,
+              totalScore: Number(result.totalScore ?? attempt.totalScore),
+              durationSeconds:
+                typeof result.durationMinutes === "number" && Number.isFinite(result.durationMinutes)
+                  ? Math.round(result.durationMinutes * 60)
+                  : attempt.durationSeconds,
+            };
+          } catch {
+            return attempt;
+          }
+        })
+      );
+
+      return enriched
+        .sort((a, b) => {
+          const aTime = (a.submittedAt ?? a.startedAt) ? new Date((a.submittedAt ?? a.startedAt) as string).getTime() : 0;
+          const bTime = (b.submittedAt ?? b.startedAt) ? new Date((b.submittedAt ?? b.startedAt) as string).getTime() : 0;
+          return bTime - aTime;
+        });
+    } catch {
+      return [];
+    }
+  },
 };
+
 

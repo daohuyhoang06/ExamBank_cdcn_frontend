@@ -5,9 +5,7 @@ import {
   ArrowDown,
   ArrowUp,
   Award,
-  BadgeInfo,
   CheckCircle2,
-  Clock3,
   Eye,
   FileDown,
   Loader2,
@@ -15,7 +13,6 @@ import {
   PlayCircle,
   RefreshCcw,
   Trophy,
-  UnlockKeyhole,
   UsersRound,
   X,
 } from "lucide-react";
@@ -1017,54 +1014,6 @@ export default function ModeratorExamSessionManagementPage() {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[var(--line-soft)] bg-[var(--bg-soft)] p-4">
-                  <p className="text-sm font-bold text-[var(--ink-900)]">Hành động</p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--ink-600)]">
-                    API hiện tại chỉ cho phép xem/sửa session của chính người dùng. Moderator không có quyền thao tác trên session của người khác.
-                  </p>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      leftIcon={<BadgeInfo size={15} />}
-                      disabled
-                      className="rounded-xl bg-white"
-                      title="Backend từ chối xem result session người khác (403)."
-                    >
-                      Xem kết quả
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      leftIcon={<Clock3 size={15} />}
-                      disabled
-                      className="rounded-xl"
-                      title="Backend từ chối submit session người khác (403)."
-                    >
-                      Force Submit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      leftIcon={<LockKeyhole size={15} />}
-                      disabled
-                      className="rounded-xl"
-                      title="Chưa có API Lock Session"
-                    >
-                      Lock Session
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      leftIcon={<UnlockKeyhole size={15} />}
-                      disabled
-                      className="rounded-xl bg-white"
-                      title="Chưa có API Unlock Session"
-                    >
-                      Unlock Session
-                    </Button>
-                  </div>
-                </div>
               </div>
             ) : null}
           </aside>
