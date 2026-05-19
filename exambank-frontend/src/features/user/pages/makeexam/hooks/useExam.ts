@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { examService } from '@/features/user/services/user.service';
 import type { Exam, ExamSessionStatusResponse, SaveAnswerItem, SubmitReason } from '@/features/user/types/user.type';
+import { getStoredAuthToken } from '@/lib/api-client';
 
 const EXAM_PROGRESS_STORAGE_PREFIX = 'exambank_exam_progress';
 
@@ -222,6 +223,13 @@ export const useExam = (examId?: string) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!getStoredAuthToken()) {
+      setIsLoadingExam(false);
+      setExam(null);
+      setExamLoadError('Vui long dang nhap de lam bai thi online.');
+      return;
+    }
+
     if (!examId) {
       setIsLoadingExam(false);
       setExamLoadError('Khong tim thay ma de thi.');

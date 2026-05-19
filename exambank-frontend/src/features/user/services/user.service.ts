@@ -28,6 +28,16 @@ import type {
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 
 const api = apiClient;
+const buildAuthConfig = () => {
+  const token = getStoredAuthToken();
+  return token
+    ? {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    : undefined;
+};
 
 const DEFAULT_EDUCATION_LEVELS: EducationLevel[] = [
   { id: "10", name: "Lớp 10", group: "THPT" },
@@ -79,13 +89,29 @@ type BackendReview = {
   canDelete?: boolean;
 };
 
-type BackendLeaderBoard = {
-  id: number;
+type BackendLeaderBoardEntry = {
+  rank?: number;
+  userId?: number;
+  displayName?: string;
+  avatar?: string | null;
+  xp?: number;
+  streak?: number;
+  coinBalance?: number;
+  // Legacy shape fallback
+  id?: number;
   totalPoints?: number;
   user?: {
     id?: number;
     name?: string;
   };
+};
+
+type BackendLeaderBoardResponse = {
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+  items?: BackendLeaderBoardEntry[];
 };
 
 type BackendSubject = {
@@ -119,6 +145,8 @@ type BackendExam = {
   grade?: string;
   educationLevelName?: string;
   durationMinutes?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
   status?: string;
   createdAt?: string;
 };
@@ -203,6 +231,15 @@ type BackendUser = {
   createdAt?: string;
 };
 
+type UserExamAttempt = {
+  sessionId: number;
+  startedAt: string | null;
+  submittedAt: string | null;
+  totalScore: number;
+  durationSeconds: number | null;
+};
+
+
 type BackendSelfUser = {
   id?: number;
   email?: string;
@@ -214,9 +251,61 @@ type BackendSelfUser = {
   profileImageUrl?: string;
 };
 
-const isPublishedExamStatus = (status?: string): boolean => {
-  return (status ?? "").trim().toUpperCase() === "PUBLISHED";
+const normalizeExamStatus = (status?: string): string => (status ?? "").trim().toUpperCase();
+
+const isUserVisibleExamStatus = (status?: string): boolean => {
+  const normalized = normalizeExamStatus(status);
+  return normalized === "PUBLISHED" || normalized === "ONGOING" || normalized === "CLOSED";
 };
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toStringOrNull = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toArrayPayload = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const objectValue = value as Record<string, unknown>;
+  const candidates = [
+    objectValue.data,
+    objectValue.content,
+    objectValue.items,
+    objectValue.sessions,
+    objectValue.payload,
+    objectValue.result,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+};
+
+const normalizeUserAttempt = (value: unknown): UserExamAttempt | null => {
+  if (!value || typeof value !== "object") return null;
+  const objectValue = value as Record<string, unknown>;
+  const sessionId = toNumberOrNull(objectValue.sessionId ?? objectValue.session_id ?? objectValue.id);
+  if (sessionId === null || sessionId <= 0) return null;
+
+  return {
+    sessionId,
+    startedAt: toStringOrNull(objectValue.startTime ?? objectValue.start_time),
+    submittedAt: toStringOrNull(objectValue.submittedAt ?? objectValue.submitted_at),
+    totalScore: toNumberOrNull(objectValue.totalScore ?? objectValue.total_score) ?? 0,
+    durationSeconds: toNumberOrNull(objectValue.durationSeconds ?? objectValue.duration_seconds),
+  };
+};
+
 
 const toExamSessionStatus = (status?: string): ExamSessionStatusResponse["status"] => {
   const normalized = (status ?? "").trim().toUpperCase();
@@ -842,29 +931,53 @@ const normalizeDocumentQueryParams = (
   return normalized;
 };
 
-const mapLeaderBoards = (items: BackendLeaderBoard[]): Ranking[] => {
+const toLeaderboardEntries = (data: BackendLeaderBoardResponse | BackendLeaderBoardEntry[]): BackendLeaderBoardEntry[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data.items)) {
+    return data.items;
+  }
+
+  return [];
+};
+
+const toLeaderboardPoints = (item: BackendLeaderBoardEntry): number => {
+  return Math.round(item.xp ?? item.totalPoints ?? 0);
+};
+
+const toLeaderboardDisplayName = (item: BackendLeaderBoardEntry, index: number): string => {
+  return item.displayName ?? item.user?.name ?? `User ${item.userId ?? item.user?.id ?? index + 1}`;
+};
+
+const toLeaderboardAvatarSeed = (item: BackendLeaderBoardEntry, index: number): string => {
+  return String(item.userId ?? item.user?.id ?? item.id ?? index + 1);
+};
+
+const mapLeaderBoards = (items: BackendLeaderBoardEntry[]): Ranking[] => {
   return [...items]
-    .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
+    .sort((a, b) => toLeaderboardPoints(b) - toLeaderboardPoints(a))
     .slice(0, 5)
     .map((item, index) => {
-      const points = Math.round(item.totalPoints ?? 0);
+      const points = toLeaderboardPoints(item);
       return {
         rank: index + 1,
-        name: item.user?.name ?? `User ${item.user?.id ?? index + 1}`,
+        name: toLeaderboardDisplayName(item, index),
         score: `${points}/1200`,
-        avatar: String(item.user?.id ?? index + 1),
+        avatar: toLeaderboardAvatarSeed(item, index),
       };
     });
 };
 
-const mapLeaderBoardUsers = (items: BackendLeaderBoard[]): LeaderboardUser[] => {
+const mapLeaderBoardUsers = (items: BackendLeaderBoardEntry[]): LeaderboardUser[] => {
   return [...items]
-    .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
+    .sort((a, b) => toLeaderboardPoints(b) - toLeaderboardPoints(a))
     .slice(0, 10)
     .map((item, index) => ({
       rank: index + 1,
-      name: item.user?.name ?? `User ${item.user?.id ?? index + 1}`,
-      score: Math.round(item.totalPoints ?? 0),
+      name: toLeaderboardDisplayName(item, index),
+      score: toLeaderboardPoints(item),
       isUser: false,
     }));
 };
@@ -998,8 +1111,15 @@ export const userService = {
 
   getRankings: async (): Promise<Ranking[]> => {
     try {
-      const { data } = await api.get<BackendLeaderBoard[]>("/api/leaderboards");
-      return mapLeaderBoards(data);
+      const { data } = await api.get<BackendLeaderBoardResponse | BackendLeaderBoardEntry[]>("/api/v1/leaderboard", {
+        ...buildAuthConfig(),
+        params: {
+          page: 0,
+          size: 20,
+          sortMode: "XP",
+        },
+      });
+      return mapLeaderBoards(toLeaderboardEntries(data));
     } catch {
       return [];
     }
@@ -1020,8 +1140,15 @@ export const userService = {
 
   getLeaderboard: async (): Promise<LeaderboardUser[]> => {
     try {
-      const { data } = await api.get<BackendLeaderBoard[]>("/api/leaderboards");
-      return mapLeaderBoardUsers(data);
+      const { data } = await api.get<BackendLeaderBoardResponse | BackendLeaderBoardEntry[]>("/api/v1/leaderboard", {
+        ...buildAuthConfig(),
+        params: {
+          page: 0,
+          size: 20,
+          sortMode: "XP",
+        },
+      });
+      return mapLeaderBoardUsers(toLeaderboardEntries(data));
     } catch {
       return [];
     }
@@ -1300,12 +1427,12 @@ export const examService = {
         return null;
       }
 
-      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`);
-      if (!isPublishedExamStatus(examData.status)) {
+      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`, buildAuthConfig());
+      if (!isUserVisibleExamStatus(examData.status)) {
         return null;
       }
 
-      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`);
+      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`, buildAuthConfig());
       return {
         id: String(examData.id),
         title: examData.title,
@@ -1322,7 +1449,7 @@ export const examService = {
   getAllExams: async (): Promise<ExamListItem[]> => {
     try {
       const [{ data: exams }, subjectsResponse] = await Promise.all([
-        api.get<BackendExam[]>("/api/exams"),
+        api.get<BackendExam[]>("/api/exams", buildAuthConfig()),
         api.get<BackendSubject[]>("/api/subjects").catch(() => null),
       ]);
 
@@ -1336,7 +1463,7 @@ export const examService = {
       }
 
       return exams
-        .filter((item) => isPublishedExamStatus(item.status))
+        .filter((item) => isUserVisibleExamStatus(item.status))
         .map((item) => ({
           id: item.id,
           title: item.title,
@@ -1349,6 +1476,8 @@ export const examService = {
           className: item.className ?? item.classLevel ?? item.grade,
           educationLevelName: item.educationLevelName,
           durationMinutes: item.durationMinutes,
+          startAt: item.startAt ?? null,
+          endAt: item.endAt ?? null,
           status: item.status,
           createdAt: item.createdAt,
         }));
@@ -1357,8 +1486,50 @@ export const examService = {
     }
   },
 
+  getExamListItemById: async (id: number): Promise<ExamListItem | null> => {
+    try {
+      const [{ data }, subjectsResponse] = await Promise.all([
+        api.get<BackendExam>(`/api/exams/${id}`, buildAuthConfig()),
+        api.get<BackendSubject[]>("/api/subjects").catch(() => null),
+      ]);
+      if (!isUserVisibleExamStatus(data.status)) {
+        return null;
+      }
+
+      const subjectNameById = new Map<number, string>();
+      for (const subject of subjectsResponse?.data ?? []) {
+        const normalizedName = subject.name?.trim();
+        if (!normalizedName) {
+          continue;
+        }
+        subjectNameById.set(subject.id, normalizedName);
+      }
+
+      return {
+        id: data.id,
+        title: data.title,
+        subjectId: data.subjectId,
+        subjectName:
+          resolveBackendExamSubjectName(data) ??
+          (data.subjectId !== null && data.subjectId !== undefined
+            ? subjectNameById.get(data.subjectId)
+            : undefined),
+        className: data.className ?? data.classLevel ?? data.grade,
+        educationLevelName: data.educationLevelName,
+        durationMinutes: data.durationMinutes,
+        startAt: data.startAt ?? null,
+        endAt: data.endAt ?? null,
+        status: data.status,
+        createdAt: data.createdAt,
+      };
+    } catch {
+      return null;
+    }
+  },
+
+
   startExamSession: async (examId: number): Promise<StartExamSessionResponse> => {
-    const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`);
+    const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`, undefined, buildAuthConfig());
     return mapStartSession(data);
   },
 
@@ -1407,6 +1578,44 @@ export const examService = {
           score: Math.round(s.totalScore ?? 0),
           isUser: s.sessionId === sessionId,
         }));
+    } catch {
+      return [];
+    }
+  },
+
+  getMyExamAttempts: async (examId: number): Promise<UserExamAttempt[]> => {
+    try {
+      const response = await api.get(`/api/v1/me/exam-sessions?examId=${examId}&page=0&size=50`);
+      const attempts = toArrayPayload(response.data)
+        .map(normalizeUserAttempt)
+        .filter((item): item is UserExamAttempt => item !== null);
+
+      const enriched = await Promise.all(
+        attempts.map(async (attempt) => {
+          try {
+            const result = await examService.getExamSessionResult(attempt.sessionId);
+            return {
+              ...attempt,
+              startedAt: result.startTime ?? attempt.startedAt,
+              submittedAt: result.submittedAt ?? attempt.submittedAt,
+              totalScore: Number(result.totalScore ?? attempt.totalScore),
+              durationSeconds:
+                typeof result.durationMinutes === "number" && Number.isFinite(result.durationMinutes)
+                  ? Math.round(result.durationMinutes * 60)
+                  : attempt.durationSeconds,
+            };
+          } catch {
+            return attempt;
+          }
+        })
+      );
+
+      return enriched
+        .sort((a, b) => {
+          const aTime = (a.submittedAt ?? a.startedAt) ? new Date((a.submittedAt ?? a.startedAt) as string).getTime() : 0;
+          const bTime = (b.submittedAt ?? b.startedAt) ? new Date((b.submittedAt ?? b.startedAt) as string).getTime() : 0;
+          return bTime - aTime;
+        });
     } catch {
       return [];
     }

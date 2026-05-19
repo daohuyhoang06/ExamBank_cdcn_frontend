@@ -30,6 +30,12 @@ body {
   background: #F3F4F6;
 }
 
+body.admin-detail-modal-open .sidebar-toggle-fab {
+  opacity: 0.2;
+  pointer-events: none;
+  filter: saturate(0.2);
+}
+
 h1,
 h2 {
   margin: 0;
