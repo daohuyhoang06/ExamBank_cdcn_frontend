@@ -13,6 +13,7 @@ import type {
   LeaderboardUser,
   Question,
   Ranking,
+  ReviewRecommendation,
   SaveAnswerItem,
   SelectedFile,
   StartExamSessionResponse,
@@ -24,6 +25,7 @@ import type {
   UploadDocumentPayload,
   UserComment,
   UserProfile,
+  WeakTopicInsight,
 } from "../types/user.type";
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
 
@@ -96,6 +98,38 @@ type BackendSubject = {
 type BackendTopic = {
   id: number;
   name: string;
+};
+
+type BackendTopicTag = {
+  id?: number | null;
+  name?: string | null;
+};
+
+type BackendWeakTopic = {
+  topicTag?: string | null;
+  totalAttempts?: number | null;
+  correctCount?: number | null;
+  accuracyRate?: number | string | null;
+  lastUpdatedAt?: string | null;
+};
+
+type BackendReviewRecommendation = {
+  questionId?: number | null;
+  subjectId?: number | null;
+  content?: string | null;
+  type?: string | null;
+  options?: string | null;
+  imageUrl?: string | null;
+  difficulty?: number | string | null;
+  maxScore?: number | string | null;
+  topicTag?: BackendTopicTag[] | null;
+  source?: string | null;
+  due?: boolean | null;
+  memoryLevel?: string | null;
+  intervalDays?: number | string | null;
+  easeFactor?: number | string | null;
+  repetitionCount?: number | string | null;
+  nextReviewDate?: string | null;
 };
 
 type BackendExam = {
@@ -253,6 +287,46 @@ const toFiniteNumberOrUndefined = (value: unknown): number | undefined => {
   }
   return undefined;
 };
+
+const toAccuracyRate = (value: unknown): number => {
+  const numeric = toFiniteNumberOrUndefined(value);
+  if (numeric === undefined) {
+    return 0;
+  }
+  if (numeric > 1) {
+    return Math.min(1, numeric / 100);
+  }
+  return Math.max(0, numeric);
+};
+
+const mapWeakTopicInsight = (item: BackendWeakTopic): WeakTopicInsight => ({
+  topicTag: item.topicTag ?? "",
+  totalAttempts: item.totalAttempts ?? 0,
+  correctCount: item.correctCount ?? 0,
+  accuracyRate: toAccuracyRate(item.accuracyRate),
+  lastUpdatedAt: item.lastUpdatedAt ?? undefined,
+});
+
+const mapReviewRecommendation = (item: BackendReviewRecommendation): ReviewRecommendation => ({
+  questionId: item.questionId ?? 0,
+  subjectId: item.subjectId ?? undefined,
+  content: item.content ?? "",
+  type: item.type ?? undefined,
+  options: item.options ?? undefined,
+  imageUrl: item.imageUrl ?? undefined,
+  difficulty: toFiniteNumberOrUndefined(item.difficulty),
+  maxScore: toFiniteNumberOrUndefined(item.maxScore),
+  topicTags: (item.topicTag ?? [])
+    .map((tag) => tag?.name ?? "")
+    .filter((name) => name.trim().length > 0),
+  source: item.source ?? undefined,
+  due: Boolean(item.due),
+  memoryLevel: item.memoryLevel ?? undefined,
+  intervalDays: toFiniteNumberOrUndefined(item.intervalDays),
+  easeFactor: toFiniteNumberOrUndefined(item.easeFactor),
+  repetitionCount: toFiniteNumberOrUndefined(item.repetitionCount),
+  nextReviewDate: item.nextReviewDate ?? undefined,
+});
 
 const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null => {
   if (!fileUrl) {
@@ -1002,6 +1076,43 @@ export const userService = {
       return mapLeaderBoards(data);
     } catch {
       return [];
+    }
+  },
+
+  getWeakTopics: async (limit = 5): Promise<WeakTopicInsight[]> => {
+    try {
+      const { data } = await api.get<BackendWeakTopic[]>("/api/v1/me/learning/weak-topics", {
+        params: { limit },
+      });
+      return data.map(mapWeakTopicInsight).filter((item) => item.topicTag.trim().length > 0);
+    } catch {
+      return [];
+    }
+  },
+
+  getReviewRecommendations: async (limit = 8): Promise<ReviewRecommendation[]> => {
+    try {
+      const { data } = await api.get<BackendReviewRecommendation[]>("/api/v1/me/reviews/recommendations", {
+        params: { limit },
+      });
+      return data.map(mapReviewRecommendation).filter((item) => item.questionId > 0 && item.content.trim().length > 0);
+    } catch {
+      return [];
+    }
+  },
+
+  recordSm2ReviewResult: async (questionId: number, quality: number): Promise<boolean> => {
+    if (!Number.isFinite(questionId) || questionId <= 0) {
+      return false;
+    }
+
+    try {
+      await api.post(`/api/v1/me/reviews/${questionId}/result`, {
+        quality,
+      });
+      return true;
+    } catch {
+      return false;
     }
   },
 

@@ -32,6 +32,35 @@ export interface Recommendation {
   documentId?: number;
 }
 
+export interface WeakTopicInsight {
+  topicTag: string;
+  totalAttempts: number;
+  correctCount: number;
+  accuracyRate: number;
+  lastUpdatedAt?: string;
+}
+
+export type ReviewMemoryLevel = "FORGOTTEN" | "HARD" | "REMEMBERED" | "EASY" | string;
+
+export interface ReviewRecommendation {
+  questionId: number;
+  subjectId?: number;
+  content: string;
+  type?: string;
+  options?: string;
+  imageUrl?: string;
+  difficulty?: number;
+  maxScore?: number;
+  topicTags: string[];
+  source?: string;
+  due?: boolean;
+  memoryLevel?: ReviewMemoryLevel;
+  intervalDays?: number;
+  easeFactor?: number;
+  repetitionCount?: number;
+  nextReviewDate?: string;
+}
+
 export interface Ranking {
   rank: number;
   name: string;

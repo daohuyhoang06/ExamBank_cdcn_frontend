@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { CheckCircle2, RotateCcw, Trophy } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Exam, Question, QuestionResult } from '@/features/user/types/user.type';
-import { examService } from '@/features/user/services/user.service';
+import { examService, userService } from '@/features/user/services/user.service';
 import { sanitizeRichHtml } from '@/features/user/utils/rich-text';
 import { useExamreview } from '../hooks/useExamreview';
 
@@ -25,6 +25,7 @@ type ReviewQuestionRow = {
 };
 
 const REVIEW_SNAPSHOT_STORAGE_PREFIX = 'exambank_exam_review_snapshot';
+const SM2_SYNC_STORAGE_PREFIX = 'exambank_sm2_sync';
 
 const readStoredReviewSnapshot = (sessionId?: number): ExamReviewRouteState | null => {
   if (!sessionId) {
@@ -91,6 +92,16 @@ const toAnswerText = (question: Question, rawValue: unknown): string => {
   }
 
   return String(rawValue);
+};
+
+const toSm2Quality = (result: QuestionResult): number | null => {
+  if (result.isCorrect === true) {
+    return 4;
+  }
+  if (result.isCorrect === false) {
+    return 1;
+  }
+  return null;
 };
 
 const renderQuestionAnswers = (
@@ -349,6 +360,40 @@ const Examreview = () => {
       isActive = false;
     };
   }, [reviewRows, questionScoreById]);
+
+  useEffect(() => {
+    if (!sessionId || questionResults.length === 0) {
+      return;
+    }
+
+    const syncKey = `${SM2_SYNC_STORAGE_PREFIX}:${sessionId}`;
+    if (sessionStorage.getItem(syncKey) === 'done') {
+      return;
+    }
+
+    const sm2Targets = questionResults
+      .map((result) => ({
+        questionId: result.questionId,
+        quality: toSm2Quality(result),
+      }))
+      .filter((item) => typeof item.quality === 'number' && Number.isFinite(item.questionId));
+
+    if (sm2Targets.length === 0) {
+      sessionStorage.setItem(syncKey, 'done');
+      return;
+    }
+
+    const pushResults = async () => {
+      await Promise.allSettled(
+        sm2Targets.map((item) =>
+          userService.recordSm2ReviewResult(item.questionId, item.quality as number),
+        ),
+      );
+      sessionStorage.setItem(syncKey, 'done');
+    };
+
+    void pushResults();
+  }, [questionResults, sessionId]);
 
   const effectiveExamTitle = routeState?.examTitle ?? storedRouteState?.examTitle ?? fetchedExamTitle;
   const effectiveQuestionCount = routeState?.questionCount ?? storedRouteState?.questionCount ?? snapshotQuestions.length;
