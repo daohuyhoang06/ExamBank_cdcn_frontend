@@ -55,7 +55,12 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
   ) {
     return 'moderation';
   }
-  if (normalized === 'COIN_EARNED') {
+  if (
+    normalized === 'COIN_EARNED' ||
+    normalized === 'PREMIUM_PAYMENT_PENDING_REVIEW' ||
+    normalized === 'PREMIUM_APPROVED' ||
+    normalized === 'PREMIUM_REJECTED'
+  ) {
     return 'financial';
   }
   if (normalized === 'DISCUSSION_ACTIVITY') {
@@ -212,6 +217,15 @@ const buildNotificationHref = (
 
   if (normalizedType === 'SCORE_UPDATED') {
     return '/user/online-exam';
+  }
+
+  if (
+    normalizedType === 'PREMIUM_PAYMENT_PENDING_REVIEW' ||
+    normalizedType === 'PREMIUM_APPROVED' ||
+    normalizedType === 'PREMIUM_REJECTED' ||
+    normalizedTarget === 'PREMIUM_ORDER'
+  ) {
+    return isAdmin ? '/admin/financial' : '/user/premium/upgrade';
   }
 
   return undefined;

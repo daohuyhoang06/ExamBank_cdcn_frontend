@@ -213,6 +213,7 @@ type BackendUser = {
   status?: string;
   phone?: string;
   birthDate?: string;
+  premiumConfirmed?: boolean;
   createdAt?: string;
 };
 
@@ -418,6 +419,7 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
+  premiumConfirmed: Boolean(user.premiumConfirmed),
   createdAt: user.createdAt,
 });
 
@@ -447,6 +449,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     xp: 0,
     coinBalance: 0,
     streak: 0,
+    premiumConfirmed: false,
     createdAt: undefined,
   };
 };
@@ -471,6 +474,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
     xp: storedFallback?.xp ?? 0,
     coinBalance: storedFallback?.coinBalance ?? 0,
     streak: storedFallback?.streak ?? 0,
+    premiumConfirmed: storedFallback?.premiumConfirmed,
     createdAt: storedFallback?.createdAt,
   };
 };

@@ -215,6 +215,7 @@ export interface UserProfile {
   xp: number;
   coinBalance: number;
   streak: number;
+  premiumConfirmed?: boolean;
   createdAt?: string;
 }
 

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Temporary QR">
+  <rect width="240" height="240" fill="#ffffff"/>
+  <rect x="12" y="12" width="70" height="70" fill="#000000"/>
+  <rect x="22" y="22" width="50" height="50" fill="#ffffff"/>
+  <rect x="30" y="30" width="34" height="34" fill="#000000"/>
+
+  <rect x="158" y="12" width="70" height="70" fill="#000000"/>
+  <rect x="168" y="22" width="50" height="50" fill="#ffffff"/>
+  <rect x="176" y="30" width="34" height="34" fill="#000000"/>
+
+  <rect x="12" y="158" width="70" height="70" fill="#000000"/>
+  <rect x="22" y="168" width="50" height="50" fill="#ffffff"/>
+  <rect x="30" y="176" width="34" height="34" fill="#000000"/>
+
+  <rect x="98" y="98" width="10" height="10" fill="#000000"/>
+  <rect x="118" y="98" width="10" height="10" fill="#000000"/>
+  <rect x="138" y="98" width="10" height="10" fill="#000000"/>
+  <rect x="88" y="118" width="10" height="10" fill="#000000"/>
+  <rect x="108" y="118" width="10" height="10" fill="#000000"/>
+  <rect x="128" y="118" width="10" height="10" fill="#000000"/>
+  <rect x="148" y="118" width="10" height="10" fill="#000000"/>
+  <rect x="98" y="138" width="10" height="10" fill="#000000"/>
+  <rect x="118" y="138" width="10" height="10" fill="#000000"/>
+  <rect x="138" y="138" width="10" height="10" fill="#000000"/>
+
+  <rect x="90" y="170" width="10" height="10" fill="#000000"/>
+  <rect x="110" y="170" width="10" height="10" fill="#000000"/>
+  <rect x="130" y="170" width="10" height="10" fill="#000000"/>
+  <rect x="150" y="170" width="10" height="10" fill="#000000"/>
+  <rect x="170" y="170" width="10" height="10" fill="#000000"/>
+  <rect x="190" y="170" width="10" height="10" fill="#000000"/>
+
+  <rect x="90" y="190" width="10" height="10" fill="#000000"/>
+  <rect x="130" y="190" width="10" height="10" fill="#000000"/>
+  <rect x="170" y="190" width="10" height="10" fill="#000000"/>
+  <rect x="190" y="190" width="10" height="10" fill="#000000"/>
+
+  <text x="120" y="232" font-size="10" text-anchor="middle" font-family="monospace" fill="#111111">TEMP QR</text>
+</svg>
