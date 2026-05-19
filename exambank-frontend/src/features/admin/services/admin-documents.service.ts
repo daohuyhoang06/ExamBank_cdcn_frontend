@@ -2,7 +2,11 @@ import { isAxiosError } from "axios";
 import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 
 const ADMIN_DOCUMENTS_PATH = "/api/v1/admin/documents";
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "");
 
 type ApiEnvelope = {
   data?: unknown;
@@ -260,18 +264,14 @@ function toPublicMinioUrlIfInternal(rawUrl: string) {
       return rawUrl;
     }
 
-    const isPresignedUrl = target.searchParams.has("X-Amz-Signature");
-    if (isPresignedUrl) {
-      // Signature includes canonical host; rewriting host would invalidate it.
-      // Convert to public object URL (no signature), consistent with moderator/user flow.
-      return `${MINIO_PUBLIC_ENDPOINT}${target.pathname}`;
+    const pathSegments = target.pathname.split("/").filter(Boolean);
+    if (pathSegments.length < 2) {
+      return rawUrl;
     }
 
-    const publicBase = new URL(MINIO_PUBLIC_ENDPOINT);
-    target.protocol = publicBase.protocol;
-    target.hostname = publicBase.hostname;
-    target.port = publicBase.port;
-    return target.toString();
+    const [bucket, ...objectKeySegments] = pathSegments;
+    const objectKey = objectKeySegments.join("/");
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
   } catch {
     return rawUrl;
   }
@@ -374,29 +374,21 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     return normalized;
   }
 
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
+  }
+
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
-  if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
-  }
-
-  const pathWithoutScheme = normalized.slice("storage://".length);
-  const firstSlash = pathWithoutScheme.indexOf("/");
-  if (firstSlash <= 0) {
-    return null;
-  }
-
-  const bucket = pathWithoutScheme.slice(0, firstSlash);
-  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
-  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
-  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
 }

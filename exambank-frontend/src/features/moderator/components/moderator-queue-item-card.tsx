@@ -2,7 +2,11 @@
 import type { ModeratorQueueRecord } from "@/features/moderator/services/moderator-queue.service";
 import defaultQueueThumbnail from "@/assets/default-queue-thumbnail.svg";
 
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "");
 
 type ModeratorQueueItemCardProps = {
   item: ModeratorQueueRecord;
@@ -74,7 +78,7 @@ function badgeBaseClassName() {
   return "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em]";
 }
 
-function toMinioPublicUrl(fileUrl: string | null | undefined) {
+function toPublicStorageUrl(fileUrl: string | null | undefined) {
   if (!fileUrl) {
     return null;
   }
@@ -88,29 +92,23 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     return normalized;
   }
 
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
+  }
+
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
-  if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
-  }
-
-  const pathWithoutScheme = normalized.slice("storage://".length);
-  const firstSlash = pathWithoutScheme.indexOf("/");
-  if (firstSlash <= 0) {
-    return null;
-  }
-
-  const bucket = pathWithoutScheme.slice(0, firstSlash);
-  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
 }
 
 export function ModeratorQueueItemCard({
@@ -118,7 +116,7 @@ export function ModeratorQueueItemCard({
   active,
   onSelect,
 }: ModeratorQueueItemCardProps) {
-  const imageThumbnail = toMinioPublicUrl(item.fileUrl);
+  const imageThumbnail = toPublicStorageUrl(item.fileUrl);
   const thumbnailSrc = imageThumbnail || defaultQueueThumbnail;
 
   return (
