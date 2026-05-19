@@ -25,6 +25,7 @@ import UserProfileSettingsPage from "@/features/user/pages/UserProfileSettingsPa
 import PremiumExamImportPage from "@/features/user/pages/PremiumExamImportPage";
 import PremiumCompetitionsPage from "@/features/user/pages/PremiumCompetitionsPage";
 import PrivateCompetitionJoinPage from "@/features/user/pages/PrivateCompetitionJoinPage";
+import PremiumUpgradePage from "@/features/user/pages/PremiumUpgradePage";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
 import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
@@ -133,6 +134,10 @@ export const router = createBrowserRouter([
       {
         path: "private-competition",
         element: <PrivateCompetitionJoinPage />,
+      },
+      {
+        path: "premium/upgrade",
+        element: <PremiumUpgradePage />,
       },
       {
         path: "premium/import",

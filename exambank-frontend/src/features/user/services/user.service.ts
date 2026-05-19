@@ -58,7 +58,12 @@ const DEFAULT_SUBJECTS: Subject[] = [
   "Tin học",
 ];
 const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ??
+  ""
+).replace(/\/+$/, "");
 
 type BackendDocument = {
   id: number;
@@ -211,6 +216,14 @@ type BackendExamSessionResult = {
   questionResults?: BackendQuestionResult[];
 };
 
+type BackendExamLeaderboardItem = {
+  rank?: number;
+  userId?: number;
+  userName?: string;
+  totalScore?: number;
+  currentUser?: boolean;
+};
+
 type BackendUser = {
   id: number;
   email: string;
@@ -228,6 +241,7 @@ type BackendUser = {
   status?: string;
   phone?: string;
   birthDate?: string;
+  premiumConfirmed?: boolean;
   createdAt?: string;
 };
 
@@ -358,11 +372,11 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
   }
 
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
   if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
   }
 
   const pathWithoutScheme = normalized.slice("storage://".length);
@@ -373,15 +387,7 @@ const toPublicStorageUrl = (fileUrl: string | null | undefined): string | null =
 
   const bucket = pathWithoutScheme.slice(0, firstSlash);
   const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
-  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
-  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
 };
 
 const appendQuestionImageHtml = (content: string, imageUrl: string | null | undefined): string => {
@@ -458,13 +464,19 @@ const resolveBackendExamSubjectName = (item: BackendExam): string | undefined =>
 const resolveBackendAvatarUrl = (
   user: Pick<BackendUser, "avatarUrl" | "avatar" | "imageUrl" | "photoUrl" | "profileImageUrl">,
 ): string | undefined => {
-  return (
+  const rawAvatarUrl = (
     toNonEmptyString(user.avatarUrl) ??
     toNonEmptyString(user.avatar) ??
     toNonEmptyString(user.imageUrl) ??
     toNonEmptyString(user.photoUrl) ??
     toNonEmptyString(user.profileImageUrl)
   );
+
+  if (!rawAvatarUrl) {
+    return undefined;
+  }
+
+  return toPublicStorageUrl(rawAvatarUrl) ?? rawAvatarUrl;
 };
 
 const normalizeRoles = (user: BackendUser): string[] => {
@@ -496,6 +508,7 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
+  premiumConfirmed: Boolean(user.premiumConfirmed),
   createdAt: user.createdAt,
 });
 
@@ -525,6 +538,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     xp: 0,
     coinBalance: 0,
     streak: 0,
+    premiumConfirmed: false,
     createdAt: undefined,
   };
 };
@@ -549,6 +563,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
     xp: storedFallback?.xp ?? 0,
     coinBalance: storedFallback?.coinBalance ?? 0,
     streak: storedFallback?.streak ?? 0,
+    premiumConfirmed: storedFallback?.premiumConfirmed,
     createdAt: storedFallback?.createdAt,
   };
 };
@@ -1557,26 +1572,14 @@ export const examService = {
   },
 
   getExamLeaderboard: async (sessionId: number): Promise<LeaderboardUser[]> => {
-    // Backend does not expose a per-session leaderboard endpoint.
-    // Use the public top-10-by-exam statistics and match by sessionId.
     try {
-      type TopSessionItem = { sessionId: number; totalScore: number; durationSeconds: number };
-      type TopByExamEntry = { examId: number; sessions: TopSessionItem[] };
-      const { data } = await api.get<TopByExamEntry[]>("/api/exam-sessions/statistics/top-10-by-exam");
-      const matchingExam = data.find((entry) =>
-        entry.sessions.some((s) => s.sessionId === sessionId),
-      );
-      if (!matchingExam || matchingExam.sessions.length === 0) {
-        return [];
-      }
-      return matchingExam.sessions
-        .sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0) || (a.durationSeconds ?? 0) - (b.durationSeconds ?? 0))
-        .slice(0, 10)
-        .map((s, index) => ({
-          rank: index + 1,
-          name: s.sessionId === sessionId ? "Bạn" : `Thí sinh ${index + 1}`,
-          score: Math.round(s.totalScore ?? 0),
-          isUser: s.sessionId === sessionId,
+      const { data } = await api.get<BackendExamLeaderboardItem[]>(`/api/exam-sessions/${sessionId}/leaderboard`);
+      return data
+        .map((item, index) => ({
+          rank: item.rank ?? index + 1,
+          name: item.userName?.trim() || `User ${item.userId ?? index + 1}`,
+          score: Math.round(item.totalScore ?? 0),
+          isUser: Boolean(item.currentUser),
         }));
     } catch {
       return [];
@@ -1621,4 +1624,5 @@ export const examService = {
     }
   },
 };
+
 

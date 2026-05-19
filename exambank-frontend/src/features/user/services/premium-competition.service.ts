@@ -20,7 +20,15 @@ export const parseDraftJson = (draftJson?: string): ExamDraft | null => {
       subjectId: parsed.subjectId ?? null,
       className: parsed.className ?? "Lớp 12",
       durationMinutes: Number(parsed.durationMinutes ?? 45),
-      questions: Array.isArray(parsed.questions) ? parsed.questions : [],
+      questions: Array.isArray(parsed.questions)
+        ? parsed.questions.map((question) => ({
+            ...question,
+            imageUrls: Array.isArray((question as { imageUrls?: unknown }).imageUrls)
+              ? ((question as { imageUrls: unknown[] }).imageUrls
+                  .filter((item): item is string => typeof item === "string" && item.trim().length > 0))
+              : [],
+          }))
+        : [],
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
     };
   } catch {
@@ -37,14 +45,20 @@ export const premiumCompetitionService = {
   uploadExamImport: async (payload: {
     file: File;
     title: string;
-    subjectId: number;
+    subjectId?: number;
+    subjectName?: string;
     className?: string;
     durationMinutes?: number;
   }): Promise<ExamImportJob> => {
     const formData = new FormData();
     formData.append("file", payload.file);
     formData.append("title", payload.title);
-    formData.append("subjectId", String(payload.subjectId));
+    if (payload.subjectId !== undefined) {
+      formData.append("subjectId", String(payload.subjectId));
+    }
+    if (payload.subjectName?.trim()) {
+      formData.append("subjectName", payload.subjectName.trim());
+    }
     if (payload.className) {
       formData.append("className", payload.className);
     }
@@ -59,6 +73,21 @@ export const premiumCompetitionService = {
     const { data } = await api.put<ExamImportJob>(`/api/v1/premium/exam-imports/${jobId}/draft`, {
       draftJson: JSON.stringify(draft),
     });
+    return data;
+  },
+
+  getExamImport: async (jobId: number): Promise<ExamImportJob> => {
+    const { data } = await api.get<ExamImportJob>(`/api/v1/premium/exam-imports/${jobId}`);
+    return data;
+  },
+
+  uploadQuestionImage: async (jobId: number, orderIndex: number, file: File): Promise<ExamImportJob> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await api.post<ExamImportJob>(
+      `/api/v1/premium/exam-imports/${jobId}/questions/${orderIndex}/image`,
+      formData,
+    );
     return data;
   },
 
