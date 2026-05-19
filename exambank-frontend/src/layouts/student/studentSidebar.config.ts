@@ -17,13 +17,13 @@ export interface SidebarNavItem {
 }
 
 const baseItems: SidebarNavItem[] = [
-  { label: "Trang chu", path: "/user", icon: LayoutDashboard },
-  { label: "Ngan hang de", path: "/user/exambank", icon: FileText },
-  { label: "Bai da nop", path: "/user/exambank/mysubmit", icon: BarChart3 },
-  { label: "Tai de len", path: "/user/exambank/submit", icon: Settings },
+  { label: "Trang chủ", path: "/user", icon: LayoutDashboard },
+  { label: "Ngân hàng đề", path: "/user/exambank", icon: FileText },
+  { label: "Bài đã nộp", path: "/user/exambank/mysubmit", icon: BarChart3 },
+  { label: "Tải đề lên", path: "/user/exambank/submit", icon: Settings },
   { label: "Thi online", path: "/user/online-exam", icon: MonitorPlay },
-  { label: "Vao thi private", path: "/user/private-competition", icon: LockKeyhole },
-  { label: "Nang cap Premium", path: "/user/premium/upgrade", icon: Crown },
+  { label: "Vào thi private", path: "/user/private-competition", icon: LockKeyhole },
+  { label: "Nâng cấp Premium", path: "/user/premium/upgrade", icon: Crown },
 ];
 
 const aiPremiumItem: SidebarNavItem = {

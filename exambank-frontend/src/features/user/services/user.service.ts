@@ -621,7 +621,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
   const storedFallback = mapStoredAuthUserToProfile();
   const id = selfUser.id ?? storedFallback?.id ?? 0;
   const email = toNonEmptyString(selfUser.email) ?? storedFallback?.email ?? "";
-  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "Nguoi dung");
+  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "Người dùng");
   const roles = storedFallback?.roles?.length ? storedFallback.roles : ["USER"];
 
   return {
@@ -1151,6 +1151,7 @@ export const userService = {
       const { data } = await api.get<BackendReview[]>(`/api/v1/documents/${documentId}/reviews`);
       return data.map((item) => ({
         id: item.id,
+        userId: item.userId,
         author: item.userName ?? `User ${item.userId}`,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.userId}`,
         rating: item.rating ?? 0,
@@ -1361,7 +1362,7 @@ export const userService = {
         }
       }
 
-      throw error instanceof Error ? error : new Error("Khong the tai thong tin ho so.");
+      throw error instanceof Error ? error : new Error("Không thể tải thông tin hồ sơ.");
     }
   },
 
@@ -1505,6 +1506,19 @@ export const userService = {
       rating,
       comment,
     });
+  },
+
+  deleteReview: async (reviewId: number): Promise<boolean> => {
+    if (!Number.isFinite(reviewId) || reviewId <= 0) {
+      return false;
+    }
+
+    try {
+      await api.delete(`/api/v1/reviews/${reviewId}`, buildAuthConfig());
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   uploadDocument: async (payload: UploadDocumentPayload, file: File): Promise<DocumentSummary> => {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 export interface UserComment {
   id: number;
+  userId?: number;
   author: string;
   avatar: string;
   rating: number;

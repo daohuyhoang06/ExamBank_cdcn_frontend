@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Star,
@@ -16,6 +16,7 @@ import {
 import { Pagination } from '@/components/ui/Pagination/pagination';
 import type { Comment } from '../types/user.type';
 import { userService } from '../services/user.service';
+import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 
 const COMMENTS_PER_PAGE = 5;
 
@@ -96,6 +97,35 @@ export default function DiscussionDetailPage() {
   const [reviewText, setReviewText] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
   const [commentPage, setCommentPage] = useState(1);
+  const [currentUserReviewId, setCurrentUserReviewId] = useState<number | null>(null);
+
+  const getCurrentUserId = useCallback((): number | null => {
+    const storedUser = getStoredAuthUser();
+    const rawId = storedUser?.id;
+    if (rawId === undefined || rawId === null || String(rawId).trim().length === 0) {
+      return null;
+    }
+    const parsed = Number(rawId);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, []);
+
+  const applyUserReviewSnapshot = useCallback((commentList: Comment[]) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setCurrentUserReviewId(null);
+      return;
+    }
+
+    const existing = commentList.find((item) => item.userId === currentUserId);
+    setCurrentUserReviewId(existing?.id ?? null);
+    if (existing) {
+      setReviewRating(existing.rating ?? 0);
+      setReviewText(existing.content ?? '');
+    } else {
+      setReviewRating(0);
+      setReviewText('');
+    }
+  }, [getCurrentUserId]);
 
   useEffect(() => {
     return () => {
@@ -133,6 +163,10 @@ export default function DiscussionDetailPage() {
           setIsPreviewLoading(false);
           setPreviewLoadError(false);
           setCommentPage(1);
+          setCurrentUserReviewId(null);
+          setReviewRating(0);
+          setReviewText('');
+          setSubmitMessage('');
           setIsLoading(false);
           return;
         }
@@ -162,6 +196,7 @@ export default function DiscussionDetailPage() {
         setCommentPage(1);
         setRatingAverage(stats.average);
         setRatingCount(stats.count);
+        applyUserReviewSnapshot(commentList);
         setRelatedDocuments(
           related
             .filter((item) => item.id !== resolvedDocumentId)
@@ -181,7 +216,7 @@ export default function DiscussionDetailPage() {
       }
     };
     fetchData();
-  }, [documentId, navigate]);
+  }, [documentId, navigate, applyUserReviewSnapshot]);
 
   useEffect(() => {
     if (!activeDocumentId) {
@@ -275,12 +310,27 @@ export default function DiscussionDetailPage() {
     if (!activeDocumentId) {
       return;
     }
+
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setSubmitMessage('Vui lòng đăng nhập để gửi đánh giá.');
+      return;
+    }
     if (reviewRating < 1) {
       setSubmitMessage('Vui lòng chọn số sao trước khi gửi.');
       return;
     }
 
     try {
+      const isUpdating = Boolean(currentUserReviewId);
+      if (currentUserReviewId) {
+        const removed = await userService.deleteReview(currentUserReviewId);
+        if (!removed) {
+          setSubmitMessage('Không thể cập nhật đánh giá cũ. Bạn chỉ có thể chỉnh sửa trong 24 giờ sau khi gửi.');
+          return;
+        }
+      }
+
       await userService.createOrUpdateReview(activeDocumentId, reviewRating, reviewText);
       const [nextComments, nextStats] = await Promise.all([
         userService.getComments(activeDocumentId),
@@ -290,9 +340,8 @@ export default function DiscussionDetailPage() {
       setCommentPage(1);
       setRatingAverage(nextStats.average);
       setRatingCount(nextStats.count);
-      setReviewText('');
-      setReviewRating(0);
-      setSubmitMessage('Đã gửi đánh giá thành công.');
+      applyUserReviewSnapshot(nextComments);
+      setSubmitMessage(isUpdating ? 'Đã cập nhật đánh giá thành công.' : 'Đã gửi đánh giá thành công.');
     } catch (error) {
       console.error(error);
       setSubmitMessage('Không thể gửi đánh giá. Vui lòng đăng nhập và thử lại.');

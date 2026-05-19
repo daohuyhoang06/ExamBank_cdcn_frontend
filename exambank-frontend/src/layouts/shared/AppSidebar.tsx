@@ -283,7 +283,7 @@ export function AppSidebar({
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState(() => {
-    const fallbackName = 'Nguoi dung';
+    const fallbackName = 'Người dùng';
     const currentUser = getStoredAuthUser() as
       | {
           fullName?: string;
@@ -377,7 +377,7 @@ export function AppSidebar({
 
   useEffect(() => {
     function handleAuthUserUpdated() {
-      const fallbackName = 'Nguoi dung';
+      const fallbackName = 'Người dùng';
       const currentUser = getStoredAuthUser() as
         | {
             fullName?: string;
@@ -500,7 +500,7 @@ export function AppSidebar({
     >
       <button
         onClick={toggleSidebar}
-        aria-label={isCollapsed ? 'Mo rong sidebar' : 'Thu gon sidebar'}
+        aria-label={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
         className="sidebar-toggle-fab absolute top-20 -right-3 w-7 h-7 rounded-full bg-white border border-[rgba(0,0,0,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center transition-all duration-200 ease-in-out hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] hover:text-[var(--brand-700)] hover:border-[var(--brand-200)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -518,8 +518,8 @@ export function AppSidebar({
               ${isExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}
             `}
           >
-            <p className="whitespace-nowrap font-[var(--font-label)] text-[2.45rem] font-semibold tracking-[0.01em] text-[var(--ink-900)]">
-              Scholarly Sanctuar
+            <p className="whitespace-nowrap font-[var(--font-label)] text-[1.45rem] font-semibold tracking-[-0.01em] text-[var(--ink-900)]">
+              Scholarly Sanctuary
             </p>
             <p className="-mt-1 inline-block origin-left whitespace-nowrap text-[8px] uppercase leading-none tracking-[0.12em] text-[var(--ink-500)] scale-[0.7]">
               {subtitle}
@@ -680,7 +680,7 @@ export function AppSidebar({
                 type="button"
                 onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
                 className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[var(--brand-500)] shadow-[0_0_0_4px_rgba(31,99,180,0.18),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : 'border-[var(--brand-100)] hover:brightness-110'}`}
-                aria-label="Mở menu tài khoảnS"
+                aria-label="Mở menu tài khoản"
                 aria-haspopup="menu"
                 aria-expanded={isAvatarMenuOpen}
                 title={!isExpanded ? 'Tài khoản' : undefined}

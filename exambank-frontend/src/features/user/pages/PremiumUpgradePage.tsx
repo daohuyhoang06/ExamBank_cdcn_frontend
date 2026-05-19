@@ -9,7 +9,7 @@ import type {
 } from "@/features/user/types/premium-upgrade.type";
 
 const PENDING_REVIEW_TEXT =
-  "Don hang cua ban dang duoc van chuyen, he thong se phan hoi som nhat (thuong la trong ngay).";
+  "Đơn hàng của bạn đang được xử lý, hệ thống sẽ phản hồi sớm nhất (thường trong ngày).";
 
 const formatVnd = (value: number): string =>
   new Intl.NumberFormat("vi-VN", {
@@ -36,10 +36,10 @@ const formatDateTime = (value?: string): string => {
 };
 
 const premiumBenefits = [
-  "AI Import de thi va tao draft cau hoi nhanh.",
-  "Tao private competition co mat khau rieng.",
-  "Uu tien ho tro va cap nhat tinh nang moi.",
-  "Thong ke hoc tap nang cao va quan ly tien do.",
+  "AI Import đề thi và tạo draft câu hỏi nhanh.",
+  "Tạo private competition có mật khẩu riêng.",
+  "Ưu tiên hỗ trợ và cập nhật tính năng mới.",
+  "Thống kê học tập nâng cao và quản lý tiến độ.",
 ];
 
 export default function PremiumUpgradePage() {
@@ -91,7 +91,7 @@ export default function PremiumUpgradePage() {
         setSelectedPlanCode((monthly ?? loadedPlans[0]).code);
       }
     } catch (err) {
-      setError(extractApiErrorMessage(err, "Khong the tai thong tin nang cap premium."));
+      setError(extractApiErrorMessage(err, "Không thể tải thông tin nâng cấp premium."));
     } finally {
       setBusyAction("");
     }
@@ -104,7 +104,7 @@ export default function PremiumUpgradePage() {
 
   const createOrder = async () => {
     if (!activePlan) {
-      setError("Chua co goi premium kha dung.");
+      setError("Chưa có gói premium khả dụng.");
       return;
     }
     setBusyAction("create");
@@ -113,9 +113,9 @@ export default function PremiumUpgradePage() {
     try {
       const created = await premiumUpgradeService.createOrder(activePlan.code);
       setOrder(created);
-      setInfo("Da tao yeu cau nang cap premium. Vui long chuyen khoan theo ma QR.");
+      setInfo("Đã tạo yêu cầu nâng cấp premium. Vui lòng chuyển khoản theo mã QR.");
     } catch (err) {
-      setError(extractApiErrorMessage(err, "Khong the tao yeu cau nang cap."));
+      setError(extractApiErrorMessage(err, "Không thể tạo yêu cầu nâng cấp."));
     } finally {
       setBusyAction("");
     }
@@ -131,9 +131,9 @@ export default function PremiumUpgradePage() {
     try {
       const updated = await premiumUpgradeService.confirmTransfer(order.id);
       setOrder(updated);
-      setInfo("Da xac nhan chuyen khoan. Vui long tai anh bill de he thong duyet.");
+      setInfo("Đã xác nhận chuyển khoản. Vui lòng tải ảnh bill để hệ thống duyệt.");
     } catch (err) {
-      setError(extractApiErrorMessage(err, "Khong the xac nhan chuyen khoan."));
+      setError(extractApiErrorMessage(err, "Không thể xác nhận chuyển khoản."));
     } finally {
       setBusyAction("");
     }
@@ -141,7 +141,7 @@ export default function PremiumUpgradePage() {
 
   const uploadBill = async () => {
     if (!order || !billFile) {
-      setError("Vui long chon anh bill truoc khi gui.");
+      setError("Vui lòng chọn ảnh bill trước khi gửi.");
       return;
     }
     setBusyAction("upload");
@@ -153,7 +153,7 @@ export default function PremiumUpgradePage() {
       setBillFile(null);
       setInfo(PENDING_REVIEW_TEXT);
     } catch (err) {
-      setError(extractApiErrorMessage(err, "Khong the tai anh bill."));
+      setError(extractApiErrorMessage(err, "Không thể tải ảnh bill."));
     } finally {
       setBusyAction("");
     }
@@ -171,22 +171,22 @@ export default function PremiumUpgradePage() {
               <Crown size={14} />
               Premium Upgrade
             </p>
-            <h1 className="text-2xl font-bold text-slate-900">Nang cap tai khoan Premium</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Nâng cấp tài khoản Premium</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Chuyen khoan qua QR, xac nhan da chuyen, upload bill, admin se duyet trong ngay.
+              Chuyển khoản qua QR, xác nhận đã chuyển, upload bill, admin sẽ duyệt trong ngày.
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-            <p className="font-semibold text-slate-900">Trang thai Premium</p>
+            <p className="font-semibold text-slate-900">Trạng thái Premium</p>
             <p className="mt-1 text-slate-600">
-              {status?.premium ? "Dang Premium" : status?.status === "PENDING_CONFIRMATION" ? "Dang cho xac nhan" : "Chua Premium"}
+              {status?.premium ? "Đang Premium" : status?.status === "PENDING_CONFIRMATION" ? "Đang chờ xác nhận" : "Chưa Premium"}
             </p>
           </div>
         </div>
 
         {status?.premium ? (
           <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Tai khoan cua ban da co premium ({status.planName ?? status.planCode ?? "VIP"}).
+            Tài khoản của bạn đã có premium ({status.planName ?? status.planCode ?? "VIP"}).
           </div>
         ) : null}
 
@@ -199,9 +199,9 @@ export default function PremiumUpgradePage() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Dich vu nhan duoc khi len Premium</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Dịch vụ nhận được khi lên Premium</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Goi thang: <span className="font-semibold">50.000 VND</span> - Goi nam: <span className="font-semibold">350.000 VND</span>.
+          Gói tháng: <span className="font-semibold">50.000 VND</span> · Gói năm: <span className="font-semibold">350.000 VND</span>.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {premiumBenefits.map((benefit) => (
@@ -215,7 +215,7 @@ export default function PremiumUpgradePage() {
 
       <section className="grid gap-6 lg:grid-cols-2">
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">1. Chon goi va tao yeu cau</h2>
+          <h2 className="text-lg font-semibold text-slate-900">1. Chọn gói và tạo yêu cầu</h2>
           <div className="mt-4 grid gap-3">
             {planChoices.map((plan) => (
               <label
@@ -226,7 +226,7 @@ export default function PremiumUpgradePage() {
               >
                 <div>
                   <p className="font-semibold text-slate-900">{plan.name}</p>
-                  <p className="text-sm text-slate-600">Thoi han {plan.durationDays} ngay</p>
+                  <p className="text-sm text-slate-600">Thời hạn {plan.durationDays} ngày</p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-blue-700">{formatVnd(plan.price)}</p>
@@ -247,34 +247,34 @@ export default function PremiumUpgradePage() {
             disabled={busyAction !== "" || Boolean(status?.premium)}
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busyAction === "create" ? "Dang tao..." : "Tao yeu cau nang cap"}
+            {busyAction === "create" ? "Đang tạo..." : "Tạo yêu cầu nâng cấp"}
           </button>
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">2. Thanh toan qua QR</h2>
+          <h2 className="text-lg font-semibold text-slate-900">2. Thanh toán qua QR</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-[160px_1fr]">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               {shownQrImage ? (
                 <img src={shownQrImage} alt="Temporary QR" className="h-36 w-36 rounded-md object-cover" />
               ) : (
                 <div className="flex h-36 w-36 items-center justify-center rounded-md border border-dashed border-slate-300 bg-white text-center text-xs text-slate-500">
-                  Tao yeu cau truoc de hien QR
+                  Tạo yêu cầu trước để hiện QR
                 </div>
               )}
             </div>
             <div className="text-sm">
-              <p className="font-semibold text-slate-900">Noi dung chuyen khoan</p>
+              <p className="font-semibold text-slate-900">Nội dung chuyển khoản</p>
               <p className="mt-1 rounded-md bg-slate-100 px-3 py-2 font-mono text-slate-800">{shownTransferContent}</p>
               <p className="mt-3 text-slate-600">
-                Goi: <span className="font-semibold text-slate-900">{shownPlanName}</span>
+                Gói: <span className="font-semibold text-slate-900">{shownPlanName}</span>
               </p>
               <p className="text-slate-600">
-                So tien: <span className="font-semibold text-slate-900">{formatVnd(shownAmount)}</span>
+                Số tiền: <span className="font-semibold text-slate-900">{formatVnd(shownAmount)}</span>
               </p>
               <p className="mt-2 inline-flex items-center gap-2 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
                 <QrCode size={14} />
-                Ma QR tam thoi de demo
+                Mã QR tạm thời để demo
               </p>
             </div>
           </div>
@@ -286,11 +286,11 @@ export default function PremiumUpgradePage() {
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CheckCircle2 size={16} />
-              {busyAction === "confirm" ? "Dang xac nhan..." : "Toi da chuyen khoan xong"}
+              {busyAction === "confirm" ? "Đang xác nhận..." : "Tôi đã chuyển khoản xong"}
             </button>
           ) : (
             <p className="mt-4 text-sm text-slate-600">
-              QR se hien sau khi ban bam "Tao yeu cau nang cap".
+              QR sẽ hiện sau khi bạn bấm "Tạo yêu cầu nâng cấp".
             </p>
           )}
         </article>
@@ -298,21 +298,21 @@ export default function PremiumUpgradePage() {
 
       {order ? (
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">3. Upload bill va cho duyet</h2>
+          <h2 className="text-lg font-semibold text-slate-900">3. Upload bill và chờ duyệt</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Trang thai hien tai: <span className="font-semibold text-slate-900">{order.status}</span>
+            Trạng thái hiện tại: <span className="font-semibold text-slate-900">{order.status}</span>
           </p>
           <p className="mt-1 text-sm text-slate-600">
-            Tao luc: <span className="font-semibold">{formatDateTime(order.createdAt)}</span>
+            Tạo lúc: <span className="font-semibold">{formatDateTime(order.createdAt)}</span>
           </p>
           <p className="mt-1 text-sm text-slate-600">
-            Xac nhan chuyen khoan luc: <span className="font-semibold">{formatDateTime(order.transferConfirmedAt)}</span>
+            Xác nhận chuyển khoản lúc: <span className="font-semibold">{formatDateTime(order.transferConfirmedAt)}</span>
           </p>
 
           {canUploadBill ? (
             <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
               <label className="text-sm font-medium text-slate-700">
-                Anh bill thanh toan
+                Ảnh bill thanh toán
                 <input
                   type="file"
                   accept="image/*"
@@ -327,7 +327,7 @@ export default function PremiumUpgradePage() {
                 className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ImageUp size={16} />
-                {busyAction === "upload" ? "Dang gui bill..." : "Gui bill cho admin duyet"}
+                {busyAction === "upload" ? "Đang gửi bill..." : "Gửi bill cho admin duyệt"}
               </button>
             </div>
           ) : null}
@@ -340,19 +340,19 @@ export default function PremiumUpgradePage() {
 
           {order.status === "APPROVED" ? (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              Yeu cau nang cap da duoc duyet. Premium cua ban da co hieu luc.
+              Yêu cầu nâng cấp đã được duyệt. Premium của bạn đã có hiệu lực.
             </div>
           ) : null}
 
           {order.status === "REJECTED" ? (
             <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              Yeu cau bi tu choi{order.adminNote ? `: ${order.adminNote}` : "."}
+              Yêu cầu bị từ chối{order.adminNote ? `: ${order.adminNote}` : "."}
             </div>
           ) : null}
 
           {order.billImageUrl ? (
             <div className="mt-4">
-              <p className="mb-2 text-sm font-semibold text-slate-900">Bill da tai len</p>
+              <p className="mb-2 text-sm font-semibold text-slate-900">Bill đã tải lên</p>
               <img src={order.billImageUrl} alt="Bill preview" className="max-h-72 rounded-lg border border-slate-200 object-contain" />
             </div>
           ) : null}
