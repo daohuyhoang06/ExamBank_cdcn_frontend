@@ -122,6 +122,8 @@ export interface ExamListItem {
   className?: string;
   educationLevelName?: string;
   durationMinutes?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
   status?: string;
   createdAt?: string;
 }

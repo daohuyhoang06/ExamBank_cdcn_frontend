@@ -4,7 +4,7 @@ import {
   BadgeDollarSign,
   BookOpenCheck,
   CheckCircle2,
-  Flag,
+  FileText,
   Gauge,
   ShieldCheck,
   UserPlus,
@@ -19,10 +19,10 @@ import { Button } from "@/components/ui/Button/button";
 import { Card } from "@/components/ui/Card/card";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
 import { setAuthToken } from "@/lib/api-client";
+import { getAdminDocumentStats } from "@/features/admin/services/admin-documents.service";
 import { getAdminUserCardMetrics } from "@/features/admin/services/admin-users.service";
 import { clearStoredAuthUser } from "@/features/auth/services/auth.service";
 import { listComposerExams } from "@/features/moderator/services/moderator-composer.service";
-import { getModeratorQueueMetrics } from "@/features/moderator/services/moderator-queue.service";
 
 type DashboardStat = {
   title: string;
@@ -53,14 +53,14 @@ const dashboardStats: DashboardStat[] = [
     accent: "blue",
   },
   {
-    title: "Nội dung",
+    title: "Tài liệu",
     value: "4,200",
-    metaOne: "Đang chờ duyệt 156",
-    metaTwo: "Khẩn cấp 24",
+    metaOne: "Đang hiển thị 132",
+    metaTwo: "Bị ẩn 6",
     to: "/admin/content",
     icon: CheckCircle2,
     accent: "orange",
-    badge: "Cần xử lý",
+    badge: "Thống kê",
   },
   {
     title: "Kỳ thi",
@@ -108,10 +108,10 @@ const urgentActions: QuickAction[] = [
     icon: UserPlus,
   },
   {
-    title: "Báo cáo vi phạm",
-    description: "5 câu hỏi bị gắn cờ",
+    title: "Quản lý tài liệu",
+    description: "Xem thống kê tài liệu do người dùng tải lên",
     to: "/admin/content",
-    icon: Flag,
+    icon: FileText,
   },
 ];
 
@@ -125,8 +125,8 @@ const initialUserCard: DashboardStat = {
 const initialContentCard: DashboardStat = {
   ...dashboardStats[1],
   value: "0",
-  metaOne: "Đang chờ duyệt 0",
-  metaTwo: "Đã duyệt 0",
+  metaOne: "Đang hiển thị 0",
+  metaTwo: "Bị ẩn 0",
 };
 
 const initialExamCard: DashboardStat = {
@@ -199,7 +199,7 @@ export default function AdminDashboardPage() {
       try {
         const [userMetrics, contentMetrics, exams] = await Promise.all([
           getAdminUserCardMetrics(),
-          getModeratorQueueMetrics(),
+          getAdminDocumentStats(),
           listComposerExams(),
         ]);
 
@@ -231,9 +231,9 @@ export default function AdminDashboardPage() {
         setContentCard({
           ...dashboardStats[1],
           value: formatNumber(contentMetrics.totalDocuments),
-          metaOne: `Đang chờ duyệt ${formatNumber(contentMetrics.pendingDocuments)}`,
-          metaTwo: `Đã duyệt ${formatNumber(contentMetrics.approvedDocuments)}`,
-          badge: contentMetrics.pendingDocuments > 0 ? "Cần xử lý" : "Ổn định",
+          metaOne: `Đã duyệt ${formatNumber(contentMetrics.approvedDocuments)}`,
+          metaTwo: `Chờ duyệt ${formatNumber(contentMetrics.pendingDocuments)}`,
+          badge: contentMetrics.pendingDocuments > 0 ? "Cần theo dõi" : "Ổn định",
         });
 
         setExamCard({
