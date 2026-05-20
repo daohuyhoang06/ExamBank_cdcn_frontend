@@ -1,16 +1,16 @@
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Star,
   ChevronRight,
-  Users,
+  Eye,
+  Download,
   BarChart2,
   Image as ImageIcon,
   MoreHorizontal,
   ThumbsUp,
   Reply,
-  Verified,
   Award
 } from 'lucide-react';
 import { Pagination } from '@/components/ui/Pagination/pagination';
@@ -19,6 +19,46 @@ import { userService } from '../services/user.service';
 import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 
 const COMMENTS_PER_PAGE = 5;
+const REVIEW_DISCUSSION_PREFIX = 'review-link:';
+
+const looksLikeMojibake = (value: string): boolean => /(Ã.|Â.|Æ.|Ð.|áº|á»|Ä.)/.test(value);
+
+const repairMojibakeText = (value?: string): string => {
+  const raw = value ?? '';
+  if (!raw || !looksLikeMojibake(raw)) {
+    return raw;
+  }
+
+  let repaired = raw;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const bytes = new Uint8Array([...repaired].map((char) => char.charCodeAt(0)));
+
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) {
+        break;
+      }
+      repaired = decoded;
+      if (!looksLikeMojibake(repaired)) {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return repaired;
+};
+
+type CommentReplyItem = {
+  id: number;
+  author: string;
+  content: string;
+  createdAt?: string;
+  authorId?: number;
+  avatarUrl?: string;
+};
 
 const PREVIEW_MIME_EXTENSION_MAP: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -75,6 +115,29 @@ const resolveDocumentPreviewUrl = (documentId?: number): string | null => {
   return new URL(`/api/v1/documents/${documentId}/preview`, window.location.origin).toString();
 };
 
+const formatReplyTime = (value?: string): string => {
+  if (!value) {
+    return 'Vừa xong';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Vừa xong';
+  }
+
+  return parsed.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+const buildAvatarUrl = (seed: string): string => {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+};
+
 // --- Main Page Component ---
 export default function DiscussionDetailPage() {
   const { documentId } = useParams();
@@ -88,7 +151,8 @@ export default function DiscussionDetailPage() {
   const [documentFileUrl, setDocumentFileUrl] = useState<string | null>(null);
   const [inlinePreviewUrl, setInlinePreviewUrl] = useState<string | null>(null);
   const [ratingAverage, setRatingAverage] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
+  const [documentViewCount, setDocumentViewCount] = useState(0);
+  const [documentDownloadCount, setDocumentDownloadCount] = useState(0);
   const [activeDocumentId, setActiveDocumentId] = useState<number | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewLoadError, setPreviewLoadError] = useState(false);
@@ -98,6 +162,11 @@ export default function DiscussionDetailPage() {
   const [submitMessage, setSubmitMessage] = useState('');
   const [commentPage, setCommentPage] = useState(1);
   const [currentUserReviewId, setCurrentUserReviewId] = useState<number | null>(null);
+  const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null);
+  const [replyDraftByCommentId, setReplyDraftByCommentId] = useState<Record<number, string>>({});
+  const [isSubmittingReplyCommentId, setIsSubmittingReplyCommentId] = useState<number | null>(null);
+  const [replyItemsByCommentId, setReplyItemsByCommentId] = useState<Record<number, CommentReplyItem[]>>({});
+  const [isLoadingReplyItemsForCommentId, setIsLoadingReplyItemsForCommentId] = useState<number | null>(null);
 
   const getCurrentUserId = useCallback((): number | null => {
     const storedUser = getStoredAuthUser();
@@ -109,22 +178,94 @@ export default function DiscussionDetailPage() {
     return Number.isFinite(parsed) ? parsed : null;
   }, []);
 
+  const buildReviewDiscussionTitle = useCallback((reviewId: number): string => {
+    return `${REVIEW_DISCUSSION_PREFIX}${reviewId}`;
+  }, []);
+
+  const parseReviewIdFromDiscussionTitle = useCallback((title?: string): number | null => {
+    if (!title) {
+      return null;
+    }
+    const normalized = title.trim();
+    if (!normalized.startsWith(REVIEW_DISCUSSION_PREFIX)) {
+      return null;
+    }
+    const rawId = normalized.slice(REVIEW_DISCUSSION_PREFIX.length).trim();
+    const parsed = Number(rawId);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }, []);
+
+  const buildReviewDiscussionContent = useCallback((comment: Comment): string => {
+    const base = [
+      `Linked review from user: ${comment.author}.`,
+      `Star rating: ${comment.rating}/5.`,
+      `Review content: ${(comment.content ?? '').trim()}`,
+    ].join(' ');
+    if (base.length >= 50) {
+      return base.slice(0, 5000);
+    }
+    return `${base} Additional context to satisfy discussion length requirement.`.slice(0, 5000);
+  }, []);
+
+  const mergeDiscussionIntoComments = useCallback(
+    (
+      reviewList: Comment[],
+      discussions: Array<{ id: number; title?: string; upvoteCount?: number; viewerUpvoted?: boolean; replyCount?: number }>,
+    ): Comment[] => {
+      const discussionByReviewId = new Map<number, { id: number; upvoteCount?: number; viewerUpvoted?: boolean; replyCount?: number }>();
+
+      discussions.forEach((discussion) => {
+        const reviewId = parseReviewIdFromDiscussionTitle(discussion.title);
+        if (!reviewId) {
+          return;
+        }
+        discussionByReviewId.set(reviewId, {
+          id: discussion.id,
+          upvoteCount: discussion.upvoteCount,
+          viewerUpvoted: discussion.viewerUpvoted,
+          replyCount: discussion.replyCount,
+        });
+      });
+
+      return reviewList.map((review) => {
+        const discussion = discussionByReviewId.get(review.id);
+        if (!discussion) {
+          return {
+            ...review,
+            likes: 0,
+            viewerUpvoted: false,
+            replyCount: 0,
+            discussionId: undefined,
+          };
+        }
+        return {
+          ...review,
+          likes: discussion.upvoteCount ?? 0,
+          viewerUpvoted: Boolean(discussion.viewerUpvoted),
+          replyCount: discussion.replyCount ?? 0,
+          discussionId: discussion.id,
+        };
+      });
+    },
+    [parseReviewIdFromDiscussionTitle],
+  );
+
   const applyUserReviewSnapshot = useCallback((commentList: Comment[]) => {
     const currentUserId = getCurrentUserId();
     if (!currentUserId) {
       setCurrentUserReviewId(null);
+      setReviewRating(0);
+      setReviewText('');
       return;
     }
 
     const existing = commentList.find((item) => item.userId === currentUserId);
     setCurrentUserReviewId(existing?.id ?? null);
-    if (existing) {
-      setReviewRating(existing.rating ?? 0);
-      setReviewText(existing.content ?? '');
-    } else {
-      setReviewRating(0);
-      setReviewText('');
-    }
+    setReviewRating(0);
+    setReviewText('');
   }, [getCurrentUserId]);
 
   useEffect(() => {
@@ -166,7 +307,14 @@ export default function DiscussionDetailPage() {
           setCurrentUserReviewId(null);
           setReviewRating(0);
           setReviewText('');
+          setReplyingCommentId(null);
+          setReplyDraftByCommentId({});
+          setReplyItemsByCommentId({});
+          setIsLoadingReplyItemsForCommentId(null);
+          setIsSubmittingReplyCommentId(null);
           setSubmitMessage('');
+          setDocumentViewCount(0);
+          setDocumentDownloadCount(0);
           setIsLoading(false);
           return;
         }
@@ -180,34 +328,64 @@ export default function DiscussionDetailPage() {
         });
         setPreviewLoadError(false);
         setIsPreviewLoading(false);
+        setReplyingCommentId(null);
+        setReplyDraftByCommentId({});
+        setReplyItemsByCommentId({});
+        setIsLoadingReplyItemsForCommentId(null);
+        setIsSubmittingReplyCommentId(null);
 
-        const document = await userService.getDocumentById(resolvedDocumentId);
-        const [commentList, stats, related] = await Promise.all([
+        let document: Awaited<ReturnType<typeof userService.getDocumentById>> | null = null;
+        try {
+          document = await userService.getDocumentById(resolvedDocumentId);
+        } catch (error) {
+          console.error('Failed to fetch document detail endpoint:', error);
+        }
+        const [commentList, stats, related, discussions] = await Promise.all([
           userService.getComments(resolvedDocumentId),
           userService.getDocumentRatingStats(resolvedDocumentId),
           userService.getDocuments({ status: 'APPROVED', size: 3, sort: 'highest_rated' }).catch(() => []),
+          userService.getDocumentDiscussions(resolvedDocumentId),
         ]);
 
-        setDocumentTitle(document.title);
-        setDocumentSubject(document.subject);
-        setDocumentSemesterYear(document.semesterYear);
+        if (document) {
+          const repairedTitle = repairMojibakeText(document.title);
+          const repairedSubject = repairMojibakeText(document.subject);
+          const repairedSemesterYear = repairMojibakeText(document.semesterYear);
+
+          setDocumentTitle(repairedTitle || 'Chi tiết đề thi');
+          setDocumentSubject(repairedSubject || undefined);
+          setDocumentSemesterYear(repairedSemesterYear || undefined);
+          const viewCount = Number(document.viewCount ?? 0);
+          setDocumentViewCount(Number.isFinite(viewCount) ? Math.max(0, Math.floor(viewCount)) : 0);
+          setDocumentDownloadCount(Math.max(0, Math.floor(document.downloadCount ?? 0)));
+        } else {
+          setDocumentTitle('Chi tiết đề thi');
+          setDocumentSubject(undefined);
+          setDocumentSemesterYear(undefined);
+          setDocumentViewCount(0);
+          setDocumentDownloadCount(0);
+        }
         setDocumentFileUrl(resolveDocumentPreviewUrl(resolvedDocumentId));
-        setComments(commentList);
+        setComments(mergeDiscussionIntoComments(commentList, discussions));
         setCommentPage(1);
         setRatingAverage(stats.average);
-        setRatingCount(stats.count);
         applyUserReviewSnapshot(commentList);
         setRelatedDocuments(
           related
             .filter((item) => item.id !== resolvedDocumentId)
             .slice(0, 3)
-            .map((item) => ({
-              id: item.id,
-              title: item.title,
-              subject: item.subject,
-              averageRating: item.averageRating,
-              semesterYear: item.semesterYear,
-            })),
+            .map((item) => {
+              const subject = repairMojibakeText(item.subject);
+              const semesterYear = repairMojibakeText(item.semesterYear);
+
+              return {
+                id: item.id,
+                title: repairMojibakeText(item.title),
+                subject: subject || undefined,
+                averageRating: item.averageRating,
+                semesterYear: semesterYear || undefined,
+              };
+            }),
         );
       } catch (error) {
         console.error(error);
@@ -216,7 +394,7 @@ export default function DiscussionDetailPage() {
       }
     };
     fetchData();
-  }, [documentId, navigate, applyUserReviewSnapshot]);
+  }, [documentId, navigate, applyUserReviewSnapshot, mergeDiscussionIntoComments]);
 
   useEffect(() => {
     if (!activeDocumentId) {
@@ -306,6 +484,175 @@ export default function DiscussionDetailPage() {
     }
   };
 
+  const ensureDiscussionForComment = useCallback(async (comment: Comment): Promise<number | null> => {
+    if (!activeDocumentId) {
+      return null;
+    }
+
+    if (comment.discussionId) {
+      return comment.discussionId;
+    }
+
+    const created = await userService.createDocumentDiscussionThread(activeDocumentId, {
+      title: buildReviewDiscussionTitle(comment.id),
+      content: buildReviewDiscussionContent(comment),
+      type: 'GENERAL',
+    });
+
+    const discussionId = created?.id;
+    if (!discussionId) {
+      return null;
+    }
+
+    setComments((prev) =>
+      prev.map((item) =>
+        item.id === comment.id
+          ? { ...item, discussionId, likes: item.likes ?? 0, replyCount: item.replyCount ?? 0 }
+          : item,
+      ),
+    );
+
+    return discussionId;
+  }, [activeDocumentId, buildReviewDiscussionContent, buildReviewDiscussionTitle]);
+
+  const handleToggleCommentLike = async (comment: Comment) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setSubmitMessage('Vui lòng đăng nhập để thích bình luận.');
+      return;
+    }
+
+    const discussionId = await ensureDiscussionForComment(comment);
+    if (!discussionId) {
+      setSubmitMessage('Không thể cập nhật lượt thích lúc này.');
+      return;
+    }
+
+    const isUpvoted = Boolean(comment.viewerUpvoted);
+    const success = isUpvoted
+      ? await userService.removeDiscussionUpvote(discussionId)
+      : await userService.addDiscussionUpvote(discussionId);
+
+    if (!success) {
+      setSubmitMessage('Không thể cập nhật lượt thích. Vui lòng thử lại.');
+      return;
+    }
+
+    setComments((prev) =>
+      prev.map((item) => {
+        if (item.id !== comment.id) {
+          return item;
+        }
+        const nextLikes = isUpvoted ? Math.max(0, (item.likes ?? 0) - 1) : (item.likes ?? 0) + 1;
+        return {
+          ...item,
+          discussionId,
+          likes: nextLikes,
+          viewerUpvoted: !isUpvoted,
+        };
+      }),
+    );
+  };
+
+  const handleReplyToComment = async (comment: Comment) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setSubmitMessage('Vui lòng đăng nhập để phản hồi bình luận.');
+      return;
+    }
+
+    setSubmitMessage('');
+    setReplyDraftByCommentId((prev) => (prev[comment.id] === undefined ? { ...prev, [comment.id]: '' } : prev));
+    if (replyingCommentId === comment.id) {
+      setReplyingCommentId(null);
+      return;
+    }
+
+    setReplyingCommentId(comment.id);
+
+    if (replyItemsByCommentId[comment.id] !== undefined) {
+      return;
+    }
+
+    if (!comment.discussionId) {
+      setReplyItemsByCommentId((prev) => ({ ...prev, [comment.id]: [] }));
+      return;
+    }
+
+    setIsLoadingReplyItemsForCommentId(comment.id);
+    const replies = await userService.getDiscussionReplies(comment.discussionId);
+    setReplyItemsByCommentId((prev) => ({
+      ...prev,
+      [comment.id]: replies.map((reply) => ({
+        id: reply.id,
+        author: reply.author?.userName?.trim() || 'Người dùng',
+        content: (reply.content ?? '').trim(),
+        createdAt: reply.createdAt,
+        authorId: reply.author?.userId,
+        avatarUrl: buildAvatarUrl(String(reply.author?.userId ?? reply.author?.userName?.trim() ?? reply.id)),
+      })),
+    }));
+    setIsLoadingReplyItemsForCommentId(null);
+  };
+
+  const handleSubmitInlineReply = async (comment: Comment) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setSubmitMessage('Vui lòng đăng nhập để phản hồi bình luận.');
+      return;
+    }
+
+    const normalizedReply = (replyDraftByCommentId[comment.id] ?? '').trim();
+    if (normalizedReply.length === 0) {
+      setSubmitMessage('Vui lòng nhập nội dung phản hồi.');
+      return;
+    }
+
+    setIsSubmittingReplyCommentId(comment.id);
+
+    const discussionId = await ensureDiscussionForComment(comment);
+    if (!discussionId) {
+      setSubmitMessage('Không thể tạo luồng phản hồi cho bình luận này.');
+      setIsSubmittingReplyCommentId(null);
+      return;
+    }
+
+    const success = await userService.createDiscussionReply(discussionId, normalizedReply);
+    if (!success) {
+      setSubmitMessage('Không thể gửi phản hồi. Vui lòng thử lại.');
+      setIsSubmittingReplyCommentId(null);
+      return;
+    }
+
+    setComments((prev) =>
+      prev.map((item) =>
+        item.id === comment.id
+          ? { ...item, discussionId, replyCount: (item.replyCount ?? 0) + 1 }
+          : item,
+      ),
+    );
+    setReplyItemsByCommentId((prev) => {
+      const existing = prev[comment.id] ?? [];
+      return {
+        ...prev,
+        [comment.id]: [
+          ...existing,
+          {
+            id: Date.now(),
+            author: 'Bạn',
+            content: normalizedReply,
+            authorId: currentUserId,
+            avatarUrl: buildAvatarUrl(String(currentUserId)),
+          },
+        ],
+      };
+    });
+    setReplyDraftByCommentId((prev) => ({ ...prev, [comment.id]: '' }));
+    setReplyingCommentId(null);
+    setIsSubmittingReplyCommentId(null);
+    setSubmitMessage('Đã gửi phản hồi thành công.');
+  };
+
   const handleSubmitReview = async () => {
     if (!activeDocumentId) {
       return;
@@ -332,15 +679,19 @@ export default function DiscussionDetailPage() {
       }
 
       await userService.createOrUpdateReview(activeDocumentId, reviewRating, reviewText);
-      const [nextComments, nextStats] = await Promise.all([
+      const [nextComments, nextStats, nextDiscussions] = await Promise.all([
         userService.getComments(activeDocumentId),
         userService.getDocumentRatingStats(activeDocumentId),
+        userService.getDocumentDiscussions(activeDocumentId),
       ]);
-      setComments(nextComments);
+      setComments(mergeDiscussionIntoComments(nextComments, nextDiscussions));
       setCommentPage(1);
       setRatingAverage(nextStats.average);
-      setRatingCount(nextStats.count);
-      applyUserReviewSnapshot(nextComments);
+      setCurrentUserReviewId(
+        nextComments.find((item) => item.userId === currentUserId)?.id ?? null,
+      );
+      setReviewRating(0);
+      setReviewText('');
       setSubmitMessage(isUpdating ? 'Đã cập nhật đánh giá thành công.' : 'Đã gửi đánh giá thành công.');
     } catch (error) {
       console.error(error);
@@ -348,16 +699,38 @@ export default function DiscussionDetailPage() {
     }
   };
 
-  if (isLoading) {
-    return <div className="py-20 text-center text-slate-500 font-semibold">Đang tải thảo luận...</div>;
-  }
-
   const totalCommentPages = Math.max(1, Math.ceil(comments.length / COMMENTS_PER_PAGE));
   const safeCommentPage = Math.min(commentPage, totalCommentPages);
   const pagedComments = comments.slice(
     (safeCommentPage - 1) * COMMENTS_PER_PAGE,
     safeCommentPage * COMMENTS_PER_PAGE,
   );
+  const ratingBreakdown = useMemo(() => {
+    const counts = [0, 0, 0, 0, 0];
+
+    comments.forEach((comment) => {
+      const normalizedRating = Math.round(comment.rating ?? 0);
+      if (normalizedRating >= 1 && normalizedRating <= 5) {
+        counts[normalizedRating - 1] += 1;
+      }
+    });
+
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    return [5, 4, 3, 2, 1].map((star) => {
+      const count = counts[star - 1];
+      const percent = total === 0 ? 0 : Math.round((count / total) * 100);
+      return {
+        label: `${star} sao`,
+        count,
+        percent,
+      };
+    });
+  }, [comments]);
+  const roundedRatingAverage = Math.max(0, Math.min(5, Math.round(ratingAverage)));
+
+  if (isLoading) {
+    return <div className="py-20 text-center text-slate-500 font-semibold">Đang tải thảo luận...</div>;
+  }
 
   return (
     <div className="w-full space-y-10 animate-in fade-in duration-500 pb-20">
@@ -375,14 +748,6 @@ export default function DiscussionDetailPage() {
           <h1 className="text-4xl font-black text-[#003466] tracking-tight">
             {documentTitle}
           </h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
-              <Star size={16} fill="#ffa825" className="text-[#ffa825] mr-1" />
-              <span className="font-bold text-[#ffa825]">{ratingAverage.toFixed(1)}</span>
-              <span className="text-slate-400 ml-1 font-medium">/ 5</span>
-            </div>
-            <span className="text-slate-500 font-medium">({ratingCount} đánh giá)</span>
-          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -390,14 +755,14 @@ export default function DiscussionDetailPage() {
             disabled={!documentFileUrl && !inlinePreviewUrl}
             className="px-8 py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all bg-white border border-[#003466] text-[#003466] hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
-            Mở đề thẻ mới
+            Mở đề ở tab mới
           </button>
           <button
             onClick={handleDownloadDocument}
             disabled={!activeDocumentId}
             className="px-8 py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
-            Download đề
+            Tải đề
           </button>
         </div>
       </div>
@@ -440,28 +805,30 @@ export default function DiscussionDetailPage() {
         {/* Rating Overview */}
         <div className="lg:col-span-8 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-12 items-center">
           <div className="text-center space-y-2 min-w-[140px]">
-            <span className="text-6xl font-black text-[#003466]">4.5</span>
+            <span className="text-6xl font-black text-[#003466]">{ratingAverage.toFixed(1)}</span>
             <div className="flex justify-center text-[#ffa825]">
-              {[...Array(4)].map((_, i) => <Star key={i} size={20} fill="currentColor" />)}
-              <Star size={20} className="opacity-40" />
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  size={20}
+                  className={i < roundedRatingAverage ? 'text-[#ffa825]' : 'text-slate-300'}
+                  fill={i < roundedRatingAverage ? 'currentColor' : 'none'}
+                />
+              ))}
             </div>
             <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">Trung bình</p>
           </div>
           
           <div className="flex-1 w-full space-y-3">
-            {[
-              { label: "5 sao", percent: 75 },
-              { label: "4 sao", percent: 15 },
-              { label: "3 sao", percent: 6 },
-              { label: "2 sao", percent: 2 },
-              { label: "1 sao", percent: 2 },
-            ].map((row) => (
+            {ratingBreakdown.map((row) => (
               <div key={row.label} className="flex items-center gap-4">
                 <span className="text-xs font-bold text-slate-500 w-12">{row.label}</span>
                 <div className="flex-1 bg-slate-100 h-2.5 rounded-full overflow-hidden">
                   <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${row.percent}%` }} />
                 </div>
-                <span className="text-xs font-bold text-slate-400 w-10 text-right">{row.percent}%</span>
+                <span className="text-xs font-bold text-slate-400 w-20 text-right">
+                  {row.percent}% ({row.count})
+                </span>
               </div>
             ))}
           </div>
@@ -475,17 +842,17 @@ export default function DiscussionDetailPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2 text-slate-600">
-                <Users size={18} />
-                <span className="text-sm font-medium">Số người đã làm</span>
+                <Eye size={18} />
+                <span className="text-sm font-medium">Số lượt xem</span>
               </div>
-              <span className="font-black text-[#003466]">1,402</span>
+              <span className="font-black text-[#003466]">{documentViewCount.toLocaleString('vi-VN')}</span>
             </div>
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2 text-slate-600">
-                <Award size={18} />
-                <span className="text-sm font-medium">Độ khó cộng đồng</span>
+                <Download size={18} />
+                <span className="text-sm font-medium">Số lượt tải</span>
               </div>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black rounded-lg uppercase">Trung bình</span>
+              <span className="font-black text-[#003466]">{documentDownloadCount.toLocaleString('vi-VN')}</span>
             </div>
           </div>
         </div>
@@ -547,42 +914,129 @@ export default function DiscussionDetailPage() {
             </div>
 
             {/* Comments List */}
-            <div className="space-y-10">
+            <div className="space-y-5">
               {pagedComments.map((comment) => (
-                <div key={comment.id} className="group">
-                  <div className="flex items-start gap-5">
-                    <img src={comment.avatar} alt="avt" className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
-                    <div className="flex-1 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-bold text-[#003466]">{comment.author}</h4>
-                          <div className="flex items-center gap-3 mt-1">
+                <div
+                  key={comment.id}
+                  className="rounded-[18px] bg-white p-4 shadow-[0_8px_28px_rgba(15,23,42,0.06)] ring-1 ring-slate-100 sm:p-5"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <img
+                      src={comment.avatar}
+                      alt="avt"
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow-sm sm:h-11 sm:w-11"
+                    />
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <h4 className="truncate text-[15px] font-extrabold text-[#0f2a46]">{comment.author}</h4>
+                          <div className="mt-1 flex items-center gap-2.5">
                             <div className="flex text-[#ffa825]">
-                              {[...Array(comment.rating)].map((_, i) => <Star key={i} size={14} fill="currentColor" />)}
+                              {[...Array(comment.rating)].map((_, i) => <Star key={i} size={13} fill="currentColor" />)}
                             </div>
-                            <span className="text-[11px] text-slate-400 font-bold uppercase">{comment.time}</span>
+                            <span className="text-[11px] font-semibold text-slate-400">{comment.time}</span>
                           </div>
                         </div>
-                        <button className="text-slate-300 hover:text-slate-600 transition-colors">
-                          <MoreHorizontal size={20} />
+                        <button className="text-slate-300 transition-colors hover:text-slate-500">
+                          <MoreHorizontal size={18} />
                         </button>
                       </div>
-                      <p className="text-slate-600 leading-relaxed text-[15px]">
+                      <p className="text-[14px] leading-relaxed text-slate-700 sm:text-[15px]">
                         {comment.content}
                       </p>
                       {comment.image && (
-                        <div className="pt-2">
-                          <img src={comment.image} alt="attached" className="w-40 h-28 object-cover rounded-2xl border border-slate-100 shadow-sm hover:scale-105 transition-transform cursor-zoom-in" />
-                        </div>
+                        <img
+                          src={comment.image}
+                          alt="attached"
+                          className="h-28 w-40 rounded-2xl object-cover shadow-sm transition-transform hover:scale-[1.02] sm:h-32 sm:w-48"
+                        />
                       )}
-                      <div className="flex items-center gap-8 pt-2">
-                        <button className="flex items-center gap-1.5 text-xs font-black text-[#003466] hover:opacity-70">
-                          <ThumbsUp size={16} /> Thích ({comment.likes})
+                      <div className="flex flex-wrap items-center gap-5 pt-1">
+                        <button
+                          onClick={() => void handleToggleCommentLike(comment)}
+                          className={`inline-flex items-center gap-1.5 text-xs font-bold transition ${
+                            comment.viewerUpvoted ? 'text-emerald-600 hover:text-emerald-500' : 'text-slate-500 hover:text-[#0f2a46]'
+                          }`}
+                        >
+                          <ThumbsUp size={15} /> Thích ({comment.likes})
                         </button>
-                        <button className="flex items-center gap-1.5 text-xs font-black text-slate-400 hover:text-[#003466]">
-                          <Reply size={16} /> Phản hồi
+                        <button
+                          onClick={() => void handleReplyToComment(comment)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 transition hover:text-[#0f2a46]"
+                        >
+                          <Reply size={15} /> Phản hồi ({comment.replyCount ?? 0})
                         </button>
                       </div>
+                      {replyingCommentId === comment.id && (
+                        <div className="ml-2 space-y-3 pt-1 sm:ml-3">
+                          <div className="relative space-y-3 pl-4 before:absolute before:bottom-1 before:left-1 before:top-1 before:w-px before:bg-slate-200 sm:pl-5">
+                            {isLoadingReplyItemsForCommentId === comment.id ? (
+                              <p className="text-xs font-semibold text-slate-400">Đang tải phản hồi...</p>
+                            ) : (replyItemsByCommentId[comment.id] ?? []).length === 0 ? (
+                              <p className="text-xs font-semibold text-slate-400">Chưa có phản hồi nào.</p>
+                            ) : (
+                              <div className="space-y-2.5">
+                                {(replyItemsByCommentId[comment.id] ?? []).map((reply) => (
+                                  <div key={reply.id} className="rounded-2xl bg-[#F5F7FB] px-3 py-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.04)]">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex min-w-0 items-center gap-2">
+                                        {reply.avatarUrl ? (
+                                          <img
+                                            src={reply.avatarUrl}
+                                            alt={reply.author}
+                                            className="h-6 w-6 shrink-0 rounded-full object-cover"
+                                          />
+                                        ) : null}
+                                        <span className="truncate text-xs font-bold text-[#0f2a46]">{reply.author}</span>
+                                      </div>
+                                      <span className="text-[11px] font-semibold text-slate-400">
+                                        {formatReplyTime(reply.createdAt)}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-sm text-slate-600">{reply.content}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-2xl bg-[#F5F7FB] p-2.5 sm:p-3">
+                            <div className="flex items-start gap-2.5">
+                              <div className="min-w-0 flex-1 space-y-2.5">
+                                <textarea
+                                  value={replyDraftByCommentId[comment.id] ?? ''}
+                                  onChange={(event) =>
+                                    setReplyDraftByCommentId((prev) => ({ ...prev, [comment.id]: event.target.value }))
+                                  }
+                                  className="w-full min-h-[72px] rounded-xl border border-transparent bg-white px-3 py-2.5 text-sm text-slate-700 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.26)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                placeholder="Viết phản hồi tự nhiên, rõ ràng và tôn trọng..."
+                                />
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setReplyingCommentId(null)}
+                                      className="h-10 rounded-xl bg-white px-4 text-xs font-bold text-slate-600 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.35)] transition hover:bg-slate-50"
+                                    >
+                                      Hủy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSubmitInlineReply(comment)}
+                                      disabled={
+                                        isSubmittingReplyCommentId === comment.id
+                                        || (replyDraftByCommentId[comment.id] ?? '').trim().length === 0
+                                      }
+                                      className="h-10 rounded-xl bg-[#1f66d1] px-4 text-xs font-bold text-white shadow-[0_10px_20px_rgba(31,102,209,0.24)] transition hover:bg-[#1956b2] focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                  {isSubmittingReplyCommentId === comment.id ? 'Đang gửi...' : 'Gửi phản hồi'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -607,25 +1061,6 @@ export default function DiscussionDetailPage() {
 
         {/* Sidebar Info */}
         <aside className="lg:col-span-4 space-y-8">
-          {/* Instructor Card */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
-            <h3 className="font-bold text-slate-500 uppercase text-[11px] tracking-widest">Người tạo đề</h3>
-            <div className="flex items-center gap-4">
-              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Son" alt="TS" className="w-14 h-14 rounded-full bg-blue-50 border-2 border-blue-100" />
-              <div>
-                <p className="font-black text-[#003466]">TS. Đặng Văn Sơn</p>
-                <p className="text-xs text-slate-500 font-medium">Chuyên gia Toán Cao cấp</p>
-                <div className="flex items-center gap-1 mt-1 text-emerald-600">
-                  <Verified size={14} fill="currentColor" className="text-white" />
-                  <span className="text-[10px] font-black uppercase">Đã xác thực</span>
-                </div>
-              </div>
-            </div>
-            <button className="w-full bg-slate-50 text-[#003466] py-3 rounded-xl text-xs font-black border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all">
-              Theo dõi giảng viên
-            </button>
-          </div>
-
           {/* Related Exams */}
           <div className="space-y-6">
             <h3 className="font-bold text-[#003466] text-lg">Đề thi liên quan</h3>
@@ -672,3 +1107,6 @@ export default function DiscussionDetailPage() {
     </div>
   );
 }
+
+
+

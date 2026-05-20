@@ -9,6 +9,9 @@ export interface UserComment {
   time: string;
   content: string;
   likes: number;
+  discussionId?: number;
+  viewerUpvoted?: boolean;
+  replyCount?: number;
   image?: string;
   canDelete?: boolean;
 }
@@ -212,6 +215,7 @@ export interface DocumentSummary {
   fileUrl?: string;
   averageRating?: number;
   downloadCount?: number;
+  viewCount?: number;
   status?: string;
   submittedAt?: string;
   createdAt?: string;

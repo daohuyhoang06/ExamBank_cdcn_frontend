@@ -80,6 +80,7 @@ type BackendDocument = {
   previewUrl?: string;
   averageRating?: number;
   downloadCount?: number;
+  viewCount?: number;
   status?: string;
   submittedAt?: string;
   createdAt?: string;
@@ -94,6 +95,30 @@ type BackendReview = {
   comment?: string;
   createdAt: string;
   canDelete?: boolean;
+};
+
+type BackendDiscussionAuthor = {
+  userId?: number;
+  userName?: string;
+  role?: string;
+};
+
+type BackendDiscussionThread = {
+  id: number;
+  title?: string;
+  content?: string;
+  replyCount?: number;
+  upvoteCount?: number;
+  viewerUpvoted?: boolean;
+  author?: BackendDiscussionAuthor;
+  createdAt?: string;
+};
+
+type BackendDiscussionReply = {
+  id: number;
+  content?: string;
+  createdAt?: string;
+  author?: BackendDiscussionAuthor;
 };
 
 type BackendLeaderBoardEntry = {
@@ -862,6 +887,7 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   fileUrl: doc.fileUrl ?? doc.previewUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
+  viewCount: doc.viewCount,
   status: doc.status,
   submittedAt: doc.submittedAt,
   createdAt: doc.createdAt,
@@ -895,6 +921,7 @@ const toStoredBackendDocument = (doc: DocumentSummary): BackendDocument => ({
   fileUrl: doc.fileUrl,
   averageRating: doc.averageRating,
   downloadCount: doc.downloadCount,
+  viewCount: doc.viewCount,
   status: doc.status,
   submittedAt: doc.submittedAt,
   createdAt: doc.createdAt,
@@ -924,6 +951,7 @@ const normalizeStoredDocument = (value: unknown): BackendDocument | null => {
     previewUrl: item.previewUrl,
     averageRating: item.averageRating,
     downloadCount: item.downloadCount,
+    viewCount: item.viewCount,
     status: item.status,
     submittedAt: item.submittedAt,
     createdAt: item.createdAt,
@@ -1047,7 +1075,6 @@ const toLeaderboardAvatarSeed = (item: BackendLeaderBoardEntry, index: number): 
 const mapLeaderBoards = (items: BackendLeaderBoardEntry[]): Ranking[] => {
   return [...items]
     .sort((a, b) => toLeaderboardPoints(b) - toLeaderboardPoints(a))
-    .slice(0, 5)
     .map((item, index) => {
       const points = toLeaderboardPoints(item);
       return {
@@ -1160,6 +1187,80 @@ export const userService = {
         likes: 0,
         canDelete: item.canDelete,
       }));
+    } catch {
+      return [];
+    }
+  },
+
+  getDocumentDiscussions: async (documentId: number): Promise<BackendDiscussionThread[]> => {
+    try {
+      const { data } = await api.get<BackendDiscussionThread[]>(`/api/v1/documents/${documentId}/discussions`, {
+        params: {
+          sort: "newest",
+          page: 0,
+          size: 100,
+        },
+      });
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  createDocumentDiscussionThread: async (
+    documentId: number,
+    payload: { title: string; content: string; type?: "QUESTION" | "ANSWER" | "HINT" | "GENERAL" },
+  ): Promise<BackendDiscussionThread | null> => {
+    try {
+      const { data } = await api.post<BackendDiscussionThread>(`/api/v1/documents/${documentId}/discussions`, {
+        title: payload.title,
+        content: payload.content,
+        type: payload.type ?? "GENERAL",
+      });
+      return data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  addDiscussionUpvote: async (discussionId: number): Promise<boolean> => {
+    try {
+      await api.post(`/api/v1/discussions/${discussionId}/upvotes`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  removeDiscussionUpvote: async (discussionId: number): Promise<boolean> => {
+    try {
+      await api.delete(`/api/v1/discussions/${discussionId}/upvotes`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  createDiscussionReply: async (discussionId: number, content: string): Promise<boolean> => {
+    try {
+      await api.post(`/api/v1/discussions/${discussionId}/replies`, {
+        content,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  getDiscussionReplies: async (discussionId: number): Promise<BackendDiscussionReply[]> => {
+    try {
+      const { data } = await api.get<BackendDiscussionReply[]>(`/api/v1/discussions/${discussionId}/replies`, {
+        params: {
+          page: 0,
+          size: 100,
+        },
+      });
+      return Array.isArray(data) ? data : [];
     } catch {
       return [];
     }

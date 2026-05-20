@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
+import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 
 const SOURCE_LABELS: Record<string, string> = {
   DUE_REVIEW: "Đến hạn",
@@ -86,6 +87,23 @@ export default function UserHomePage() {
       avgEase,
     };
   }, [reviewRecommendations]);
+
+  const currentUser = useMemo(() => getStoredAuthUser(), []);
+
+  const currentUserRanking = useMemo(() => {
+    if (!currentUser) {
+      return null;
+    }
+
+    const normalizedName = (currentUser.fullName ?? currentUser.email ?? '').trim().toLowerCase();
+    const idSeed = currentUser.id !== undefined && currentUser.id !== null ? String(currentUser.id) : null;
+
+    return (
+      rankings.find((item) => (idSeed && item.avatar === idSeed))
+      ?? rankings.find((item) => normalizedName && item.name.trim().toLowerCase() === normalizedName)
+      ?? null
+    );
+  }, [currentUser, rankings]);
 
   useEffect(() => {
     let isActive = true;
@@ -288,7 +306,10 @@ export default function UserHomePage() {
                         {item.rank}
                       </div>
                       <div className="w-7 h-7 rounded-full bg-slate-100 overflow-hidden border border-slate-200 shrink-0">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${item.name}`} alt="" />
+                        <img
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${item.avatar || item.name}`}
+                          alt={item.name}
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-[13px] text-slate-800 truncate leading-tight">{item.name}</p>
@@ -311,22 +332,38 @@ export default function UserHomePage() {
           </div>
 
           <footer className="px-2 pb-2 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-2.5 bg-gradient-to-br from-blue-50 to-blue-50/40 border border-blue-100 px-3 py-2 rounded-xl">
-              <div className="w-6 h-6 flex items-center justify-center rounded-md bg-white text-blue-700 ring-1 ring-blue-200 font-bold text-[11px] tabular-nums shrink-0">
-                12
+            {currentUserRanking ? (
+              <div className="flex items-center gap-2.5 bg-gradient-to-br from-blue-50 to-blue-50/40 border border-blue-100 px-3 py-2 rounded-xl">
+                <div className="w-6 h-6 flex items-center justify-center rounded-md bg-white text-blue-700 ring-1 ring-blue-200 font-bold text-[11px] tabular-nums shrink-0">
+                  {currentUserRanking.rank}
+                </div>
+                <div className="w-7 h-7 rounded-full bg-slate-100 overflow-hidden border border-slate-200 shrink-0">
+                  <img
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUserRanking.avatar}`}
+                    alt={currentUserRanking.name}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[13px] text-blue-900 truncate leading-tight">
+                    {currentUserRanking.name} (Bạn)
+                  </p>
+                  <p className="text-[10.5px] text-blue-700/70 tabular-nums mt-0.5">
+                    {formatScoreValue(currentUserRanking.score)} điểm
+                  </p>
+                </div>
+                <span className="inline-flex items-center text-[10px] font-bold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-0.5 rounded shrink-0">
+                  Bạn
+                </span>
               </div>
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center font-bold text-[10px] shrink-0 ring-2 ring-white">
-                MH
+            ) : currentUser ? (
+              <div className="flex items-center gap-2.5 bg-gradient-to-br from-blue-50 to-blue-50/40 border border-blue-100 px-3 py-2 rounded-xl">
+                <p className="text-[11px] font-semibold text-blue-700">Bạn chưa có thứ hạng tuần này.</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[13px] text-blue-900 truncate leading-tight">Minh Hoàng (Bạn)</p>
-                <p className="text-[10.5px] text-blue-700/70 tabular-nums mt-0.5">842 điểm</p>
+            ) : (
+              <div className="flex items-center gap-2.5 bg-gradient-to-br from-blue-50 to-blue-50/40 border border-blue-100 px-3 py-2 rounded-xl">
+                <p className="text-[11px] font-semibold text-blue-700">Đăng nhập để xem thứ hạng của bạn.</p>
               </div>
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-0.5 rounded shrink-0">
-                <ArrowRight className="w-2.5 h-2.5 -rotate-45" strokeWidth={3} />
-                5
-              </span>
-            </div>
+            )}
           </footer>
         </section>
       </div>
