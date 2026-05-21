@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, Building2, ChevronLeft, ChevronRight, Headset, LogOut, User } from 'lucide-react';
+import { Bell, Building2, ChevronLeft, ChevronRight, Crown, Headset, LogOut, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { NotificationPopover } from './notification-popover';
 import type { NotificationItem, NotificationType } from './notification-popover';
 import { AUTH_USER_UPDATED_EVENT, clearStoredAuthUser, getStoredAuthUser } from '@/features/auth/services/auth.service';
 import { getStoredAuthToken, setAuthToken } from '@/lib/api-client';
+import { premiumUpgradeService } from '@/features/user/services/premium-upgrade.service';
 import {
   getUnreadNotificationCount,
   listNotifications,
@@ -280,6 +281,7 @@ export function AppSidebar({
   const [unreadCount, setUnreadCount] = useState(() =>
     (notificationItemsProp ?? []).filter((item) => item.unread).length
   );
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState(() => {
@@ -339,6 +341,20 @@ export function AppSidebar({
     }
   }, [isNotificationOverride]);
 
+  const refreshPremiumStatus = useCallback(async () => {
+    if (!getStoredAuthToken()) {
+      setIsPremiumUser(false);
+      return;
+    }
+
+    try {
+      const status = await premiumUpgradeService.getStatus();
+      setIsPremiumUser(Boolean(status.premium && status.confirmed));
+    } catch {
+      setIsPremiumUser(false);
+    }
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
@@ -363,11 +379,13 @@ export function AppSidebar({
     if (isNotificationOverride) {
       setNotificationItems(notificationItemsProp ?? []);
       setUnreadCount((notificationItemsProp ?? []).filter((item) => item.unread).length);
+      void refreshPremiumStatus();
       return;
     }
 
     void refreshNotifications();
-  }, [isNotificationOverride, notificationItemsProp, refreshNotifications]);
+    void refreshPremiumStatus();
+  }, [isNotificationOverride, notificationItemsProp, refreshNotifications, refreshPremiumStatus]);
 
   useEffect(() => {
     if (isNotificationOpen) {
@@ -392,13 +410,14 @@ export function AppSidebar({
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
       setCurrentUserAvatarUrl(currentUser?.avatarUrl ?? '');
       void refreshNotifications();
+      void refreshPremiumStatus();
     }
 
     window.addEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
     return () => {
       window.removeEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
     };
-  }, [refreshNotifications]);
+  }, [refreshNotifications, refreshPremiumStatus]);
 
   function handleOpenProfile() {
     if (location.pathname.startsWith('/admin')) {
@@ -679,7 +698,7 @@ export function AppSidebar({
               <button
                 type="button"
                 onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
-                className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[var(--brand-500)] shadow-[0_0_0_4px_rgba(31,99,180,0.18),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : 'border-[var(--brand-100)] hover:brightness-110'}`}
+                className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[#D6B76A] shadow-[0_0_0_4px_rgba(214,183,106,0.2),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : isPremiumUser ? 'border-[#D6B76A] shadow-[0_0_0_3px_rgba(214,183,106,0.18)]' : 'border-[var(--brand-100)] hover:brightness-110'}`}
                 aria-label="Mở menu tài khoản"
                 aria-haspopup="menu"
                 aria-expanded={isAvatarMenuOpen}
@@ -722,7 +741,19 @@ export function AppSidebar({
                 <p className="truncate font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">
                   {currentUserDisplayName}
                 </p>
-                <p className="truncate font-[var(--font-label)] text-[10px] text-[var(--ink-600)]">Tài khoản</p>
+                {isPremiumUser ? (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#D6B76A] bg-[#FFFCF3] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#B88A20]">
+                    <Crown size={10} /> VIP
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/user/premium/upgrade')}
+                    className="mt-1 inline-flex items-center rounded-full border border-[#a855f7] bg-white px-3 py-1 text-[10px] font-semibold text-[#7c3aed] transition hover:bg-[#f3e8ff]"
+                  >
+                    Nâng cấp
+                  </button>
+                )}
               </div>
             )}
           </div>

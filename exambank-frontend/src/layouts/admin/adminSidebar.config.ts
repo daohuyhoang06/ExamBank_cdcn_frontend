@@ -2,7 +2,6 @@ import {
   BookOpen,
   FileText,
   Gauge,
-  ShieldCheck,
   UserCog,
   Wallet,
 } from "lucide-react";
@@ -13,6 +12,5 @@ export const adminSidebarItems: SidebarNavItem[] = [
   { label: "Quản lý người dùng", path: "/admin/users", icon: UserCog },
   { label: "Quản lý tài liệu", path: "/admin/content", icon: FileText },
   { label: "Quản lý đề thi", path: "/admin/exams", icon: BookOpen },
-  { label: "Ngân hàng câu hỏi", path: "/admin/question-bank", icon: ShieldCheck },
   { label: "Tài chính", path: "/admin/financial", icon: Wallet },
 ];

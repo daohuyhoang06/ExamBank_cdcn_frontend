@@ -23,7 +23,6 @@ const baseItems: SidebarNavItem[] = [
   { label: "Tải đề lên", path: "/user/exambank/submit", icon: Settings },
   { label: "Thi online", path: "/user/online-exam", icon: MonitorPlay },
   { label: "Vào thi private", path: "/user/private-competition", icon: LockKeyhole },
-  { label: "Nâng cấp Premium", path: "/user/premium/upgrade", icon: Crown },
 ];
 
 const aiPremiumItem: SidebarNavItem = {

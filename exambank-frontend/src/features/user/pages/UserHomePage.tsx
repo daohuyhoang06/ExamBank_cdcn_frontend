@@ -14,6 +14,7 @@ import {
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
 import { getStoredAuthUser } from '@/features/auth/services/auth.service';
+import { premiumUpgradeService } from '@/features/user/services/premium-upgrade.service';
 
 const SOURCE_LABELS: Record<string, string> = {
   DUE_REVIEW: "Đến hạn",
@@ -69,6 +70,7 @@ export default function UserHomePage() {
   const [weakTopics, setWeakTopics] = useState<WeakTopicInsight[]>([]);
   const [reviewRecommendations, setReviewRecommendations] = useState<ReviewRecommendation[]>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
 
   const reviewStats = useMemo(() => {
     const dueCount = reviewRecommendations.filter((item) => item.due).length;
@@ -107,6 +109,18 @@ export default function UserHomePage() {
 
   useEffect(() => {
     let isActive = true;
+    const loadPremiumStatus = async () => {
+      try {
+        const status = await premiumUpgradeService.getStatus();
+        if (isActive) {
+          setIsPremiumUser(Boolean(status.premium && status.confirmed));
+        }
+      } catch {
+        if (isActive) {
+          setIsPremiumUser(false);
+        }
+      }
+    };
     const fetchData = async () => {
       setInsightsLoading(true);
       try {
@@ -131,6 +145,7 @@ export default function UserHomePage() {
         }
       }
     };
+    void loadPremiumStatus();
     fetchData();
 
     return () => {
@@ -233,25 +248,43 @@ export default function UserHomePage() {
 
             {/* CTA + price */}
             <div className="flex flex-wrap items-center gap-4 mt-auto pt-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate('/user/premium/upgrade');
-                }}
-                className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 px-6 py-3 text-sm font-bold text-[#3a1d00] ring-1 ring-amber-200/70 shadow-[0_10px_36px_-6px_rgba(251,191,36,0.55),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-2px_0_rgba(180,83,9,0.15)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_44px_-6px_rgba(251,191,36,0.75),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_-2px_0_rgba(180,83,9,0.18)] active:translate-y-0"
-              >
-                {/* Shine sweep effect */}
-                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent transition-transform duration-1000 group-hover/btn:translate-x-full" />
-                <Crown className="relative w-4 h-4" fill="currentColor" strokeWidth={2} />
-                <span className="relative tracking-tight">Nâng cấp ngay</span>
-                <ArrowRight className="relative w-3.5 h-3.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" strokeWidth={2.5} />
-              </button>
+              {isPremiumUser ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/user/premium/upgrade');
+                  }}
+                  className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-white/10 px-6 py-3 text-sm font-bold text-white ring-1 ring-white/30 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.5)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15"
+                >
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-1000 group-hover/btn:translate-x-full" />
+                  <Crown className="relative w-4 h-4" fill="currentColor" strokeWidth={2} />
+                  <span className="relative tracking-tight">Xem chi tiết</span>
+                  <ArrowRight className="relative w-3.5 h-3.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" strokeWidth={2.5} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/user/premium/upgrade');
+                  }}
+                  className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 px-6 py-3 text-sm font-bold text-[#3a1d00] ring-1 ring-amber-200/70 shadow-[0_10px_36px_-6px_rgba(251,191,36,0.55),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-2px_0_rgba(180,83,9,0.15)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_44px_-6px_rgba(251,191,36,0.75),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_-2px_0_rgba(180,83,9,0.18)] active:translate-y-0"
+                >
+                  {/* Shine sweep effect */}
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent transition-transform duration-1000 group-hover/btn:translate-x-full" />
+                  <Crown className="relative w-4 h-4" fill="currentColor" strokeWidth={2} />
+                  <span className="relative tracking-tight">Nâng cấp ngay</span>
+                  <ArrowRight className="relative w-3.5 h-3.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" strokeWidth={2.5} />
+                </button>
+              )}
 
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold text-white tabular-nums [text-shadow:0_2px_12px_rgba(0,0,0,0.3)]">50.000₫</span>
-                <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>/tháng</span>
-              </div>
+              {!isPremiumUser ? (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold text-white tabular-nums [text-shadow:0_2px_12px_rgba(0,0,0,0.3)]">50.000₫</span>
+                  <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>/tháng</span>
+                </div>
+              ) : null}
 
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-200 bg-emerald-400/15 border border-emerald-400/40 px-2.5 py-1.5 rounded-md shadow-[0_0_20px_-4px_rgba(74,222,128,0.3)]">
                 <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
