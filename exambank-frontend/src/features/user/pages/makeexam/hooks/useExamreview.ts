@@ -92,7 +92,7 @@ export const useExamreview = (sessionId?: number) => {
                   isUser: true,
                 },
               ]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             }
           } catch {
             try {
@@ -109,14 +109,14 @@ export const useExamreview = (sessionId?: number) => {
                   isUser: true,
                 },
               ]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             } catch {
               if (!isActive) {
                 return;
               }
 
               setLeaderboard([]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             }
           } finally {
             if (isActive) {
@@ -128,7 +128,7 @@ export const useExamreview = (sessionId?: number) => {
             return;
           }
 
-          setResultError('Chua lay duoc trang thai cham diem. Vui long thu lai sau.');
+          setResultError('Chưa lấy được trạng thái chấm điểm. Vui lòng thử lại sau.');
           setIsLoadingResult(false);
         }
       };

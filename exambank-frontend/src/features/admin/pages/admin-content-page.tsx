@@ -422,61 +422,6 @@ export default function AdminContentPage() {
     }
   }
 
-  async function handleOverrideInDetail(target: "approve" | "reject") {
-    if (!selectedDocumentDetail || detailAction) {
-      return;
-    }
-
-    const confirmed = await confirm(
-      target === "approve"
-        ? "Admin override: buộc duyệt tài liệu này?"
-        : "Admin override: buộc từ chối tài liệu này?",
-      {
-        title: "Override trạng thái",
-        type: target === "approve" ? "warning" : "danger",
-        confirmText: "Xác nhận",
-        cancelText: "Hủy",
-      }
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setDetailAction("override");
-    try {
-      if (target === "approve") {
-        await approveAdminDocument(selectedDocumentDetail.id);
-      } else {
-        const note = detailRejectNote.trim() || "Admin override từ chối tài liệu.";
-        await rejectAdminDocument(selectedDocumentDetail.id, `[ADMIN OVERRIDE] ${note}`);
-      }
-      await loadData();
-      setSelectedDocumentDetail(null);
-      setDetailRejectNote("");
-      await showAlert("Override trạng thái thành công.");
-    } catch (error) {
-      await showAlert(error instanceof Error ? error.message : "Override trạng thái thất bại.");
-    } finally {
-      setDetailAction(null);
-    }
-  }
-
-  async function handleDeleteInDetail() {
-    if (!selectedDocumentDetail || detailAction) {
-      return;
-    }
-
-    setDetailAction("delete");
-    try {
-      await handleDeleteDocument(selectedDocumentDetail);
-      setSelectedDocumentDetail(null);
-      setDetailRejectNote("");
-    } finally {
-      setDetailAction(null);
-    }
-  }
-
   const availableCategories = useMemo(() => {
     const categories = new Set<string>();
 

@@ -135,6 +135,9 @@ export default function ExamBankPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [keyword, setKeyword] = useState('');
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [documentRatingStatsById, setDocumentRatingStatsById] = useState<Record<number, { average: number; count: number }>>(
+    {},
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
@@ -174,6 +177,7 @@ export default function ExamBankPage() {
       }));
 
       setDocuments(mapped);
+      setDocumentRatingStatsById({});
       setCurrentPage(1);
     } catch (error) {
       if (isAxiosError(error)) {
@@ -229,6 +233,52 @@ export default function ExamBankPage() {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    const missingDocumentIds = pagedDocuments
+      .map((item) => item.id)
+      .filter((id) => documentRatingStatsById[id] === undefined);
+
+    if (missingDocumentIds.length === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadLatestRatings = async () => {
+      const entries = await Promise.all(
+        missingDocumentIds.map(async (id) => {
+          try {
+            const stats = await userService.getDocumentRatingStats(id);
+            return [id, stats] as const;
+          } catch {
+            return [id, { average: 0, count: 0 }] as const;
+          }
+        }),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      setDocumentRatingStatsById((prev) => {
+        const next = { ...prev };
+        entries.forEach(([id, stats]) => {
+          next[id] = {
+            average: stats.average ?? 0,
+            count: stats.count ?? 0,
+          };
+        });
+        return next;
+      });
+    };
+
+    void loadLatestRatings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pagedDocuments, documentRatingStatsById]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20">
@@ -375,11 +425,15 @@ export default function ExamBankPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-0.5">
-                  <div className="inline-flex items-center gap-1 text-amber-500">
+                  <span className="inline-flex items-center gap-1 text-amber-500">
                     <Star size={12} className="fill-current" />
-                    <span className="text-xs font-extrabold text-slate-800">{(document.averageRating ?? 0).toFixed(1)}</span>
-                    <span className="text-[11px] font-semibold text-slate-400">({document.downloadCount ?? 0})</span>
-                  </div>
+                    <span className="text-xs font-extrabold text-slate-800">
+                      {(documentRatingStatsById[document.id]?.average ?? document.averageRating ?? 0).toFixed(1)}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      ({documentRatingStatsById[document.id]?.count ?? 0})
+                    </span>
+                  </span>
 
                   <button
                     type="button"

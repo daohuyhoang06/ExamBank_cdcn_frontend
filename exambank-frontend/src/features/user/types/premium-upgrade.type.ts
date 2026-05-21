@@ -42,6 +42,8 @@ export interface PremiumUpgradeOrder {
   reviewedByUserId?: number;
   reviewedByName?: string;
   reviewedAt?: string;
+  startedAt?: string;
+  expiresAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }

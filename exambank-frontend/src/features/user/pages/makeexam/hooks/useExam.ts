@@ -226,13 +226,13 @@ export const useExam = (examId?: string) => {
     if (!getStoredAuthToken()) {
       setIsLoadingExam(false);
       setExam(null);
-      setExamLoadError('Vui long dang nhap de lam bai thi online.');
+      setExamLoadError('Vui lòng đăng nhập để làm bài thi online.');
       return;
     }
 
     if (!examId) {
       setIsLoadingExam(false);
-      setExamLoadError('Khong tim thay ma de thi.');
+      setExamLoadError('Không tìm thấy mã đề thi.');
       return;
     }
 
@@ -243,7 +243,7 @@ export const useExam = (examId?: string) => {
         const data = await examService.getExamById(examId);
         if (!data) {
           setExam(null);
-          setExamLoadError('Khong tim thay de thi hoac de thi chua duoc phe duyet.');
+          setExamLoadError('Không tìm thấy đề thi hoặc đề thi chưa được phê duyệt.');
           return;
         }
 
@@ -252,13 +252,13 @@ export const useExam = (examId?: string) => {
         setIsResumedAttempt(false);
 
         if (data.questions.length === 0) {
-          setExamLoadError('De thi nay chua co cau hoi. Vui long thu lai sau.');
+          setExamLoadError('Đề thi này chưa có câu hỏi. Vui lòng thử lại sau.');
           return;
         }
 
         const numericExamId = Number(examId);
         if (Number.isNaN(numericExamId)) {
-          setExamLoadError('Ma de thi khong hop le.');
+          setExamLoadError('Mã đề thi không hợp lệ.');
           return;
         }
 
@@ -329,8 +329,8 @@ export const useExam = (examId?: string) => {
         setTimeLimitMinutes(session.timeLimitMinutes ?? data.duration);
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
-        setSubmitError('Khong the khoi tao phien thi. Vui long thu lai.');
-        setExamLoadError(message || 'Khong the bat dau lam de ngay luc nay.');
+        setSubmitError('Không thể khởi tạo phiên thi. Vui lòng thử lại.');
+        setExamLoadError(message || 'Không thể bắt đầu làm đề ngay lúc này.');
       } finally {
         setIsLoadingExam(false);
       }
@@ -423,7 +423,7 @@ export const useExam = (examId?: string) => {
         }
       }
 
-      const message = error instanceof Error ? error.message : 'Khong the nop bai luc nay.';
+      const message = error instanceof Error ? error.message : 'Không thể nộp bài lúc này.';
       setSubmitError(message);
       return null;
     } finally {

@@ -31,6 +31,35 @@ const toOptionalString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const toOptionalDateString = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const ms = value > 1_000_000_000_000 ? value : value * 1000;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+
+  return undefined;
+};
+
+const pickOptionalDateString = (source: Record<string, unknown>, keys: string[]): string | undefined => {
+  for (const key of keys) {
+    const value = toOptionalDateString(source[key]);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
 const toStatus = (value: unknown): PremiumOrderStatus => {
   const status = toString(value).toUpperCase();
   if (
@@ -67,6 +96,93 @@ const toPublicStorageUrl = (fileUrl?: string): string | undefined => {
 
 const mapOrder = (value: unknown): AdminPremiumOrder => {
   const obj = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const premiumObject = (
+    obj.premiumStatus && typeof obj.premiumStatus === "object"
+      ? obj.premiumStatus
+      : obj.userPremiumStatus && typeof obj.userPremiumStatus === "object"
+        ? obj.userPremiumStatus
+      : obj.premium && typeof obj.premium === "object"
+        ? obj.premium
+        : {}
+  ) as Record<string, unknown>;
+
+  const startedAt = pickOptionalDateString(obj, [
+    "startedAt",
+    "started_at",
+    "startTime",
+    "start_time",
+    "startAt",
+    "start_at",
+    "premiumStartedAt",
+    "premium_started_at",
+    "premiumStartTime",
+    "premium_start_time",
+    "activatedAt",
+    "activated_at",
+    "activeFrom",
+    "active_from",
+    "start_date",
+  ]) ?? pickOptionalDateString(premiumObject, [
+    "startedAt",
+    "started_at",
+    "startTime",
+    "start_time",
+    "startAt",
+    "start_at",
+    "premiumStartedAt",
+    "premium_started_at",
+    "activatedAt",
+    "activated_at",
+    "activeFrom",
+    "active_from",
+  ]);
+
+  const expiresAtRaw = pickOptionalDateString(obj, [
+    "expiresAt",
+    "expires_at",
+    "endTime",
+    "end_time",
+    "endAt",
+    "end_at",
+    "premiumExpiresAt",
+    "premium_expires_at",
+    "premiumEndTime",
+    "premium_end_time",
+    "expiredAt",
+    "expired_at",
+    "activeUntil",
+    "active_until",
+    "end_date",
+  ]) ?? pickOptionalDateString(premiumObject, [
+    "expiresAt",
+    "expires_at",
+    "endTime",
+    "end_time",
+    "endAt",
+    "end_at",
+    "premiumExpiresAt",
+    "premium_expires_at",
+    "expiredAt",
+    "expired_at",
+    "activeUntil",
+    "active_until",
+  ]);
+
+  const planDurationDays = toNumber(obj.planDurationDays);
+  const expiresAtFromDuration = (() => {
+    if (!startedAt || planDurationDays <= 0) {
+      return undefined;
+    }
+    const startDate = new Date(startedAt);
+    if (Number.isNaN(startDate.getTime())) {
+      return undefined;
+    }
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + planDurationDays);
+    return endDate.toISOString();
+  })();
+  const expiresAt = expiresAtRaw ?? expiresAtFromDuration;
+
   return {
     id: toNumber(obj.id),
     userId: obj.userId === undefined ? undefined : toNumber(obj.userId),
@@ -74,7 +190,7 @@ const mapOrder = (value: unknown): AdminPremiumOrder => {
     userEmail: toOptionalString(obj.userEmail),
     planCode: toString(obj.planCode),
     planName: toString(obj.planName),
-    planDurationDays: toNumber(obj.planDurationDays),
+    planDurationDays,
     planPrice: toNumber(obj.planPrice),
     status: toStatus(obj.status),
     qrCodeImageUrl: toString(obj.qrCodeImageUrl),
@@ -86,6 +202,8 @@ const mapOrder = (value: unknown): AdminPremiumOrder => {
     reviewedByUserId: obj.reviewedByUserId === undefined ? undefined : toNumber(obj.reviewedByUserId),
     reviewedByName: toOptionalString(obj.reviewedByName),
     reviewedAt: toOptionalString(obj.reviewedAt),
+    startedAt,
+    expiresAt,
     createdAt: toOptionalString(obj.createdAt),
     updatedAt: toOptionalString(obj.updatedAt),
   };

@@ -34,21 +34,21 @@ export function StudentLayout() {
   const dynamicHeader = useMemo(() => {
     const currentPath = location.pathname;
     if (currentPath.includes("premium/upgrade")) {
-      return { title: "Nang cap Premium", sub: "Thanh toan qua QR, upload bill va cho admin duyet" };
+      return { title: "Nâng cấp Premium", sub: "Thanh toán qua QR, upload bill và chờ admin duyệt" };
     }
     if (currentPath.includes("premium/import")) {
-      return { title: "AI Premium", sub: "Import de thi bang AI va tao competition private" };
+      return { title: "AI Premium", sub: "Import đề thi bằng AI và tạo competition private" };
     }
     if (currentPath.includes("comment")) {
-      return { title: "De cua ban", sub: "Quan ly va theo doi cac de thi da dong gop" };
+      return { title: "Đề của bạn", sub: "Quản lý và theo dõi các đề thi đã đóng góp" };
     }
     if (currentPath.includes("online-exam")) {
-      return { title: "Thi online", sub: "Khu vuc thi truc tuyen" };
+      return { title: "Thi online", sub: "Khu vực thi trực tuyến" };
     }
     if (currentPath.includes("profile")) {
-      return { title: "Ho so ca nhan", sub: "Thong tin tai khoan cua ban" };
+      return { title: "Hồ sơ cá nhân", sub: "Thông tin tài khoản của bạn" };
     }
-    return { title: "Bang dieu khien", sub: "Chao mung ban quay tro lai he thong" };
+    return { title: "Bảng điều khiển", sub: "Chào mừng bạn quay trở lại hệ thống" };
   }, [location.pathname]);
 
   return (
