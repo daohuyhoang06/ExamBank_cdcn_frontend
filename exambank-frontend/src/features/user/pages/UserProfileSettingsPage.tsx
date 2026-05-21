@@ -239,6 +239,7 @@ export default function UserProfileSettingsPage() {
   const [notice, setNotice] = useState<{ type: NoticeType; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
@@ -352,6 +353,14 @@ export default function UserProfileSettingsPage() {
     setInitialPreferences(nextPreferences);
   };
 
+  const buildPersistedPreferences = (
+    nextProfile: UserProfile,
+    basePreferences: UiPreferences = preferences,
+  ): UiPreferences => ({
+    ...basePreferences,
+    avatarUrl: nextProfile.avatarUrl || basePreferences.avatarUrl || DEFAULT_AVATAR,
+  });
+
   const fetchProfile = useCallback(async (): Promise<void> => {
     setLoading(true);
     setNotice(null);
@@ -423,9 +432,10 @@ export default function UserProfileSettingsPage() {
         updated = await userService.uploadMyAvatar(selectedAvatarFile);
         clearAvatarObjectUrl();
       }
-      hydrateFromProfile(updated, preferences);
+      const nextPreferences = buildPersistedPreferences(updated, preferences);
+      hydrateFromProfile(updated, nextPreferences);
       setSelectedAvatarFile(null);
-      persistPreferences(preferences);
+      persistPreferences(nextPreferences);
       setNotice({ type: "success", message: "Đã cập nhật thông tin cá nhân và ảnh đại diện thành công." });
     } catch (error) {
       setNotice({ type: "error", message: extractErrorMessage(error) });
@@ -499,9 +509,10 @@ export default function UserProfileSettingsPage() {
         clearAvatarObjectUrl();
       }
 
-      hydrateFromProfile(updated, preferences);
+      const nextPreferences = buildPersistedPreferences(updated, preferences);
+      hydrateFromProfile(updated, nextPreferences);
       setSelectedAvatarFile(null);
-      persistPreferences(preferences);
+      persistPreferences(nextPreferences);
       setNotice({
         type: "info",
         message:
@@ -511,6 +522,29 @@ export default function UserProfileSettingsPage() {
       setNotice({ type: "error", message: extractErrorMessage(error) });
     } finally {
       setSavingAll(false);
+    }
+  };
+
+  const handleSaveAvatar = async (): Promise<void> => {
+    if (!selectedAvatarFile) {
+      setNotice({ type: "info", message: "Vui lòng chọn ảnh đại diện trước khi lưu." });
+      return;
+    }
+
+    setSavingAvatar(true);
+    setNotice(null);
+    try {
+      const updated = await userService.uploadMyAvatar(selectedAvatarFile);
+      clearAvatarObjectUrl();
+      const nextPreferences = buildPersistedPreferences(updated, preferences);
+      hydrateFromProfile(updated, nextPreferences);
+      setSelectedAvatarFile(null);
+      persistPreferences(nextPreferences);
+      setNotice({ type: "success", message: "Đã lưu ảnh đại diện thành công." });
+    } catch (error) {
+      setNotice({ type: "error", message: extractErrorMessage(error) });
+    } finally {
+      setSavingAvatar(false);
     }
   };
 
@@ -753,6 +787,25 @@ export default function UserProfileSettingsPage() {
                 className="hidden"
                 onChange={handleAvatarFileChange}
               />
+            </div>
+
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => avatarFileInputRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--line-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
+              >
+                <Camera size={15} />
+                Chọn ảnh đại diện
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveAvatar()}
+                disabled={!selectedAvatarFile || savingAvatar}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--brand-700)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {savingAvatar ? "Đang lưu ảnh..." : "Lưu ảnh đại diện"}
+              </button>
             </div>
 
             <p className="mt-4 text-sm font-semibold text-[var(--ink-900)]">Ảnh đại diện</p>
@@ -1034,3 +1087,4 @@ export default function UserProfileSettingsPage() {
     </div>
   );
 }
+

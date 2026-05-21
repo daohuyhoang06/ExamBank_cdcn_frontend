@@ -97,6 +97,8 @@ type SavedSnapshot = {
   subject: string;
   className: string;
   durationMinutes: number;
+  startAtInput: string;
+  endAtInput: string;
   questionSignature: string;
 };
 
@@ -224,6 +226,25 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
   return extractSharedApiErrorMessage(error, fallbackMessage);
 }
 
+function toDateTimeLocalInputValue(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+}
+
+function normalizeDateTimeLocalInput(value: string) {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function hasMeaningfulEditorContent(value: string) {
   const normalized = value.replace(/&nbsp;/g, " ").trim();
   if (!normalized) {
@@ -309,6 +330,11 @@ function resolveMcqAnswerIndex(answer: string | null, options: string[]) {
   }
 
   return 0;
+}
+
+function isModeratorEditableExamStatus(status?: string): boolean {
+  const normalized = String(status ?? "").trim().toUpperCase();
+  return normalized === "DRAFT" || normalized === "PENDING_REVIEW" || normalized === "REJECTED";
 }
 
 function mapBackendQuestionToDraft(question: ComposerQuestionRecord, subjectName: string): QuestionDraft {
@@ -563,6 +589,8 @@ export default function ModeratorComposerFormPage() {
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [className, setClassName] = useState(DEFAULT_CLASS_NAME);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION_MINUTES);
+  const [startAtInput, setStartAtInput] = useState("");
+  const [endAtInput, setEndAtInput] = useState("");
   const [questions, setQuestions] = useState<QuestionDraft[]>(initialQuestions);
 
 
@@ -619,9 +647,11 @@ export default function ModeratorComposerFormPage() {
       examTitle.trim() !== DEFAULT_EXAM_TITLE ||
       subject !== DEFAULT_SUBJECT ||
       className !== DEFAULT_CLASS_NAME ||
-      durationMinutes !== DEFAULT_DURATION_MINUTES
+      durationMinutes !== DEFAULT_DURATION_MINUTES ||
+      startAtInput.trim().length > 0 ||
+      endAtInput.trim().length > 0
     );
-  }, [className, durationMinutes, examTitle, questions.length, subject]);
+  }, [className, durationMinutes, endAtInput, examTitle, questions.length, startAtInput, subject]);
 
   const questionSignature = useMemo(() => buildQuestionSignature(questions), [questions]);
 
@@ -635,9 +665,11 @@ export default function ModeratorComposerFormPage() {
       subject !== savedSnapshot.subject ||
       className !== savedSnapshot.className ||
       durationMinutes !== savedSnapshot.durationMinutes ||
+      startAtInput !== savedSnapshot.startAtInput ||
+      endAtInput !== savedSnapshot.endAtInput ||
       questionSignature !== savedSnapshot.questionSignature
     );
-  }, [className, durationMinutes, examTitle, hasMeaningfulProgress, questionSignature, savedSnapshot, subject]);
+  }, [className, durationMinutes, endAtInput, examTitle, hasMeaningfulProgress, questionSignature, savedSnapshot, startAtInput, subject]);
 
   const loadInitialData = useCallback(async () => {
     setIsLoadingForm(true);
@@ -655,6 +687,8 @@ export default function ModeratorComposerFormPage() {
 
       if (!editingExamIdFromQuery) {
         setIsPublishedReadonly(false);
+        setStartAtInput("");
+        setEndAtInput("");
         setSubject((currentSubject) => {
           return currentSubject.trim().length === 0 ? fallbackSubject : currentSubject;
         });
@@ -665,8 +699,7 @@ export default function ModeratorComposerFormPage() {
       }
 
       const exam = await getComposerExamById(editingExamIdFromQuery);
-      const publishedByStatus = String(exam.status ?? "").toUpperCase() === "PUBLISHED";
-      const nextReadonly = isViewOnlyFromQuery || publishedByStatus;
+      const nextReadonly = isViewOnlyFromQuery || !isModeratorEditableExamStatus(exam.status);
       const subjectFromExam = toDisplaySubjectName(
         fetchedSubjects.find((item) => item.id === exam.subjectId)?.name ?? fallbackSubject
       );
@@ -685,11 +718,15 @@ export default function ModeratorComposerFormPage() {
         exam.durationMinutes && exam.durationMinutes > 0
           ? exam.durationMinutes
           : DEFAULT_DURATION_MINUTES;
+      const normalizedStartAtInput = toDateTimeLocalInputValue(exam.startAt);
+      const normalizedEndAtInput = toDateTimeLocalInputValue(exam.endAt);
 
       setExamTitle(normalizedTitle);
       setSubject(subjectFromExam);
       setClassName(classNameFromExam);
       setDurationMinutes(normalizedDuration);
+      setStartAtInput(normalizedStartAtInput);
+      setEndAtInput(normalizedEndAtInput);
       setQuestions((previousQuestions) => {
         previousQuestions.forEach((question) => {
           revokeObjectPreviewUrl(question.localImagePreviewUrl);
@@ -705,7 +742,7 @@ export default function ModeratorComposerFormPage() {
         toast.info({
           title: "Trạng thái đề thi",
           message: nextReadonly
-            ? "Đề đang ở chế độ chỉ xem vì đã xuất bản."
+            ? "Đề đang ở chế độ chỉ xem vì trạng thái hiện tại không cho phép chỉnh sửa."
             : "Đang chỉnh sửa đề đã lưu trên hệ thống.",
           duration: 4200,
           showProgress: true,
@@ -723,6 +760,8 @@ export default function ModeratorComposerFormPage() {
         subject: subjectFromExam,
         className: classNameFromExam,
         durationMinutes: normalizedDuration,
+        startAtInput: normalizedStartAtInput,
+        endAtInput: normalizedEndAtInput,
         questionSignature: buildQuestionSignature(mappedQuestions),
       });
     } catch (error) {
@@ -811,7 +850,8 @@ export default function ModeratorComposerFormPage() {
     });
   }
 
-  async function saveDraft() {
+  async function saveDraft(options?: { showSuccessToast?: boolean }) {
+    const showSuccessToast = options?.showSuccessToast ?? true;
     if (isPublishedReadonly) {
       toast.warning({
         title: "Không thể lưu",
@@ -889,11 +929,50 @@ export default function ModeratorComposerFormPage() {
 
     try {
       const normalizedDuration = durationMinutes > 0 ? durationMinutes : DEFAULT_DURATION_MINUTES;
+      const normalizedStartAt = normalizeDateTimeLocalInput(startAtInput);
+      const normalizedEndAt = normalizeDateTimeLocalInput(endAtInput);
+
+      if ((normalizedStartAt && !normalizedEndAt) || (!normalizedStartAt && normalizedEndAt)) {
+        toast.warning({
+          title: "Thời gian chưa hợp lệ",
+          message: "Vui lòng nhập đầy đủ cả thời gian bắt đầu và thời gian kết thúc.",
+          duration: 4200,
+          showProgress: true,
+        });
+        return null;
+      }
+
+      if (normalizedStartAt && normalizedEndAt) {
+        const startMs = new Date(normalizedStartAt).getTime();
+        const endMs = new Date(normalizedEndAt).getTime();
+        if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+          toast.warning({
+            title: "Thời gian chưa hợp lệ",
+            message: "Định dạng thời gian không hợp lệ, vui lòng chọn lại.",
+            duration: 4200,
+            showProgress: true,
+          });
+          return null;
+        }
+
+        if (endMs <= startMs) {
+          toast.warning({
+            title: "Thời gian chưa hợp lệ",
+            message: "Thời gian kết thúc phải lớn hơn thời gian bắt đầu.",
+            duration: 4200,
+            showProgress: true,
+          });
+          return null;
+        }
+      }
+
       const examPayload = {
         title: normalizedTitle,
         subjectId: resolvedSubjectRecord.id,
         className: normalizedClassName,
         durationMinutes: normalizedDuration,
+        startAt: normalizedStartAt,
+        endAt: normalizedEndAt,
         status: "DRAFT",
       } as const;
 
@@ -959,16 +1038,20 @@ export default function ModeratorComposerFormPage() {
         subject: toDisplaySubjectName(resolvedSubjectRecord.name),
         className: normalizedClassName,
         durationMinutes: normalizedDuration,
+        startAtInput: normalizedStartAt ?? "",
+        endAtInput: normalizedEndAt ?? "",
         questionSignature: nextSignature,
       });
-      toast.success({
-        title: "Hệ thống",
-        message: updatingExisting
-          ? "Đã cập nhật bản nháp trên backend."
-          : "Đã lưu bản nháp mới lên backend.",
-        duration: 3600,
-        showProgress: true,
-      });
+      if (showSuccessToast) {
+        toast.success({
+          title: "Hệ thống",
+          message: updatingExisting
+            ? "Đã cập nhật bản nháp trên backend."
+            : "Đã lưu bản nháp mới lên backend.",
+          duration: 3600,
+          showProgress: true,
+        });
+      }
       return savedExam.id;
     } catch (error) {
       toast.error({
@@ -989,7 +1072,7 @@ export default function ModeratorComposerFormPage() {
 
   async function saveDraftAndBackToOverview() {
     const isUpdatingDraft = Boolean(activeExamId);
-    const savedId = await saveDraft();
+    const savedId = await saveDraft({ showSuccessToast: false });
     if (!savedId) {
       return;
     }
@@ -1250,8 +1333,8 @@ export default function ModeratorComposerFormPage() {
           <h2 className="text-xl font-extrabold text-[var(--ink-900)]">Cấu hình bài thi</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 rounded-2xl bg-[var(--bg-soft)] p-6 md:grid-cols-5">
-          <div className="space-y-2 md:col-span-2">
+        <div className="grid grid-cols-1 gap-6 rounded-2xl bg-[var(--bg-soft)] p-6 md:grid-cols-2 xl:grid-cols-12">
+          <div className="space-y-2 md:col-span-2 xl:col-span-6">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Tiêu đề bài thi
             </label>
@@ -1265,7 +1348,7 @@ export default function ModeratorComposerFormPage() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 xl:col-span-2">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Lớp học
             </label>
@@ -1286,7 +1369,7 @@ export default function ModeratorComposerFormPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 xl:col-span-2">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Môn học
             </label>
@@ -1311,7 +1394,7 @@ export default function ModeratorComposerFormPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 xl:col-span-2">
             <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
               Thời gian (Phút)
             </label>
@@ -1321,6 +1404,32 @@ export default function ModeratorComposerFormPage() {
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(Number(event.target.value) || 0)}
               min={1}
+              disabled={isFormLocked}
+            />
+          </div>
+
+          <div className="space-y-2 xl:col-span-3 xl:col-start-7">
+            <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
+              Bắt đầu
+            </label>
+            <input
+              className="w-full rounded-xl border border-transparent bg-white px-4 py-3 font-medium text-[var(--ink-900)] outline-none transition focus:border-[var(--brand-500)] focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)]"
+              type="datetime-local"
+              value={startAtInput}
+              onChange={(event) => setStartAtInput(event.target.value)}
+              disabled={isFormLocked}
+            />
+          </div>
+
+          <div className="space-y-2 xl:col-span-3">
+            <label className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
+              Kết thúc
+            </label>
+            <input
+              className="w-full rounded-xl border border-transparent bg-white px-4 py-3 font-medium text-[var(--ink-900)] outline-none transition focus:border-[var(--brand-500)] focus:shadow-[0_0_0_3px_rgba(31,99,180,0.14)]"
+              type="datetime-local"
+              value={endAtInput}
+              onChange={(event) => setEndAtInput(event.target.value)}
               disabled={isFormLocked}
             />
           </div>

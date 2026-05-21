@@ -42,7 +42,11 @@ const initialAdminProfile = {
 };
 
 type AdminProfile = typeof initialAdminProfile;
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "");
 
 const formatDate = (value?: string): string => {
   if (!value) {
@@ -94,20 +98,14 @@ const toPublicAssetUrl = (value: string | null | undefined): string | null => {
 
     const bucket = pathWithoutScheme.slice(0, firstSlash);
     const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-    const encodedObjectKey = objectKey
-      .split("/")
-      .filter((segment) => segment.length > 0)
-      .map((segment) => encodeURIComponent(segment))
-      .join("/");
-
-    return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
   }
 
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
-  return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
 };
 
 const buildFallbackAvatarUrl = (seed: string): string => {

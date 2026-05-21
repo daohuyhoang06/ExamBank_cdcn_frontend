@@ -11,20 +11,38 @@ const AUTH_BYPASS_PATHS = new Set([
   "/auth/login",
   "/auth/register",
 ]);
+const PUBLIC_GET_WITHOUT_AUTH_PATTERNS = [
+  /^\/api\/exams$/,
+  /^\/api\/exams\/\d+$/,
+  /^\/api\/subjects(?:\/.*)?$/,
+  /^\/api\/topics(?:\/.*)?$/,
+  /^\/api\/questions(?:\/.*)?$/,
+];
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
 });
 
-function shouldBypassAuthHeader(url?: string) {
+function shouldBypassAuthHeader(url?: string, method?: string) {
   if (!url) {
     return false;
   }
 
   try {
     const parsedUrl = new URL(url, "http://localhost");
+    if ((method ?? "GET").toUpperCase() === "GET") {
+      if (PUBLIC_GET_WITHOUT_AUTH_PATTERNS.some((pattern) => pattern.test(parsedUrl.pathname))) {
+        return true;
+      }
+    }
     return AUTH_BYPASS_PATHS.has(parsedUrl.pathname);
   } catch {
+    if ((method ?? "GET").toUpperCase() === "GET") {
+      const guessedPath = url.split("?")[0];
+      if (PUBLIC_GET_WITHOUT_AUTH_PATTERNS.some((pattern) => pattern.test(guessedPath))) {
+        return true;
+      }
+    }
     return Array.from(AUTH_BYPASS_PATHS).some((path) => url.includes(path));
   }
 }
@@ -41,9 +59,21 @@ function removeAuthorizationHeader(config: InternalAxiosRequestConfig) {
   config.headers = AxiosHeaders.from(headers);
 }
 
+function hasAuthorizationHeader(config: InternalAxiosRequestConfig) {
+  if (config.headers instanceof AxiosHeaders) {
+    return config.headers.has("Authorization");
+  }
+
+  const headers = (config.headers ?? {}) as Record<string, unknown>;
+  return Boolean(headers.Authorization || headers.authorization);
+}
+
 apiClient.interceptors.request.use((config) => {
-  if (shouldBypassAuthHeader(config.url)) {
-    removeAuthorizationHeader(config);
+  if (shouldBypassAuthHeader(config.url, config.method)) {
+    // Allow callers to explicitly force auth on endpoints that are public by default.
+    if (!hasAuthorizationHeader(config)) {
+      removeAuthorizationHeader(config);
+    }
     return config;
   }
 

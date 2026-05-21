@@ -4,6 +4,7 @@ import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Cale
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import { examService, userService } from "../services/user.service";
 import type { ExamListItem, Subject } from "../types/user.type";
+import { getStoredAuthToken } from "@/lib/api-client";
 
 const ALL_SUBJECT = "T\u1ea5t c\u1ea3 m\u00f4n h\u1ecdc";
 const ALL_LEVEL = "T\u1ea5t c\u1ea3 l\u1edbp h\u1ecdc";
@@ -89,6 +90,43 @@ const toDisplayDate = (isoDate?: string): string => {
   }).format(date);
 };
 
+const normalizeExamStatus = (status?: string | null): string => (status ?? "").trim().toUpperCase();
+
+const isExamClosed = (status?: string | null, endAt?: string | null): boolean => {
+  if (normalizeExamStatus(status) === "CLOSED") return true;
+  if (!endAt) return false;
+  const parsed = new Date(endAt);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return Date.now() > parsed.getTime();
+};
+
+type ExamStatusTag = {
+  label: string;
+  className: string;
+};
+
+const getExamStatusTag = (status?: string | null, endAt?: string | null): ExamStatusTag | null => {
+  const normalized = normalizeExamStatus(status);
+  if (normalized === "ONGOING") {
+    return {
+      label: "Ongoing",
+      className: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+    };
+  }
+  if (normalized === "PUBLISHED") {
+    return {
+      label: "Published",
+      className: "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+    };
+  }
+  if (normalized === "CLOSED" || isExamClosed(status, endAt)) {
+    return {
+      label: "Closed",
+      className: "bg-slate-200 text-slate-700 ring-1 ring-slate-300",
+    };
+  }
+  return null;
+};
 const CARD_FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1400&q=80",
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80",
@@ -141,6 +179,11 @@ export default function OnlineExamPage() {
 
   useEffect(() => {
     const loadData = async () => {
+      if (!getStoredAuthToken()) {
+        navigate("/login", { replace: true });
+        return;
+      }
+
       setIsLoading(true);
       try {
         const [exams, subjectOptions] = await Promise.all([examService.getAllExams(), userService.getSubjects()]);
@@ -171,7 +214,7 @@ export default function OnlineExamPage() {
     };
 
     void loadData();
-  }, []);
+  }, [navigate]);
 
   const levelFilterOptions = useMemo(() => [ALL_LEVEL, ...CLASS_LEVEL_OPTIONS], []);
 
@@ -338,6 +381,7 @@ export default function OnlineExamPage() {
               const subjectLabel = exam.subjectName?.trim() ? exam.subjectName : "Đa môn";
               const cardImage = resolveExamCardImage(subjectLabel, (safeCurrentPage - 1) * EXAMS_PER_PAGE + index);
               const duration = exam.durationMinutes ?? 30;
+              const statusTag = getExamStatusTag(exam.status, exam.endAt);
 
               return (
                 <article
@@ -376,10 +420,14 @@ export default function OnlineExamPage() {
                     </div>
 
                     <div className="flex items-center justify-between pt-0.5">
-                      <span className="text-[11px] font-semibold text-slate-400">{"#M\u00e3 \u0111\u1ec1:"} {exam.id}</span>
+                      {statusTag ? (
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusTag.className}`}>
+                          {statusTag.label}
+                        </span>
+                      ) : <span />}
 
                       <button
-                        onClick={() => navigate(`/user/exam/${exam.id}`)}
+                        onClick={() => navigate(`/user/exam/${exam.id}/overview`)}
                         className="inline-flex items-center gap-1 rounded-lg bg-[#003466] px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#0b457e]"
                       >
                         <PlayCircle size={12} />

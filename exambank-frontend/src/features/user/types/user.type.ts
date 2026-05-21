@@ -2,12 +2,16 @@ import type { ReactNode } from "react";
 
 export interface UserComment {
   id: number;
+  userId?: number;
   author: string;
   avatar: string;
   rating: number;
   time: string;
   content: string;
   likes: number;
+  discussionId?: number;
+  viewerUpvoted?: boolean;
+  replyCount?: number;
   image?: string;
   canDelete?: boolean;
 }
@@ -30,6 +34,35 @@ export interface Recommendation {
   color: "error" | "primary" | "secondary";
   stats: string;
   documentId?: number;
+}
+
+export interface WeakTopicInsight {
+  topicTag: string;
+  totalAttempts: number;
+  correctCount: number;
+  accuracyRate: number;
+  lastUpdatedAt?: string;
+}
+
+export type ReviewMemoryLevel = "FORGOTTEN" | "HARD" | "REMEMBERED" | "EASY" | string;
+
+export interface ReviewRecommendation {
+  questionId: number;
+  subjectId?: number;
+  content: string;
+  type?: string;
+  options?: string;
+  imageUrl?: string;
+  difficulty?: number;
+  maxScore?: number;
+  topicTags: string[];
+  source?: string;
+  due?: boolean;
+  memoryLevel?: ReviewMemoryLevel;
+  intervalDays?: number;
+  easeFactor?: number;
+  repetitionCount?: number;
+  nextReviewDate?: string;
 }
 
 export interface Ranking {
@@ -122,6 +155,8 @@ export interface ExamListItem {
   className?: string;
   educationLevelName?: string;
   durationMinutes?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
   status?: string;
   createdAt?: string;
 }
@@ -180,6 +215,7 @@ export interface DocumentSummary {
   fileUrl?: string;
   averageRating?: number;
   downloadCount?: number;
+  viewCount?: number;
   status?: string;
   submittedAt?: string;
   createdAt?: string;
@@ -215,6 +251,7 @@ export interface UserProfile {
   xp: number;
   coinBalance: number;
   streak: number;
+  premiumConfirmed?: boolean;
   createdAt?: string;
 }
 

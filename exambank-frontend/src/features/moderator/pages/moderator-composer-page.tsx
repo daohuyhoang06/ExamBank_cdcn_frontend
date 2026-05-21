@@ -14,6 +14,7 @@ import {
   Star,
   Trash2,
   Upload,
+  X,
   Zap,
 } from "lucide-react";
 import { ComposerJsonImportModal } from "@/features/moderator/components/composer-json-import-modal";
@@ -32,10 +33,18 @@ import {
 import type {
   ComposerExamPayload,
   ComposerExamRecord,
+  ComposerQuestionRecord,
   ComposerQuestionPayload,
 } from "@/features/moderator/types/moderator-composer.type";
 
-type OverviewExamStatus = "DRAFT" | "PUBLISHED";
+type OverviewExamStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "PUBLISHED"
+  | "ONGOING"
+  | "CLOSED"
+  | "LOCKED"
+  | "REJECTED";
 
 type OverviewFilterStatus = "ALL" | OverviewExamStatus;
 type OverviewFilterSubject = string;
@@ -47,6 +56,8 @@ type OverviewExamRow = {
   subject: string;
   level: string;
   questionCount: number;
+  startAt: string;
+  endAt: string;
   updatedAt: string;
   updatedEpoch: number;
   status: OverviewExamStatus;
@@ -113,16 +124,52 @@ const JSON_IMPORT_API_EXAMPLE_TEXT = JSON.stringify(JSON_IMPORT_API_EXAMPLE, nul
 type JsonImportObject = Record<string, unknown>;
 
 function statusBadgeClassName(status: OverviewExamStatus) {
+  if (status === "ONGOING") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+
   if (status === "PUBLISHED") {
     return "bg-blue-100 text-blue-700";
+  }
+
+  if (status === "CLOSED") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  if (status === "LOCKED") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (status === "PENDING_REVIEW") {
+    return "bg-violet-100 text-violet-700";
+  }
+
+  if (status === "REJECTED") {
+    return "bg-rose-100 text-rose-700";
   }
 
   return "bg-slate-100 text-slate-600";
 }
 
 function statusDotClassName(status: OverviewExamStatus) {
+  if (status === "ONGOING") {
+    return "bg-emerald-500";
+  }
+
   if (status === "PUBLISHED") {
     return "bg-blue-500";
+  }
+
+  if (status === "CLOSED") {
+    return "bg-amber-500";
+  }
+
+  if (status === "LOCKED" || status === "REJECTED") {
+    return "bg-rose-500";
+  }
+
+  if (status === "PENDING_REVIEW") {
+    return "bg-violet-500";
   }
 
   return "bg-slate-400";
@@ -185,18 +232,69 @@ function formatCompactNumber(value: number) {
 }
 
 function formatOverviewStatus(status: OverviewExamStatus) {
-  return status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp";
+  if (status === "PUBLISHED") return "Published";
+  if (status === "ONGOING") return "Ongoing";
+  if (status === "CLOSED") return "Closed";
+  if (status === "LOCKED") return "Locked";
+  if (status === "PENDING_REVIEW") return "Pending Review";
+  if (status === "REJECTED") return "Rejected";
+  return "Draft";
+}
+
+function normalizeOverviewExamStatus(status?: string): OverviewExamStatus {
+  const normalized = (status ?? "").trim().toUpperCase();
+  if (
+    normalized === "DRAFT" ||
+    normalized === "PENDING_REVIEW" ||
+    normalized === "PUBLISHED" ||
+    normalized === "ONGOING" ||
+    normalized === "CLOSED" ||
+    normalized === "LOCKED" ||
+    normalized === "REJECTED"
+  ) {
+    return normalized;
+  }
+  return "DRAFT";
+}
+
+function isEditableOverviewStatus(status: OverviewExamStatus): boolean {
+  return status === "DRAFT" || status === "PENDING_REVIEW" || status === "REJECTED";
+}
+
+function isPublishableOverviewStatus(status: OverviewExamStatus): boolean {
+  return status === "DRAFT" || status === "PENDING_REVIEW" || status === "REJECTED";
 }
 
 function mapExamStatusToOverview(exam: ComposerExamRecord): OverviewExamStatus {
-  const normalized = (exam.status ?? "").toUpperCase();
+  return normalizeOverviewExamStatus(exam.status);
+}
 
-  if (normalized === "PUBLISHED") {
-    return "PUBLISHED";
+function formatPreviewQuestionType(type: string | null | undefined) {
+  const normalized = (type ?? "").trim().toUpperCase();
+  if (normalized === "MCQ") return "Multiple choice";
+  if (normalized === "FILL_IN_BLANK") return "Fill in blank";
+  if (normalized === "ESSAY") return "Essay";
+  return normalized || "Question";
+}
+
+function parsePreviewQuestionOptions(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
   }
 
-  // Any non-published status is still editable by moderator.
-  return "DRAFT";
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item));
+    }
+  } catch {
+    // fallback plain text split
+  }
+
+  return raw
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
 function collectApiErrorMessagesFromData(value: unknown, depth = 0): string[] {
@@ -337,6 +435,9 @@ function normalizeImportedExamStatus(value: unknown): ComposerExamPayload["statu
     normalized === "DRAFT" ||
     normalized === "PENDING_REVIEW" ||
     normalized === "PUBLISHED" ||
+    normalized === "ONGOING" ||
+    normalized === "CLOSED" ||
+    normalized === "LOCKED" ||
     normalized === "REJECTED"
   ) {
     return normalized;
@@ -451,6 +552,8 @@ function buildExamUpdatePayload(
     durationMinutes: exam.durationMinutes,
     status: exam.status,
     moderatorNote: exam.moderatorNote,
+    startAt: exam.startAt,
+    endAt: exam.endAt,
     publishedAt: exam.publishedAt,
     createdAt: exam.createdAt,
     ...patch,
@@ -470,6 +573,9 @@ export default function ModeratorComposerPage() {
   const [isJsonImportModalOpen, setIsJsonImportModalOpen] = useState(false);
   const [jsonImportText, setJsonImportText] = useState(JSON_IMPORT_API_EXAMPLE_TEXT);
   const [jsonImportUiError, setJsonImportUiError] = useState("");
+  const [allOverviewQuestions, setAllOverviewQuestions] = useState<ComposerQuestionRecord[]>([]);
+  const [previewExamRow, setPreviewExamRow] = useState<OverviewExamRow | null>(null);
+  const [previewQuestions, setPreviewQuestions] = useState<ComposerQuestionRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const jsonImportInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -533,25 +639,32 @@ export default function ModeratorComposerPage() {
   }, [totalPages]);
 
   const overviewStatItems = useMemo<OverviewStatItem[]>(() => {
-    const draftCount = overviewExamRows.filter((item) => item.status === "DRAFT").length;
-    const publishedCount = overviewExamRows.filter((item) => item.status === "PUBLISHED").length;
+    const editableCount = overviewExamRows.filter((item) => isEditableOverviewStatus(item.status)).length;
+    const publicCount = overviewExamRows.filter((item) => item.status === "PUBLISHED" || item.status === "ONGOING").length;
+    const closedOrLockedCount = overviewExamRows.filter((item) => item.status === "CLOSED" || item.status === "LOCKED").length;
     const totalExams = overviewExamRows.length;
-    const totalQuestions = overviewExamRows.reduce((sum, item) => sum + item.questionCount, 0);
 
     return [
       {
-        title: "Bản nháp",
-        value: formatCompactNumber(draftCount),
-        badge: "Có thể chỉnh sửa",
+        title: "Có thể chỉnh sửa",
+        value: formatCompactNumber(editableCount),
+        badge: "Draft / chờ duyệt / từ chối",
         tone: "warning",
         icon: FilePenLine,
       },
       {
-        title: "Đã xuất bản",
-        value: formatCompactNumber(publishedCount),
-        badge: "Đang hiển thị cho user",
+        title: "Đang hiển thị",
+        value: formatCompactNumber(publicCount),
+        badge: "Published / Ongoing",
         tone: "success",
         icon: CheckCircle2,
+      },
+      {
+        title: "Đã đóng / khóa",
+        value: formatCompactNumber(closedOrLockedCount),
+        badge: "Closed / Locked",
+        tone: "danger",
+        icon: Zap,
       },
       {
         title: "Tổng đề thi",
@@ -559,13 +672,6 @@ export default function ModeratorComposerPage() {
         badge: "",
         tone: "primary",
         icon: BookOpen,
-      },
-      {
-        title: "Tổng câu hỏi",
-        value: formatCompactNumber(totalQuestions),
-        badge: "",
-        tone: "primary",
-        icon: Plus,
       },
     ];
   }, [overviewExamRows]);
@@ -608,6 +714,8 @@ export default function ModeratorComposerPage() {
             subject: subjectNameById.get(exam.subjectId ?? -1) ?? "Chưa gán môn",
             level: exam.durationMinutes ? `${exam.durationMinutes} phút` : "Chưa đặt thời lượng",
             questionCount: questionCountByExam.get(exam.id) ?? 0,
+            startAt: formatOverviewUpdatedAt(exam.startAt ?? null),
+            endAt: formatOverviewUpdatedAt(exam.endAt ?? null),
             updatedAt: formatOverviewUpdatedAt(updatedSource),
             updatedEpoch,
             status: mapExamStatusToOverview(exam),
@@ -616,6 +724,7 @@ export default function ModeratorComposerPage() {
         })
         .sort((a, b) => b.updatedEpoch - a.updatedEpoch);
 
+      setAllOverviewQuestions(questions);
       setOverviewExamRows(mappedRows);
     } catch (error) {
       setLoadError(extractApiErrorMessage(error, "Không thể tải danh sách đề thi từ backend."));
@@ -631,14 +740,26 @@ export default function ModeratorComposerPage() {
   const iconActionClassName =
     "inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-45";
 
-  function openComposerForm(examId?: number, viewOnly = false) {
+  function openComposerForm(examId?: number) {
     if (!examId) {
       navigate("/moderator/composer/form");
       return;
     }
 
-    const viewQuery = viewOnly ? "&view=1" : "";
-    navigate(`/moderator/composer/form?examId=${examId}${viewQuery}`);
+    navigate(`/moderator/composer/form?examId=${examId}`);
+  }
+
+  function openExamPreview(row: OverviewExamRow) {
+    setPreviewExamRow(row);
+    const orderedQuestions = allOverviewQuestions
+      .filter((question) => question.examId === row.examId)
+      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    setPreviewQuestions(orderedQuestions);
+  }
+
+  function closeExamPreview() {
+    setPreviewExamRow(null);
+    setPreviewQuestions([]);
   }
 
   async function updateExamWithPatch(
@@ -671,7 +792,7 @@ export default function ModeratorComposerPage() {
 
   async function publishOverviewExam(examId: number) {
     const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || targetExam.status !== "DRAFT") {
+    if (!targetExam || !isPublishableOverviewStatus(targetExam.status)) {
       return;
     }
 
@@ -1048,9 +1169,14 @@ export default function ModeratorComposerPage() {
             onChange={(event) => setOverviewStatus(event.target.value as OverviewFilterStatus)}
             className="h-9 rounded-lg border border-transparent bg-white px-3 text-sm font-medium text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-500)]"
           >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="DRAFT">Bản nháp</option>
-            <option value="PUBLISHED">Đã xuất bản</option>
+            <option value="ALL">All statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PENDING_REVIEW">Pending Review</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="ONGOING">Ongoing</option>
+            <option value="CLOSED">Closed</option>
+            <option value="LOCKED">Locked</option>
+            <option value="REJECTED">Rejected</option>
           </select>
 
           <select
@@ -1119,14 +1245,20 @@ export default function ModeratorComposerPage() {
                   <th className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Đề thi / Thông tin</th>
                   <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Trạng thái</th>
                   <th className="px-5 py-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Số câu</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Bắt đầu</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Kết thúc</th>
                   <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Ngày cập nhật</th>
                   <th className="px-8 py-3 text-right text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-soft)]">
                 {paginatedOverviewRows.map((item) => {
+                  const [startDate, startTime = ""] = item.startAt.split(" - ");
+                  const [endDate, endTime = ""] = item.endAt.split(" - ");
                   const [updatedDate, updatedTime = ""] = item.updatedAt.split(" - ");
                   const isBusy = busyExamId === item.examId;
+                  const canEdit = isEditableOverviewStatus(item.status);
+                  const canPublish = isPublishableOverviewStatus(item.status);
 
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-[var(--bg-soft)]/45">
@@ -1150,13 +1282,23 @@ export default function ModeratorComposerPage() {
                       <td className="px-5 py-4 text-center align-top text-sm font-bold text-[var(--ink-900)]">{item.questionCount}</td>
 
                       <td className="px-5 py-4 align-top text-xs">
+                        <p className="font-semibold text-[var(--ink-700)]">{startDate}</p>
+                        <p className="text-[var(--ink-500)]">{startTime}</p>
+                      </td>
+
+                      <td className="px-5 py-4 align-top text-xs">
+                        <p className="font-semibold text-[var(--ink-700)]">{endDate}</p>
+                        <p className="text-[var(--ink-500)]">{endTime}</p>
+                      </td>
+
+                      <td className="px-5 py-4 align-top text-xs">
                         <p className="font-semibold text-[var(--ink-700)]">{updatedDate}</p>
                         <p className="text-[var(--ink-500)]">{updatedTime}</p>
                       </td>
 
                       <td className="px-8 py-4 align-top">
                         <div className="flex items-center justify-end gap-1">
-                          {item.status === "DRAFT" ? (
+                          {canEdit ? (
                             <>
                               <button
                                 type="button"
@@ -1171,7 +1313,7 @@ export default function ModeratorComposerPage() {
                                 type="button"
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                                 title="Xuất bản cho người dùng"
-                                disabled={isBusy}
+                                disabled={isBusy || !canPublish}
                                 onClick={() => {
                                   void publishOverviewExam(item.examId);
                                 }}
@@ -1190,16 +1332,14 @@ export default function ModeratorComposerPage() {
                                 <Trash2 size={14} />
                               </button>
                             </>
-                          ) : null}
-
-                          {item.status === "PUBLISHED" ? (
+                          ) : (
                             <>
                               <button
                                 type="button"
                                 className={iconActionClassName}
                                 title="Xem"
                                 disabled={isBusy}
-                                onClick={() => openComposerForm(item.examId, true)}
+                                onClick={() => openExamPreview(item)}
                               >
                                 <Eye size={14} />
                               </button>
@@ -1215,7 +1355,7 @@ export default function ModeratorComposerPage() {
                                 <Trash2 size={14} />
                               </button>
                             </>
-                          ) : null}
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1279,6 +1419,98 @@ export default function ModeratorComposerPage() {
           </ul>
         </article>
       </section>
+
+      {previewExamRow ? (
+        <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm">
+          <button type="button" className="absolute inset-0" onClick={closeExamPreview} aria-label="Đóng" />
+          <section className="relative z-10 flex h-[min(88vh,920px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#d6d9df] bg-white shadow-[0_28px_64px_rgba(15,23,42,0.28)]">
+            <div className="flex items-center justify-between bg-[linear-gradient(90deg,#eef5ff_0%,#fff6ea_55%,#eef7ff_100%)] px-3 py-1.5">
+              <h3 className="truncate text-[1.1rem] font-bold tracking-tight text-[#111827]">Nội dung đề thi</h3>
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-[#6b7280] hover:bg-white/70"
+                onClick={closeExamPreview}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <section className="mb-3 rounded-lg border border-[#dde5f3] bg-[#fbfdff] px-4 py-3">
+                <p className="text-xs text-[var(--ink-600)]">Tiêu đề đề thi</p>
+                <p className="mt-1 text-[1rem] font-semibold text-[var(--ink-900)]">{previewExamRow.title}</p>
+              </section>
+
+              {previewQuestions.length === 0 ? (
+                <div className="rounded-lg border border-[var(--line-soft)] px-3 py-8 text-center text-sm text-[var(--ink-600)]">
+                  Đề thi chưa có câu hỏi.
+                </div>
+              ) : null}
+
+              {previewQuestions.length > 0 ? (
+                <div className="space-y-3">
+                  {previewQuestions.map((question, index) => {
+                    const options = parsePreviewQuestionOptions(question.options);
+                    const normalizedAnswer = (question.answer ?? "").trim().toLowerCase();
+
+                    return (
+                      <article key={question.id} className="rounded-lg border border-[#dce4f3] bg-white p-3">
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Q{index + 1}</span>
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+                            {formatPreviewQuestionType(question.type)}
+                          </span>
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
+                            {question.maxScore ?? 0} point{question.maxScore === 1 ? "" : "s"}
+                          </span>
+                        </div>
+
+                        <div className="prose prose-sm max-w-none text-[var(--ink-900)]" dangerouslySetInnerHTML={{ __html: question.content ?? "" }} />
+
+                        {question.imageUrl ? (
+                          <img
+                            src={question.imageUrl}
+                            alt={`question-${question.id}`}
+                            className="mt-2 max-h-36 w-auto max-w-full rounded border border-[var(--line-soft)] object-contain"
+                          />
+                        ) : null}
+
+                        {options.length > 0 ? (
+                          <ul className="mt-3 space-y-1.5 text-[12px]">
+                            {options.map((option, optionIndex) => {
+                              const letter = String.fromCharCode(65 + optionIndex);
+                              const isCorrect =
+                                normalizedAnswer === letter.toLowerCase()
+                                || normalizedAnswer === option.trim().toLowerCase();
+
+                              return (
+                                <li
+                                  key={`${question.id}-option-${optionIndex}`}
+                                  className={`flex items-center justify-between rounded-md px-2.5 py-1.5 ${
+                                    isCorrect
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-slate-50 text-slate-700"
+                                  }`}
+                                >
+                                  <span>
+                                    <span className="mr-1 font-bold">{letter}.</span>
+                                    {option}
+                                  </span>
+                                  {isCorrect ? <CheckCircle2 size={14} className="text-emerald-600" /> : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

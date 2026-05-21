@@ -12,6 +12,7 @@ import AdminFinancialPage from "@/features/admin/pages/admin-financial-page";
 import AdminSystemPage from "@/features/admin/pages/admin-system-page";
 import UserHomePage from "@/features/user/pages/UserHomePage";
 import OnlineExamPage from "@/features/user/pages/OnlineExamPage";
+import OnlineExamIntroPage from "@/features/user/pages/OnlineExamIntroPage";
 import { StudentLayout } from "@/layouts/student/StudentLayout";
 import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
@@ -21,6 +22,10 @@ import Comment from "@/features/user/pages/Comment";
 import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 import UserProfileSettingsPage from "@/features/user/pages/UserProfileSettingsPage";
+import PremiumExamImportPage from "@/features/user/pages/PremiumExamImportPage";
+import PremiumCompetitionsPage from "@/features/user/pages/PremiumCompetitionsPage";
+import PrivateCompetitionJoinPage from "@/features/user/pages/PrivateCompetitionJoinPage";
+import PremiumUpgradePage from "@/features/user/pages/PremiumUpgradePage";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
 import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
@@ -102,9 +107,13 @@ export const router = createBrowserRouter([
         
         ],
       },
-        {
+    {
       path: "exam/:examId",
       element: <Exampage />,
+    },
+    {
+      path: "exam/:examId/overview",
+      element: <OnlineExamIntroPage />,
     },
       {
         path: "comment", // URL: /user/comment
@@ -121,6 +130,22 @@ export const router = createBrowserRouter([
       {
         path: "online-exam",
         element: <OnlineExamPage />,
+      },
+      {
+        path: "private-competition",
+        element: <PrivateCompetitionJoinPage />,
+      },
+      {
+        path: "premium/upgrade",
+        element: <PremiumUpgradePage />,
+      },
+      {
+        path: "premium/import",
+        element: <PremiumExamImportPage />,
+      },
+      {
+        path: "premium/competitions",
+        element: <PremiumCompetitionsPage />,
       },
     ],
   },

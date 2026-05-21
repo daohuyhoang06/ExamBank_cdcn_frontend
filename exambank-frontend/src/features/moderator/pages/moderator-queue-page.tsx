@@ -31,7 +31,11 @@ import {
 import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 const PAGE_SIZE = 5;
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "");
 
 const quickReasons = [
   {
@@ -66,7 +70,7 @@ const DEFAULT_METADATA_CATEGORY = METADATA_CATEGORY_OPTIONS[0];
 const METADATA_SEMESTER_YEAR_OPTIONS = Array.from({ length: 7 }, (_, index) => String(2020 + index));
 const METADATA_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
 
-function toMinioPublicUrl(fileUrl: string | null | undefined) {
+function toPublicStorageUrl(fileUrl: string | null | undefined) {
   if (!fileUrl) {
     return null;
   }
@@ -80,32 +84,23 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     return normalized;
   }
 
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
+  }
+
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
-  if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
-  }
-
-  const pathWithoutScheme = normalized.slice("storage://".length);
-  const firstSlash = pathWithoutScheme.indexOf("/");
-  if (firstSlash <= 0) {
-    return null;
-  }
-
-  const bucket = pathWithoutScheme.slice(0, firstSlash);
-  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  // R2 public dev URLs (pub-XXX.r2.dev) are bucket-scoped: do NOT include bucket name.
-  const isR2PublicDev = MINIO_PUBLIC_ENDPOINT.includes(".r2.dev");
-  const bucketSegment = isR2PublicDev ? "" : `/${encodeURIComponent(bucket)}`;
-  return `${MINIO_PUBLIC_ENDPOINT}${bucketSegment}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
 }
 
 function detectPreviewKind(fileType: string | null | undefined, previewUrl: string | null) {
@@ -412,11 +407,11 @@ export default function ModeratorQueuePage() {
         }
 
         // Backend now returns proper public/presigned URLs in previewUrl.
-        // Use directly if it's already an HTTP URL; only fallback through toMinioPublicUrl for raw storage paths.
+        // Use directly if it's already an HTTP URL; fallback to storage endpoint for raw storage paths.
         const resolvedUrl = preview.fileUrl ?? fallbackFileUrl;
         const finalUrl = resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))
           ? resolvedUrl
-          : toMinioPublicUrl(resolvedUrl);
+          : toPublicStorageUrl(resolvedUrl);
 
         setPreviewUrl(finalUrl);
         setPreviewFileType(preview.fileType);
@@ -425,7 +420,7 @@ export default function ModeratorQueuePage() {
           return;
         }
 
-        setPreviewUrl(toMinioPublicUrl(fallbackFileUrl));
+        setPreviewUrl(toPublicStorageUrl(fallbackFileUrl));
         setPreviewFileType(null);
         setPreviewError(extractApiErrorMessage(error, "Không thể tải preview tài liệu."));
       } finally {
@@ -569,7 +564,7 @@ export default function ModeratorQueuePage() {
   }
 
   function downloadOriginalFile() {
-    const rawUrl = previewUrl ?? toMinioPublicUrl(selected?.fileUrl);
+    const rawUrl = previewUrl ?? toPublicStorageUrl(selected?.fileUrl);
     if (!rawUrl) {
       return;
     }
