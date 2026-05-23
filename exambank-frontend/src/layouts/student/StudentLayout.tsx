@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppShell } from "@/layouts/shared/AppShell";
 import { buildStudentSidebarItems } from "./studentSidebar.config";
 import { premiumUpgradeService } from "@/features/user/services/premium-upgrade.service";
+import { getStoredAuthToken } from "@/lib/api-client";
 
 export function StudentLayout() {
   const location = useLocation();
@@ -10,6 +11,12 @@ export function StudentLayout() {
 
   useEffect(() => {
     let mounted = true;
+    if (!getStoredAuthToken()) {
+      setIsPremiumUser(false);
+      return () => {
+        mounted = false;
+      };
+    }
     premiumUpgradeService
       .getStatus()
       .then((status) => {

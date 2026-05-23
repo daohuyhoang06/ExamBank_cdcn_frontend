@@ -20,7 +20,7 @@ const PUBLIC_GET_WITHOUT_AUTH_PATTERNS = [
 ];
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080",
 });
 
 function shouldBypassAuthHeader(url?: string, method?: string) {
@@ -59,21 +59,10 @@ function removeAuthorizationHeader(config: InternalAxiosRequestConfig) {
   config.headers = AxiosHeaders.from(headers);
 }
 
-function hasAuthorizationHeader(config: InternalAxiosRequestConfig) {
-  if (config.headers instanceof AxiosHeaders) {
-    return config.headers.has("Authorization");
-  }
-
-  const headers = (config.headers ?? {}) as Record<string, unknown>;
-  return Boolean(headers.Authorization || headers.authorization);
-}
-
 apiClient.interceptors.request.use((config) => {
   if (shouldBypassAuthHeader(config.url, config.method)) {
-    // Allow callers to explicitly force auth on endpoints that are public by default.
-    if (!hasAuthorizationHeader(config)) {
-      removeAuthorizationHeader(config);
-    }
+    // Public auth endpoints must never carry stale bearer tokens.
+    removeAuthorizationHeader(config);
     return config;
   }
 

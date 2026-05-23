@@ -15,6 +15,7 @@ import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/u
 import { userService } from '../services/user.service';
 import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 import { premiumUpgradeService } from '@/features/user/services/premium-upgrade.service';
+import { getStoredAuthToken } from '@/lib/api-client';
 
 const SOURCE_LABELS: Record<string, string> = {
   DUE_REVIEW: "Đến hạn",
@@ -109,7 +110,14 @@ export default function UserHomePage() {
 
   useEffect(() => {
     let isActive = true;
+    const token = getStoredAuthToken();
     const loadPremiumStatus = async () => {
+      if (!token) {
+        if (isActive) {
+          setIsPremiumUser(false);
+        }
+        return;
+      }
       try {
         const status = await premiumUpgradeService.getStatus();
         if (isActive) {
@@ -123,6 +131,24 @@ export default function UserHomePage() {
     };
     const fetchData = async () => {
       setInsightsLoading(true);
+      if (!token) {
+        if (isActive) {
+          setWeakTopics([]);
+          setReviewRecommendations([]);
+          setInsightsLoading(false);
+        }
+        try {
+          const ranks = await userService.getRankings();
+          if (isActive) {
+            setRankings(ranks);
+          }
+        } catch (error) {
+          if (isActive) {
+            console.error('Error loading rankings:', error);
+          }
+        }
+        return;
+      }
       try {
         const [ranks, topics, recommendations] = await Promise.all([
           userService.getRankings(),

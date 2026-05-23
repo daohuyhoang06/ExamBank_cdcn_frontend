@@ -1,14 +1,19 @@
 export type ExamDraftQuestion = {
   content: string;
+  latexContent?: string;
+  contentEditable?: boolean;
+  detectedNumber?: number;
   type: "MCQ" | "FILL_IN_BLANK" | "TRUE_FALSE";
   options: string[];
   answer: string;
   answerExplanation?: string;
   imageUrl?: string | null;
   imageUrls?: string[];
+  selectedImageIds?: string[];
   difficulty?: number;
   maxScore?: number;
   orderIndex?: number;
+  pageNo?: number | null;
   needsReview?: boolean;
 };
 
@@ -19,6 +24,7 @@ export type ExamDraft = {
   durationMinutes: number;
   questions: ExamDraftQuestion[];
   warnings?: string[];
+  contentEditable?: boolean;
 };
 
 export type ExamImportJob = {
@@ -34,6 +40,8 @@ export type ExamImportJob = {
   extractedText?: string;
   draftJson?: string;
   errorMessage?: string;
+  progressPercent?: number;
+  progressMessage?: string;
   createdExamId?: number;
   assets?: ExamImportAsset[];
   createdAt?: string;
@@ -43,7 +51,9 @@ export type ExamImportJob = {
 
 export type ExamImportAsset = {
   id: number;
+  imageId?: string;
   pageNo?: number | null;
+  originalPage?: number | null;
   bboxJson?: string | null;
   sourceType: string;
   confidence?: number | null;
@@ -52,6 +62,9 @@ export type ExamImportAsset = {
   originalFileName?: string | null;
   contentType?: string | null;
   fileSize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  extractionOrder?: number | null;
   linkedQuestionOrder?: number | null;
   createdAt?: string;
 };
