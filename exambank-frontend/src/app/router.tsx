@@ -34,6 +34,7 @@ import ModeratorComposerFormPage from "@/features/moderator/pages/moderator-comp
 import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
 import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
 import ModeratorExamSessionManagementPage from "@/features/moderator/pages/moderator-exam-session-management-page";
+import ReviewPage from "@/features/user/pages/ReviewPage";
 
 
 
@@ -134,6 +135,10 @@ export const router = createBrowserRouter([
       {
         path: "private-competition",
         element: <PrivateCompetitionJoinPage />,
+      },
+      {
+        path: "review",
+        element: <ReviewPage />,
       },
       {
         path: "premium/upgrade",
