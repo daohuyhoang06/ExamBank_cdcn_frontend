@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock3,
-  Download,
   Eye,
   Filter,
   RefreshCcw,
@@ -235,44 +234,6 @@ function statToneClasses(tone: FinancialStat["tone"]) {
   };
 }
 
-function buildCsv(rows: AdminPremiumOrder[]) {
-  const header = [
-    "Order ID",
-    "User Name",
-    "User Email",
-    "Plan Name",
-    "Plan Duration Days",
-    "Amount VND",
-    "Status",
-    "Transfer Content",
-    "Transfer Confirmed At",
-    "Bill Uploaded At",
-    "Reviewed By",
-    "Reviewed At",
-    "Admin Note",
-  ];
-
-  const body = rows.map((row) => [
-    row.id,
-    row.userName ?? "",
-    row.userEmail ?? "",
-    row.planName,
-    row.planDurationDays,
-    row.planPrice,
-    row.status,
-    row.transferContent,
-    row.transferConfirmedAt ?? "",
-    row.billUploadedAt ?? "",
-    row.reviewedByName ?? "",
-    row.reviewedAt ?? "",
-    row.adminNote ?? "",
-  ]);
-
-  const toCell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
-
-  return [header, ...body].map((row) => row.map(toCell).join(",")).join("\n");
-}
-
 export default function AdminFinancialPage() {
   const [orders, setOrders] = useState<AdminPremiumOrder[]>([]);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
@@ -341,22 +302,6 @@ export default function AdminFinancialPage() {
   }, [currentPage, totalPages]);
 
   const pagedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  const handleExport = async () => {
-    if (filteredOrders.length === 0) {
-      await showAlert("Không có dữ liệu để xuất.");
-      return;
-    }
-
-    const csv = buildCsv(filteredOrders);
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `admin-financial-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const handleApprove = async (order: AdminPremiumOrder) => {
     if (processingOrderId !== null) {
@@ -440,16 +385,6 @@ export default function AdminFinancialPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            leftIcon={<Download size={16} />}
-            className="rounded-xl"
-            onClick={() => void handleExport()}
-          >
-            Xuất báo cáo
-          </Button>
           <Button
             type="button"
             variant="primary"
