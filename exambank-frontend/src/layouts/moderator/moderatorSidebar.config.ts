@@ -1,10 +1,4 @@
-﻿import {
-  ClipboardCheck,
-  FilePenLine,
-  GraduationCap,
-  NotebookPen,
-  Trophy,
-} from "lucide-react";
+﻿import { ClipboardCheck, FilePenLine, Trophy } from "lucide-react";
 import type { SidebarNavItem } from "@/layouts/shared/AppSidebar";
 
 export const moderatorSidebarItems: SidebarNavItem[] = [
@@ -15,6 +9,4 @@ export const moderatorSidebarItems: SidebarNavItem[] = [
   },
   { label: "Tạo đề thi", path: "/moderator/composer", icon: FilePenLine },
   { label: "Chi tiết cuộc thi", path: "/moderator/exam-sessions", icon: Trophy },
-  { label: "Grading Studio", path: "/moderator/grading", icon: GraduationCap },
-  { label: "Editorial", path: "/moderator/editorial", icon: NotebookPen },
 ];

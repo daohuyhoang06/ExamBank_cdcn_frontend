@@ -13,7 +13,6 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/Button/button";
 import { Card } from "@/components/ui/Card/card";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
 import { setAuthToken } from "@/lib/api-client";
@@ -524,16 +523,6 @@ export default function AdminDashboardPage() {
           </h1>
         </div>
 
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            className="rounded-lg text-sm font-semibold"
-          >
-            Xuất báo cáo
-          </Button>
-        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
