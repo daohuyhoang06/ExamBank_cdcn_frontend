@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
 import { authService } from '@/features/auth/services/auth.service';
@@ -89,7 +90,21 @@ export default function LoginPage() {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getApiErrorMessage = (error: unknown) => {
+  const getLoginErrorMessage = (error: unknown) => {
+    if (!isAxiosError(error)) {
+      return extractApiErrorMessage(error, 'Đăng nhập thất bại, vui lòng thử lại.');
+    }
+
+    const status = error.response?.status ?? error.status;
+
+    if (status === 400) {
+      return 'Vui lòng kiểm tra lại tài khoản hoặc mật khẩu của bạn.';
+    }
+
+    if (status === 401) {
+      return 'Tài khoản của bạn chưa được đăng ký, vui lòng đăng ký.';
+    }
+
     return extractApiErrorMessage(error, 'Đăng nhập thất bại, vui lòng thử lại.');
   };
 
@@ -143,7 +158,7 @@ export default function LoginPage() {
 
       navigate('/user', { replace: true });
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error));
+      setSubmitError(getLoginErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -244,7 +259,7 @@ export default function LoginPage() {
             </div>
 
             {submitError ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                 {submitError}
               </p>
             ) : null}

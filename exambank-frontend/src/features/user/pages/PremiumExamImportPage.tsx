@@ -25,8 +25,17 @@ const SUBJECT_OPTIONS = [
 ];
 
 const CLASS_OPTIONS = ["Lớp 10", "Lớp 11", "Lớp 12"];
+const MCQ_ANSWER_LETTERS = ["A", "B", "C", "D"] as const;
 
 const generateAccessCode = () => `EXAM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+const mcqAnswerLetters = (question: ExamDraftQuestion): string[] => {
+  const optionCount = question.options.length;
+  const count = optionCount >= 2 ? Math.min(4, optionCount) : 4;
+  return MCQ_ANSWER_LETTERS.slice(0, count);
+};
+
+const isValidMcqAnswer = (answer?: string | null) => /^[A-D]$/i.test((answer ?? "").trim());
 const STORAGE_PUBLIC_ENDPOINT = (
   import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
   import.meta.env.VITE_API_BASE_URL ??
@@ -78,8 +87,22 @@ const assetUrl = (asset?: ExamImportAsset | null): string | null => {
   return asset.previewUrl ?? toPublicStorageUrl(asset.fileUrl) ?? null;
 };
 
+const normalizeMathForPreview = (content: string): string => {
+  if (!content?.trim()) {
+    return content;
+  }
+  let normalized = content
+    .replace(/<math>\s*(.*?)\s*<\/math>/gis, "$$1$")
+    .replace(/\\\(/g, "$")
+    .replace(/\\\)/g, "$")
+    .replace(/<b>([A-D])\.<\/b>/gi, "\n$1. ")
+    .replace(/<i>(.*?)<\/i>/gi, "$1");
+  normalized = normalized.replace(/\\text\{\\text\{([^}]*)\}\}/g, "$1");
+  return normalized;
+};
+
 function LatexMarkdownPreview({ content }: { content: string }) {
-  const safeContent = content?.trim() ? content : "_Chưa có nội dung._";
+  const safeContent = content?.trim() ? normalizeMathForPreview(content) : "_Chưa có nội dung._";
 
   try {
     return (
@@ -101,17 +124,7 @@ function LatexMarkdownPreview({ content }: { content: string }) {
   }
 }
 
-const questionAssets = (assets: ExamImportAsset[], question: ExamDraftQuestion, index: number) => {
-  const orderIndex = question.orderIndex ?? index + 1;
-  const detectedNumber = question.detectedNumber ?? orderIndex;
-  return assets.filter((asset) => {
-    const linked = asset.linkedQuestionOrder;
-    if (linked == null || linked <= 0) {
-      return false;
-    }
-    return linked === detectedNumber || linked === orderIndex;
-  });
-};
+const questionAssets = (assets: ExamImportAsset[], _question: ExamDraftQuestion, _index: number) => assets;
 
 export default function PremiumExamImportPage() {
   const navigate = useNavigate();
@@ -140,7 +153,8 @@ export default function PremiumExamImportPage() {
       throw new Error(completedJob.errorMessage || "Không thể tạo bản nháp từ file này.");
     }
     setDraft(parsedDraft);
-    setMessage("Đã trích xuất xong. Kiểm tra nội dung LaTeX và chọn ảnh minh họa cho từng câu trước khi tạo đề.");
+    setDurationMinutes(Math.max(1, parsedDraft.durationMinutes ?? 45));
+    setMessage("Đã trích xuất xong. Trắc nghiệm: chọn đáp án A–D. Điền đáp án: nhập đáp án mẫu (nếu có). Chọn ảnh minh họa từ danh sách đã detect.");
   };
 
   const pollImportJob = async (jobId: number) => {
@@ -186,7 +200,7 @@ export default function PremiumExamImportPage() {
       setJob(uploaded);
       setDraft(null);
       if (isPendingImportStatus(uploaded.status)) {
-        setMessage("Đã nhận file. Đang trích xuất tối đa 10 trang đầu (text + công thức + ảnh theo câu).");
+        setMessage("Đã nhận file. Đang trích xuất toàn bộ text (tối đa 10 trang) + ảnh minh họa...");
         void pollImportJob(uploaded.id);
         return;
       }
@@ -214,9 +228,23 @@ export default function PremiumExamImportPage() {
     setDraft((current) => {
       if (!current) return current;
       const questions = current.questions.map((question, questionIndex) =>
-        questionIndex === index ? { ...question, ...patch, needsReview: false } : question,
+        questionIndex === index ? { ...question, ...patch } : question,
       );
       return { ...current, questions };
+    });
+  };
+
+  const updateDraftDuration = (minutes: number) => {
+    const normalized = Math.max(1, Math.min(600, Math.round(minutes) || 1));
+    setDurationMinutes(normalized);
+    setDraft((current) => (current ? { ...current, durationMinutes: normalized } : current));
+  };
+
+  const updateQuestionAnswer = (index: number, answer: string) => {
+    const normalized = answer.trim().toUpperCase();
+    updateQuestion(index, {
+      answer: normalized,
+      needsReview: normalized ? false : true,
     });
   };
 
@@ -253,17 +281,36 @@ export default function PremiumExamImportPage() {
       setError("Mật khẩu cuộc thi phải có ít nhất 6 ký tự.");
       return;
     }
+    const draftToConfirm: ExamDraft = {
+      ...draft,
+      durationMinutes: Math.max(1, draft.durationMinutes ?? durationMinutes),
+    };
+    const mcqMissingAnswer = draftToConfirm.questions
+      .map((question, index) => ({ question, index }))
+      .filter(
+        ({ question }) =>
+          question.type === "MCQ" &&
+          question.options.length >= 2 &&
+          !isValidMcqAnswer(question.answer),
+      );
+    if (mcqMissingAnswer.length > 0) {
+      const labels = mcqMissingAnswer
+        .map(({ question, index }) => `Câu ${question.detectedNumber ?? index + 1}`)
+        .join(", ");
+      setError(`Vui lòng chọn đáp án đúng (A, B, C hoặc D) cho: ${labels}.`);
+      return;
+    }
     setIsBusy(true);
     setError("");
     setMessage("");
     try {
-      const confirmed = await premiumCompetitionService.confirmImport(job.id, draft);
+      const confirmed = await premiumCompetitionService.confirmImport(job.id, draftToConfirm);
       if (!confirmed.createdExamId) {
         throw new Error("Backend chưa trả về mã đề đã tạo.");
       }
       await premiumCompetitionService.createCompetition({
         examId: confirmed.createdExamId,
-        title: draft.title,
+        title: draftToConfirm.title,
         accessCode,
         password: competitionPassword,
         maxAttemptsPerUser: 1,
@@ -432,8 +479,23 @@ export default function PremiumExamImportPage() {
           <div>
             <h2 className="text-xl font-bold text-slate-900">Bản nháp câu hỏi</h2>
             <p className="text-sm text-slate-500">
-              {draft.questions.length} câu · Nội dung và đáp án đã khóa · Chỉ chọn ảnh minh họa cho từng câu.
+              {draft.questions.length} câu · Nội dung câu hỏi đã khóa · Chọn đáp án đúng, thời gian làm bài và ảnh minh họa.
             </p>
+          </div>
+
+          <div className="mt-4 max-w-xs">
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Thời gian làm bài (phút)
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2"
+                type="number"
+                min={1}
+                max={600}
+                value={draft.durationMinutes ?? durationMinutes}
+                onChange={(event) => updateDraftDuration(Number(event.target.value))}
+              />
+            </label>
+            <p className="mt-1 text-xs text-slate-500">Áp dụng khi học sinh làm bài và chấm điểm tự động.</p>
           </div>
 
           <div className="mt-4 flex flex-col gap-4">
@@ -460,10 +522,43 @@ export default function PremiumExamImportPage() {
                     </div>
                   )}
 
-                  <div className="mt-3 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                    <span className="font-semibold">Đáp án: </span>
-                    {question.answer?.trim() ? question.answer : "—"}
-                  </div>
+                  {question.type === "FILL_IN_BLANK" ? (
+                    <div className="mt-3 flex flex-col gap-1 rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                      <span className="font-semibold">Đáp án mẫu (điền đáp án):</span>
+                      <input
+                        type="text"
+                        className="rounded-md border border-sky-200 bg-white px-2 py-1 text-sm text-slate-800"
+                        placeholder="Nhập đáp án đúng (tùy chọn, để chấm tự động)"
+                        value={question.answer ?? ""}
+                        onChange={(event) =>
+                          updateQuestion(index, {
+                            answer: event.target.value,
+                            needsReview: !event.target.value.trim(),
+                          })
+                        }
+                      />
+                      <span className="text-xs text-slate-600">Học sinh sẽ thấy ô nhập khi làm bài.</span>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                      <span className="font-semibold">Đáp án đúng (trắc nghiệm):</span>
+                      <select
+                        className="rounded-md border border-emerald-200 bg-white px-2 py-1 text-sm font-semibold text-slate-800"
+                        value={isValidMcqAnswer(question.answer) ? question.answer!.trim().toUpperCase() : ""}
+                        onChange={(event) => updateQuestionAnswer(index, event.target.value)}
+                      >
+                        <option value="">-- Chọn --</option>
+                        {mcqAnswerLetters(question).map((letter) => (
+                          <option key={letter} value={letter}>
+                            {letter}
+                          </option>
+                        ))}
+                      </select>
+                      {question.options.length >= 2 && !isValidMcqAnswer(question.answer) && (
+                        <span className="text-xs text-amber-700">Bắt buộc để chấm điểm tự động</span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mt-4">
                     <div className="mb-2 text-sm font-semibold text-slate-700">Ảnh minh họa cho câu này (chọn/bỏ chọn)</div>

@@ -10,6 +10,9 @@ import {
   Crown,
   Check,
   Zap,
+  Coins,
+  UploadCloud,
+  Download,
 } from "lucide-react";
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
@@ -67,6 +70,10 @@ const formatDate = (value?: string): string => {
 
 export default function UserHomePage() {
   const navigate = useNavigate();
+  const currentUser = useMemo(() => getStoredAuthUser(), []);
+  const [coinBalance, setCoinBalance] = useState(() =>
+    typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0,
+  );
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [weakTopics, setWeakTopics] = useState<WeakTopicInsight[]>([]);
   const [reviewRecommendations, setReviewRecommendations] = useState<ReviewRecommendation[]>([]);
@@ -90,8 +97,6 @@ export default function UserHomePage() {
       avgEase,
     };
   }, [reviewRecommendations]);
-
-  const currentUser = useMemo(() => getStoredAuthUser(), []);
 
   const currentUserRanking = useMemo(() => {
     if (!currentUser) {
@@ -135,6 +140,7 @@ export default function UserHomePage() {
         if (isActive) {
           setWeakTopics([]);
           setReviewRecommendations([]);
+          setCoinBalance(typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0);
           setInsightsLoading(false);
         }
         try {
@@ -150,10 +156,11 @@ export default function UserHomePage() {
         return;
       }
       try {
-        const [ranks, topics, recommendations] = await Promise.all([
+        const [ranks, topics, recommendations, profile] = await Promise.all([
           userService.getRankings(),
           userService.getWeakTopics(5),
           userService.getReviewRecommendations(8),
+          userService.getMyProfile().catch(() => null),
         ]);
         if (!isActive) {
           return;
@@ -161,6 +168,13 @@ export default function UserHomePage() {
         setRankings(ranks);
         setWeakTopics(topics);
         setReviewRecommendations(recommendations);
+        setCoinBalance(
+          typeof profile?.coinBalance === "number"
+            ? profile.coinBalance
+            : typeof currentUser?.coinBalance === "number"
+              ? currentUser.coinBalance
+              : 0,
+        );
       } catch (error) {
         if (isActive) {
           console.error('Error loading data:', error);
@@ -177,12 +191,59 @@ export default function UserHomePage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [currentUser]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div className="border-b border-slate-100 bg-slate-950 px-6 py-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-300 text-slate-950">
+                <Coins className="h-5 w-5" strokeWidth={2.4} />
+              </span>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200">Coin hiện có</p>
+                <p className="mt-1 text-3xl font-black tabular-nums">{coinBalance.toLocaleString("vi-VN")}</p>
+              </div>
+            </div>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
+              Coin dùng để tải tài liệu đã được duyệt trong thư viện. Số dư được cập nhật theo hồ sơ tài khoản của bạn.
+            </p>
+          </div>
 
-      
+          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:p-6">
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700 ring-1 ring-emerald-100">
+                  <UploadCloud className="h-4 w-4" strokeWidth={2.3} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Tích lũy coin</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Tải tài liệu lên hệ thống. Khi moderator duyệt tài liệu, tài khoản được cộng 10 coin.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 ring-1 ring-blue-100">
+                  <Download className="h-4 w-4" strokeWidth={2.3} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Sử dụng coin</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Mỗi lượt tải tài liệu đã duyệt trừ 5 coin. Nếu số dư không đủ, hệ thống sẽ chặn lượt tải.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* SECTION 1: Hero & Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         

@@ -23,6 +23,7 @@ export function AppHeader({
           fullName?: string;
           name?: string;
           email?: string;
+          coinBalance?: number;
         }
       | null;
 
@@ -31,6 +32,14 @@ export function AppHeader({
 
   const headerMetaTitle = isStudentArea ? "Tài khoản" : title;
   const headerMetaSubtitle = currentUserDisplayName || subtitle;
+  const [coinBalance, setCoinBalance] = useState(() => {
+    const currentUser = getStoredAuthUser() as
+      | {
+          coinBalance?: number;
+        }
+      | null;
+    return typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0;
+  });
 
   useEffect(() => {
     function handleAuthUserUpdated() {
@@ -40,10 +49,12 @@ export function AppHeader({
             fullName?: string;
             name?: string;
             email?: string;
+            coinBalance?: number;
           }
         | null;
 
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
+      setCoinBalance(typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0);
     }
 
     window.addEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
@@ -62,6 +73,11 @@ export function AppHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        {isStudentArea ? (
+          <div className="rounded-full border border-[var(--line-soft)] bg-[var(--bg-panel)] px-3 py-1 text-xs font-semibold text-[var(--ink-700)]">
+            Coin: {coinBalance.toLocaleString("vi-VN")}
+          </div>
+        ) : null}
         <button
           type="button"
           className="rounded-full border border-transparent p-2 text-[var(--ink-600)] transition duration-200 hover:border-[var(--line-soft)] hover:bg-[var(--bg-page)]"
