@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleAlert, Download, Eye, FileText, Filter, MessageSquare, Sparkles, Star, Trash2, TrendingUp, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, CircleAlert, Download, Eye, FileText, Filter, Loader2, MessageSquare, Sparkles, Star, Trash2, TrendingUp, X } from "lucide-react";
 import { Button } from "@/components/ui/Button/button";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
@@ -8,6 +8,7 @@ import {
   approveAdminDocument,
   deleteAdminDocument,
   getAdminDocumentLogs,
+  getAdminDocumentPreviewBlob,
   getAdminDocumentStats,
   getAdminDocuments,
   rejectAdminDocument,
@@ -84,26 +85,40 @@ function formatDateKey(value: string | null | undefined) {
   }).format(parsed);
 }
 
-function buildPreviewEmbedUrl(url: string) {
+function buildPreviewEmbedUrl(url: string, isPdf = false) {
   const trimmed = url.trim();
   if (!trimmed) {
     return trimmed;
   }
 
   const lower = trimmed.toLowerCase();
-  const isPdf = lower.includes(".pdf");
-  if (!isPdf || trimmed.includes("#")) {
+  const looksLikePdf = isPdf || lower.includes(".pdf") || trimmed.startsWith("blob:");
+  if (!looksLikePdf || trimmed.includes("#")) {
     return trimmed;
   }
 
   return `${trimmed}#toolbar=0&navpanes=0&view=FitH&zoom=45`;
 }
 
-function isImagePreviewUrl(url: string) {
+function isImagePreviewUrl(url: string, fileType?: string | null) {
+  const normalizedType = (fileType ?? "").trim().toLowerCase();
+  if (normalizedType.startsWith("image/")) {
+    return true;
+  }
+
   const normalized = url.trim().toLowerCase();
   return /\.(png|jpe?g|webp|gif|bmp|svg)(?:\?|#|$)/.test(normalized);
 }
 
+function isPdfPreviewUrl(url: string, fileType?: string | null) {
+  const normalizedType = (fileType ?? "").trim().toLowerCase();
+  if (normalizedType.includes("pdf")) {
+    return true;
+  }
+
+  const normalized = url.trim().toLowerCase();
+  return normalized.includes(".pdf") || normalized.startsWith("blob:");
+}
 function isPlaceholderCategory(value: string | null | undefined) {
   if (!value) {
     return true;
@@ -248,6 +263,11 @@ export default function AdminContentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
+  const [detailPreviewUrl, setDetailPreviewUrl] = useState<string | null>(null);
+  const [detailPreviewFileType, setDetailPreviewFileType] = useState<string | null>(null);
+  const [detailPreviewLoading, setDetailPreviewLoading] = useState(false);
+  const [detailPreviewError, setDetailPreviewError] = useState<string | null>(null);
+  const detailPreviewObjectUrlRef = useRef<string | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -290,6 +310,81 @@ export default function AdminContentPage() {
 
     return () => {
       document.body.classList.remove("admin-detail-modal-open");
+    };
+  }, [selectedDocumentDetail]);
+
+  useEffect(() => {
+    return () => {
+      if (detailPreviewObjectUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(detailPreviewObjectUrlRef.current);
+        detailPreviewObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview(documentId: number, fallbackPreviewUrl: string | null) {
+      setDetailPreviewLoading(true);
+      setDetailPreviewError(null);
+
+      try {
+        const preview = await getAdminDocumentPreviewBlob(documentId);
+        if (cancelled) {
+          return;
+        }
+
+        const nextPreviewUrl = URL.createObjectURL(preview.blob);
+        setDetailPreviewUrl((current) => {
+          if (current?.startsWith("blob:")) {
+            URL.revokeObjectURL(current);
+          }
+          detailPreviewObjectUrlRef.current = nextPreviewUrl;
+          return nextPreviewUrl;
+        });
+        setDetailPreviewFileType(preview.fileType);
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+
+        setDetailPreviewUrl((current) => {
+          if (current?.startsWith("blob:")) {
+            URL.revokeObjectURL(current);
+          }
+          detailPreviewObjectUrlRef.current = null;
+          return fallbackPreviewUrl;
+        });
+        setDetailPreviewFileType(null);
+        setDetailPreviewError(loadError instanceof Error ? loadError.message : "Không thể tải preview tài liệu.");
+      } finally {
+        if (!cancelled) {
+          setDetailPreviewLoading(false);
+        }
+      }
+    }
+
+    if (!selectedDocumentDetail) {
+      setDetailPreviewUrl((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+        detailPreviewObjectUrlRef.current = null;
+        return null;
+      });
+      setDetailPreviewFileType(null);
+      setDetailPreviewLoading(false);
+      setDetailPreviewError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void loadPreview(selectedDocumentDetail.id, selectedDocumentDetail.previewUrl);
+
+    return () => {
+      cancelled = true;
     };
   }, [selectedDocumentDetail]);
 
@@ -928,25 +1023,30 @@ export default function AdminContentPage() {
               <div className="flex h-full flex-col gap-3">
                 <div className="flex min-h-[240px] flex-1 flex-col rounded-xl border border-[#cfd5df] bg-[#eef1f6] p-4">
                   <p className="mb-3 text-lg font-bold text-[#111827]">Document Preview</p>
-                  {selectedDocumentDetail.previewUrl ? (
-                    isImagePreviewUrl(selectedDocumentDetail.previewUrl) ? (
+                  {detailPreviewLoading ? (
+                    <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[#c9cfda] bg-white text-sm font-semibold text-[#6b7280]">
+                      <Loader2 size={16} className="mr-2 animate-spin" /> Đang tải preview...
+                    </div>
+                  ) : detailPreviewUrl ? (
+                    isImagePreviewUrl(detailPreviewUrl, detailPreviewFileType) ? (
                       <div className="flex h-full items-center justify-center rounded-lg border border-[#d6d9e0] bg-white p-2">
                         <img
                           alt={`preview-${selectedDocumentDetail.id}`}
-                          src={selectedDocumentDetail.previewUrl}
+                          src={detailPreviewUrl}
                           className="max-h-full w-auto max-w-full object-contain"
                         />
                       </div>
                     ) : (
                       <iframe
                         title={`preview-${selectedDocumentDetail.id}`}
-                        src={buildPreviewEmbedUrl(selectedDocumentDetail.previewUrl)}
+                        src={buildPreviewEmbedUrl(detailPreviewUrl, isPdfPreviewUrl(detailPreviewUrl, detailPreviewFileType))}
                         className="h-full w-full rounded-lg border border-[#d6d9e0] bg-white"
                       />
                     )
                   ) : (
-                    <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[#c9cfda] bg-white text-sm text-[#6b7280]">
-                      Tài liệu này chưa có đường dẫn xem trước.
+                    <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-[#c9cfda] bg-white px-4 text-center text-sm text-[#6b7280]">
+                      <span>Tài liệu này chưa có đường dẫn xem trước.</span>
+                      {detailPreviewError ? <span className="mt-2 text-xs text-rose-600">{detailPreviewError}</span> : null}
                     </div>
                   )}
                 </div>
