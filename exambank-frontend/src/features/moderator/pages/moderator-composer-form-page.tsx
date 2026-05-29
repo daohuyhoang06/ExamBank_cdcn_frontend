@@ -37,6 +37,7 @@ import {
   getComposerQuestionById,
   listComposerExamQuestions,
   listComposerSubjects,
+  listComposerTopics,
   removeComposerExamQuestion,
   uploadComposerQuestionImage,
   updateComposerExam,
@@ -45,6 +46,7 @@ import type {
   ComposerQuestionPayload,
   ComposerQuestionRecord,
   ComposerSubjectRecord,
+  ComposerTopicRecord,
 } from "@/features/moderator/types/moderator-composer.type";
 import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
@@ -193,6 +195,32 @@ function buildQuestionSignature(source: QuestionDraft[]) {
   }));
 
   return JSON.stringify(normalized);
+}
+
+function parseTagNames(value: string) {
+  const deduplicated = new Map<string, string>();
+  value
+    .split(/[,\n;]+/)
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter((item) => item.length > 0)
+    .forEach((item) => {
+      const key = item.toLocaleLowerCase("vi-VN");
+      if (!deduplicated.has(key)) {
+        deduplicated.set(key, item);
+      }
+    });
+  return Array.from(deduplicated.values());
+}
+
+function joinTagNames(values: string[]) {
+  return parseTagNames(values.join(", ")).join(", ");
+}
+
+function filterTagNamesByCatalog(value: string, topics: ComposerTopicRecord[]) {
+  const allowedKeys = new Set(topics.map((item) => item.name.toLocaleLowerCase("vi-VN")));
+  return joinTagNames(
+    parseTagNames(value).filter((item) => allowedKeys.has(item.toLocaleLowerCase("vi-VN")))
+  );
 }
 
 function normalizeSubjectName(value: string) {
@@ -386,15 +414,18 @@ function buildQuestionPayload(
   question: QuestionDraft,
   subjectId: number,
   examId: number,
-  orderIndex: number
+  orderIndex: number,
+  availableSubjectTopics: ComposerTopicRecord[]
 ): ComposerQuestionPayload {
+  const normalizedTopicTag = filterTagNamesByCatalog(question.tags, availableSubjectTopics) || null;
+
   if (question.type === "Đúng/Sai (True/False)") {
     return {
       examId,
       subjectId,
       content: question.content.trim(),
       type: "MCQ",
-      topicTag: question.tags.trim() || null,
+      topicTag: normalizedTopicTag,
       imageUrl: question.imageUrl?.trim() || null,
       maxScore: question.points,
       options: JSON.stringify(["Đúng", "Sai"]),
@@ -410,7 +441,7 @@ function buildQuestionPayload(
       subjectId,
       content: question.content.trim(),
       type: "FILL_IN_BLANK",
-      topicTag: question.tags.trim() || null,
+      topicTag: normalizedTopicTag,
       imageUrl: question.imageUrl?.trim() || null,
       maxScore: question.points,
       options: null,
@@ -428,7 +459,7 @@ function buildQuestionPayload(
     subjectId,
     content: question.content.trim(),
     type: "MCQ",
-    topicTag: question.tags.trim() || null,
+    topicTag: normalizedTopicTag,
     imageUrl: question.imageUrl?.trim() || null,
     maxScore: question.points,
     options: JSON.stringify(normalizedOptions),
@@ -468,6 +499,94 @@ function stripTemporaryInlineImageMarkup(content: string): string {
   return content
     .replace(TEMPORARY_INLINE_IMAGE_FIGURE_PATTERN, "")
     .replace(TEMPORARY_INLINE_IMAGE_TAG_PATTERN, "");
+}
+
+function TopicTagSelector({
+  value,
+  topics,
+  disabled,
+  emptyLabel,
+  onChange,
+}: {
+  value: string;
+  topics: ComposerTopicRecord[];
+  disabled: boolean;
+  emptyLabel: string;
+  onChange: (nextValue: string) => void;
+}) {
+  const selectedTags = parseTagNames(value);
+  const selectedKeys = new Set(selectedTags.map((item) => item.toLocaleLowerCase("vi-VN")));
+  const availableKeys = new Set(topics.map((item) => item.name.toLocaleLowerCase("vi-VN")));
+  const orphanedTags = selectedTags.filter((item) => !availableKeys.has(item.toLocaleLowerCase("vi-VN")));
+
+  const toggleTag = (topicName: string) => {
+    const topicKey = topicName.toLocaleLowerCase("vi-VN");
+    if (selectedKeys.has(topicKey)) {
+      onChange(joinTagNames(selectedTags.filter((item) => item.toLocaleLowerCase("vi-VN") !== topicKey)));
+      return;
+    }
+    onChange(joinTagNames([...selectedTags, topicName]));
+  };
+
+  const removeOrphanedTag = (topicName: string) => {
+    const topicKey = topicName.toLocaleLowerCase("vi-VN");
+    onChange(joinTagNames(selectedTags.filter((item) => item.toLocaleLowerCase("vi-VN") !== topicKey)));
+  };
+
+  return (
+    <div className="space-y-3">
+      {selectedTags.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {selectedTags.map((tag) => {
+            const isOrphaned = orphanedTags.some((item) => item.toLocaleLowerCase("vi-VN") === tag.toLocaleLowerCase("vi-VN"));
+            return (
+              <button
+                key={`selected-${tag}`}
+                type="button"
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  isOrphaned
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-[var(--brand-200)] bg-[var(--brand-100)] text-[var(--brand-700)]"
+                }`}
+                onClick={() => (isOrphaned ? removeOrphanedTag(tag) : toggleTag(tag))}
+                disabled={disabled}
+                title={isOrphaned ? "Tag này không thuộc danh mục môn hiện tại. Bấm để gỡ." : "Bấm để bỏ chọn tag"}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {topics.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-3 text-sm text-[var(--ink-500)]">
+          {emptyLabel}
+        </div>
+      ) : (
+        <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto rounded-xl border border-[var(--line-soft)] bg-[var(--bg-soft)] p-3">
+          {topics.map((topic) => {
+            const selected = selectedKeys.has(topic.name.toLocaleLowerCase("vi-VN"));
+            return (
+              <button
+                key={topic.id}
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  selected
+                    ? "border-[var(--brand-500)] bg-[var(--brand-600)] text-white"
+                    : "border-[var(--line-soft)] bg-white text-[var(--ink-700)] hover:border-[var(--brand-300)] hover:bg-[var(--brand-50)]"
+                }`}
+                onClick={() => toggleTag(topic.name)}
+                disabled={disabled}
+              >
+                {topic.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
@@ -595,6 +714,7 @@ export default function ModeratorComposerFormPage() {
 
 
   const [availableSubjects, setAvailableSubjects] = useState<ComposerSubjectRecord[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<ComposerTopicRecord[]>([]);
   const [activeExamId, setActiveExamId] = useState<number | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState<SavedSnapshot | null>(null);
 
@@ -631,6 +751,13 @@ export default function ModeratorComposerFormPage() {
   const activeSubjectRecord = useMemo(() => {
     return findSubjectByName(availableSubjects, subject);
   }, [availableSubjects, subject]);
+
+  const filteredTopics = useMemo(() => {
+    if (!activeSubjectRecord) {
+      return [];
+    }
+    return availableTopics.filter((item) => item.subjectId === activeSubjectRecord.id);
+  }, [activeSubjectRecord, availableTopics]);
 
   const groupedQuestions = useMemo(() => {
     return questionTypeConfigs.map((config) => {
@@ -778,6 +905,30 @@ export default function ModeratorComposerFormPage() {
   }, [loadInitialData]);
 
   useEffect(() => {
+    if (!activeSubjectRecord) {
+      setAvailableTopics([]);
+      return;
+    }
+
+    let active = true;
+    void listComposerTopics({ subjectId: activeSubjectRecord.id })
+      .then((topics) => {
+        if (active) {
+          setAvailableTopics(topics);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAvailableTopics([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeSubjectRecord]);
+
+  useEffect(() => {
     return () => {
       if (typeof window === "undefined") {
         return;
@@ -830,6 +981,13 @@ export default function ModeratorComposerFormPage() {
   function handleSubjectChange(nextSubject: string) {
     const previousSubject = subject;
     setSubject(nextSubject);
+    setQuestions((prev) =>
+      prev.map((question) => ({
+        ...question,
+        subjectLine: nextSubject,
+        tags: "",
+      }))
+    );
 
     setNewQuestionForms((prev) => {
       const nextForms = { ...prev };
@@ -842,6 +1000,7 @@ export default function ModeratorComposerFormPage() {
           nextForms[config.type] = {
             ...currentForm,
             subjectLine: nextSubject,
+            tags: "",
           };
         }
       });
@@ -998,9 +1157,10 @@ export default function ModeratorComposerFormPage() {
         const questionsForCreate = questions.map((question) => ({
           ...question,
           content: stripTemporaryInlineImageMarkup(question.content),
+          tags: filterTagNamesByCatalog(question.tags, filteredTopics),
         }));
         const payloads = questionsForCreate.map((question, index) =>
-          buildQuestionPayload(question, resolvedSubjectRecord.id, savedExam.id, index + 1)
+          buildQuestionPayload(question, resolvedSubjectRecord.id, savedExam.id, index + 1, filteredTopics)
         );
         const createdQuestions = await Promise.all(payloads.map((payload) => createComposerQuestion(payload)));
         const finalizedQuestions = await Promise.all(
@@ -1249,7 +1409,7 @@ export default function ModeratorComposerFormPage() {
       pendingImageFile: currentForm.pendingImageFile,
       localImagePreviewUrl: currentForm.localImagePreviewUrl,
       points,
-      tags: currentForm.tags.trim(),
+      tags: filterTagNamesByCatalog(currentForm.tags, filteredTopics),
       ...(type === "Trắc nghiệm (Multiple Choice)"
         ? {
             options: currentForm.options.map((option) => option.trim()),
@@ -1480,7 +1640,7 @@ export default function ModeratorComposerFormPage() {
                         className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
                         value={currentForm.subjectLine}
                         onChange={(event) => updateCreateForm(config.type, { subjectLine: event.target.value })}
-                        disabled={isFormLocked}
+                        disabled
                       />
                     </label>
 
@@ -1497,16 +1657,16 @@ export default function ModeratorComposerFormPage() {
                       />
                     </label>
 
-                    <label className="space-y-2">
-                      <span className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Tags</span>
-                      <input
-                        className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand-500)]"
-                        placeholder="Ví dụ: Đạo hàm, Giải tích"
+                    <div className="space-y-2 md:col-span-3">
+                      <span className="px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">Tags theo môn học</span>
+                      <TopicTagSelector
                         value={currentForm.tags}
-                        onChange={(event) => updateCreateForm(config.type, { tags: event.target.value })}
+                        topics={filteredTopics}
                         disabled={isFormLocked}
+                        emptyLabel={activeSubjectRecord ? "Môn này chưa có tag trong danh mục." : "Hãy chọn môn học trước để hiện danh mục tag."}
+                        onChange={(nextValue) => updateCreateForm(config.type, { tags: nextValue })}
                       />
-                    </label>
+                    </div>
                   </div>
 
                   <div className="mt-4 block space-y-2">
@@ -1756,15 +1916,27 @@ export default function ModeratorComposerFormPage() {
 
                           <div className="flex flex-col gap-4 pt-1 md:flex-row md:items-center md:justify-between">
                             <div className="flex-1">
-                              <div className="relative flex items-center">
-                                <Tag size={14} className="pointer-events-none absolute left-3 text-[var(--ink-500)]" />
-                                <input
-                                  className="w-full rounded-lg border border-[var(--line-soft)] bg-[var(--bg-soft)] py-2 pl-9 pr-3 text-sm text-[var(--ink-800)] outline-none transition focus:border-[var(--brand-500)]"
-                                  placeholder="Gắn thẻ chủ đề..."
-                                  value={question.tags}
-                                  onChange={(event) => updateQuestion(question.id, { tags: event.target.value })}
-                                  disabled={isFormLocked}
-                                />
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-widest text-[var(--ink-500)]">
+                                  <Tag size={14} />
+                                  <span>Tags theo môn học</span>
+                                </div>
+                                {parseTagNames(question.tags).length > 0 ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {parseTagNames(question.tags).map((tag) => (
+                                      <span
+                                        key={`${question.id}-${tag}`}
+                                        className="rounded-full border border-[var(--brand-200)] bg-[var(--brand-100)] px-3 py-1 text-xs font-semibold text-[var(--brand-700)]"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-3 text-sm text-[var(--ink-500)]">
+                                    Chưa chọn tag cho câu hỏi này.
+                                  </div>
+                                )}
                               </div>
                             </div>
 

@@ -8,11 +8,14 @@ import type {
   ComposerQuestionRecord,
   ComposerSubjectPayload,
   ComposerSubjectRecord,
+  ComposerTopicListParams,
+  ComposerTopicRecord,
 } from "@/features/moderator/types/moderator-composer.type";
 
 const EXAMS_PATH = "/api/exams";
 const QUESTIONS_PATH = "/api/questions";
 const SUBJECTS_PATH = "/api/subjects";
+const TOPICS_PATH = "/api/topics";
 
 type ApiEnvelope = {
   data?: unknown;
@@ -23,6 +26,7 @@ type ApiEnvelope = {
   exams?: unknown;
   questions?: unknown;
   subjects?: unknown;
+  topics?: unknown;
 };
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -44,6 +48,30 @@ function toNumber(value: unknown): number | null {
 
 function toStringOrNull(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function toTopicTagString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const tags = value
+    .map((item) => {
+      const objectValue = toObject(item);
+      if (!objectValue) {
+        return null;
+      }
+      const name = toStringOrNull(objectValue.name);
+      return name?.trim() ? name.trim() : null;
+    })
+    .filter((item): item is string => Boolean(item));
+
+  return tags.length > 0 ? tags.join(", ") : null;
 }
 
 function toIsoDateTimeOrNull(value: unknown): string | null {
@@ -159,6 +187,7 @@ function extractArray(value: unknown): unknown[] {
     (objectValue as ApiEnvelope).exams,
     (objectValue as ApiEnvelope).questions,
     (objectValue as ApiEnvelope).subjects,
+    (objectValue as ApiEnvelope).topics,
   ];
 
   for (const candidate of candidates) {
@@ -240,6 +269,26 @@ function normalizeSubject(value: unknown): ComposerSubjectRecord | null {
   };
 }
 
+function normalizeTopic(value: unknown): ComposerTopicRecord | null {
+  const objectValue = toObject(value);
+  if (!objectValue) {
+    return null;
+  }
+
+  const id = toNumber(objectValue.id);
+  const subjectId = toNumber(objectValue.subjectId);
+  const name = toStringOrNull(objectValue.name);
+  if (id === null || subjectId === null || !name) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    subjectId,
+  };
+}
+
 function normalizeQuestion(value: unknown): ComposerQuestionRecord | null {
   const objectValue = toObject(value);
   if (!objectValue) {
@@ -259,7 +308,7 @@ function normalizeQuestion(value: unknown): ComposerQuestionRecord | null {
     subjectId,
     content,
     type: toStringOrNull(objectValue.type) ?? "MCQ",
-    topicTag: toStringOrNull(objectValue.topicTag),
+    topicTag: toTopicTagString(objectValue.topicTag),
     maxScore: toNumber(objectValue.maxScore),
     options: toStringOrNull(objectValue.options),
     answer: toStringOrNull(objectValue.answer),
@@ -290,7 +339,7 @@ function normalizeExamQuestionLink(value: unknown): ComposerExamQuestionLink | n
     options: toStringOrNull(objectValue.options),
     answer: toStringOrNull(objectValue.answer),
     difficulty: toNumber(objectValue.difficulty),
-    topicTag: toStringOrNull(objectValue.topicTag),
+    topicTag: toTopicTagString(objectValue.topicTag),
     orderIndex: toNumber(objectValue.orderIndex),
   };
 }
@@ -365,6 +414,19 @@ export async function listComposerSubjects(): Promise<ComposerSubjectRecord[]> {
 export async function createComposerSubject(payload: ComposerSubjectPayload): Promise<ComposerSubjectRecord> {
   const response = await apiClient.post(SUBJECTS_PATH, payload, buildAuthConfig());
   return ensureSubject(response.data);
+}
+
+export async function listComposerTopics(params?: ComposerTopicListParams): Promise<ComposerTopicRecord[]> {
+  const response = await apiClient.get(TOPICS_PATH, {
+    ...buildAuthConfig(),
+    params: {
+      ...(params?.subjectId ? { subjectId: params.subjectId } : {}),
+    },
+  });
+
+  return extractArray(response.data)
+    .map(normalizeTopic)
+    .filter((item): item is ComposerTopicRecord => Boolean(item));
 }
 
 export async function listComposerQuestions(params?: ComposerQuestionListParams): Promise<ComposerQuestionRecord[]> {

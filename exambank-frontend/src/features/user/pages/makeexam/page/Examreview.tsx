@@ -301,7 +301,7 @@ const Examreview = () => {
     };
   }, [fallbackExamIdNumber]);
 
-  const { topics, leaderboard, examResult, isLoadingResult, resultError, leaderboardError } = useExamreview(sessionId);
+  const { leaderboard, examResult, isLoadingResult, resultError, leaderboardError } = useExamreview(sessionId);
 
   const snapshotQuestions = localSnapshotQuestions.length > 0 ? localSnapshotQuestions : fetchedQuestions;
   const snapshotAnswers = routeState?.userAnswers ?? storedRouteState?.userAnswers ?? {};
@@ -333,6 +333,25 @@ const Examreview = () => {
       };
     });
   }, [questionResults, snapshotQuestions, snapshotAnswers]);
+
+  const reviewTopics = useMemo(() => {
+    const incorrectRows = reviewRows.filter((row) => row.result.isCorrect === false);
+    if (incorrectRows.length === 0) {
+      return [];
+    }
+    const uniqueTopicNames = new Set<string>();
+
+    for (const row of incorrectRows) {
+      for (const topicName of row.question?.topicTags ?? []) {
+        const normalizedName = topicName.trim();
+        if (normalizedName.length > 0) {
+          uniqueTopicNames.add(normalizedName);
+        }
+      }
+    }
+
+    return Array.from(uniqueTopicNames).slice(0, 8);
+  }, [reviewRows]);
 
   useEffect(() => {
     let isActive = true;
@@ -647,16 +666,16 @@ const Examreview = () => {
                 </div>
               </div>
 
-              {topics.length > 0 && (
+              {reviewTopics.length > 0 && (
                 <div>
                   <h3 className="mb-3 font-bold text-slate-800">Chủ đề cần ôn thêm</h3>
                   <div className="flex flex-wrap gap-2">
-                    {topics.slice(0, 8).map((topic) => (
+                    {reviewTopics.map((topicName) => (
                       <span
-                        key={topic.name}
+                        key={topicName}
                         className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"
                       >
-                        {topic.name}
+                        {topicName}
                       </span>
                     ))}
                   </div>

@@ -52,6 +52,7 @@ export interface ReviewRecommendation {
   content: string;
   type?: string;
   options?: string;
+  answer?: string;
   imageUrl?: string;
   difficulty?: number;
   maxScore?: number;
@@ -118,6 +119,7 @@ export interface BaseQuestion {
   type: QuestionType;
   question: string;
   score: number;
+  topicTags?: string[];
 }
 
 export interface MultipleChoiceQuestion extends BaseQuestion {
