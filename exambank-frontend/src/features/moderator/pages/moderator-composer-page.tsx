@@ -9,8 +9,10 @@ import {
   Eye,
   FilePenLine,
   HelpCircle,
+  Loader2,
   Plus,
   RefreshCcw,
+  Sparkles,
   Star,
   Trash2,
   Upload,
@@ -25,16 +27,23 @@ import {
   createComposerQuestion,
   createComposerSubject,
   deleteComposerExam,
+  getModeratorAiImport,
   listComposerOwnedExams,
   listComposerQuestions,
   listComposerSubjects,
+  parseModeratorAiDraft,
+  uploadModeratorAiImport,
   updateComposerExam,
 } from "@/features/moderator/services/moderator-composer.service";
+import {
+  COMPOSER_AI_IMPORT_DRAFT_KEY,
+} from "@/features/moderator/services/moderator-ai-import-tracker";
 import type {
   ComposerExamPayload,
   ComposerExamRecord,
   ComposerQuestionRecord,
   ComposerQuestionPayload,
+  ComposerSubjectRecord,
 } from "@/features/moderator/types/moderator-composer.type";
 
 type OverviewExamStatus =
@@ -81,7 +90,6 @@ type JsonImportSummary = {
   failedExamMessages: string[];
 };
 
-const COMPOSER_FLASH_NOTICE_KEY = "moderator-composer-flash-notice";
 const OVERVIEW_PAGE_SIZE = 10;
 const JSON_IMPORT_API_EXAMPLE = {
   exams: [
@@ -121,7 +129,13 @@ const JSON_IMPORT_API_EXAMPLE = {
 };
 const JSON_IMPORT_API_EXAMPLE_TEXT = JSON.stringify(JSON_IMPORT_API_EXAMPLE, null, 2);
 
+const AI_IMPORT_POLL_INTERVAL_MS = 2000;
+const AI_IMPORT_MAX_WAIT_MS = 300000;
+
 type JsonImportObject = Record<string, unknown>;
+
+const AI_IMPORT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
+
 
 function statusBadgeClassName(status: OverviewExamStatus) {
   if (status === "ONGOING") {
@@ -396,6 +410,12 @@ function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
   return extractApiErrorMessages(error, fallbackMessage)[0] ?? fallbackMessage;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function toTrimmedString(value: unknown) {
   if (typeof value === "string") {
     return value.trim();
@@ -573,11 +593,21 @@ export default function ModeratorComposerPage() {
   const [isJsonImportModalOpen, setIsJsonImportModalOpen] = useState(false);
   const [jsonImportText, setJsonImportText] = useState(JSON_IMPORT_API_EXAMPLE_TEXT);
   const [jsonImportUiError, setJsonImportUiError] = useState("");
+  const [isAiImportModalOpen, setIsAiImportModalOpen] = useState(false);
+  const [isSubmittingAiImport, setIsSubmittingAiImport] = useState(false);
+  const [aiImportError, setAiImportError] = useState("");
+  const [aiImportTitle, setAiImportTitle] = useState("Đề thi AI import");
+  const [aiImportFile, setAiImportFile] = useState<File | null>(null);
+  const [aiImportClassName, setAiImportClassName] = useState("Lớp 12");
+  const [aiImportDurationMinutes, setAiImportDurationMinutes] = useState("45");
+  const [availableComposerSubjects, setAvailableComposerSubjects] = useState<ComposerSubjectRecord[]>([]);
+  const [aiImportSubjectId, setAiImportSubjectId] = useState<number | "">("");
   const [allOverviewQuestions, setAllOverviewQuestions] = useState<ComposerQuestionRecord[]>([]);
   const [previewExamRow, setPreviewExamRow] = useState<OverviewExamRow | null>(null);
   const [previewQuestions, setPreviewQuestions] = useState<ComposerQuestionRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const jsonImportInputRef = useRef<HTMLInputElement | null>(null);
+  const aiImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const subjectFilterOptions = useMemo(() => {
     const values = Array.from(new Set(overviewExamRows.map((item) => item.subject))).sort((a, b) =>
@@ -592,25 +622,6 @@ export default function ModeratorComposerPage() {
       setOverviewSubject("Tất cả môn học");
     }
   }, [overviewSubject, subjectFilterOptions]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const noticeMessage = window.sessionStorage.getItem(COMPOSER_FLASH_NOTICE_KEY) ?? "";
-    if (!noticeMessage) {
-      return;
-    }
-
-    window.sessionStorage.removeItem(COMPOSER_FLASH_NOTICE_KEY);
-    toast.success({
-      title: "Hệ thống",
-      message: noticeMessage,
-      duration: 3600,
-      showProgress: true,
-    });
-  }, [toast]);
 
   const filteredOverviewRows = useMemo(() => {
     return overviewExamRows.filter((item) => {
@@ -686,6 +697,7 @@ export default function ModeratorComposerPage() {
         listComposerQuestions(),
         listComposerSubjects(),
       ]);
+      setAvailableComposerSubjects(subjects);
 
       const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
       const questionCountByExam = new Map<number, number>();
@@ -747,6 +759,101 @@ export default function ModeratorComposerPage() {
     }
 
     navigate(`/moderator/composer/form?examId=${examId}`);
+  }
+
+  function resetAiImportModalState() {
+    setIsSubmittingAiImport(false);
+    setAiImportError("");
+    setAiImportFile(null);
+    if (aiImportInputRef.current) {
+      aiImportInputRef.current.value = "";
+    }
+    setAiImportTitle("Đề thi AI import");
+    setAiImportClassName("Lớp 12");
+    setAiImportDurationMinutes("45");
+    setAiImportSubjectId(availableComposerSubjects[0]?.id ?? "");
+  }
+
+  function openAiImportModal() {
+    resetAiImportModalState();
+    setIsAiImportModalOpen(true);
+  }
+
+  function closeAiImportModal() {
+    if (isSubmittingAiImport) {
+      return;
+    }
+
+    setIsAiImportModalOpen(false);
+  }
+
+  async function submitAiImport() {
+    if (!aiImportFile) {
+      setAiImportError("Vui lòng chọn file PDF hoặc ảnh để AI xử lý.");
+      return;
+    }
+
+    if (!aiImportTitle.trim()) {
+      setAiImportError("Vui lòng nhập tiêu đề đề thi.");
+      return;
+    }
+
+    const resolvedDuration = Number(aiImportDurationMinutes);
+    if (!Number.isFinite(resolvedDuration) || resolvedDuration <= 0) {
+      setAiImportError("Thời lượng làm bài phải lớn hơn 0.");
+      return;
+    }
+
+    setIsSubmittingAiImport(true);
+    setAiImportError("");
+
+    try {
+      const selectedSubject = availableComposerSubjects.find((item) => item.id === aiImportSubjectId);
+      const job = await uploadModeratorAiImport({
+        file: aiImportFile,
+        title: aiImportTitle.trim(),
+        subjectId: typeof aiImportSubjectId === "number" ? aiImportSubjectId : undefined,
+        subjectName: selectedSubject?.name,
+        className: aiImportClassName,
+        durationMinutes: resolvedDuration,
+      });
+
+      let latestJob = job;
+      let elapsedMs = 0;
+      while (!latestJob.draftJson && elapsedMs < AI_IMPORT_MAX_WAIT_MS) {
+        const normalizedStatus = String(latestJob.status ?? "").toUpperCase();
+        if (normalizedStatus === "FAILED") {
+          setAiImportError(latestJob.errorMessage?.trim() || "AI import thất bại.");
+          return;
+        }
+        await sleep(AI_IMPORT_POLL_INTERVAL_MS);
+        elapsedMs += AI_IMPORT_POLL_INTERVAL_MS;
+        latestJob = await getModeratorAiImport(latestJob.id);
+      }
+
+      if (!latestJob.draftJson) {
+        setAiImportError("AI import mất quá nhiều thời gian. Vui lòng thử lại sau.");
+        return;
+      }
+
+      const parsedDraft = parseModeratorAiDraft(latestJob.draftJson);
+      if (!parsedDraft) {
+        setAiImportError(latestJob.errorMessage?.trim() || "AI import không trả về bản nháp hợp lệ.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(COMPOSER_AI_IMPORT_DRAFT_KEY, JSON.stringify(parsedDraft));
+      }
+      setIsAiImportModalOpen(false);
+      navigate("/moderator/composer/form");
+    } catch (error) {
+      setAiImportError(
+        extractApiErrorMessage(error, "Không thể khởi tạo tác vụ AI import từ file đã chọn.")
+      );
+    } finally {
+      setIsSubmittingAiImport(false);
+    }
   }
 
   function openExamPreview(row: OverviewExamRow) {
@@ -1112,6 +1219,152 @@ export default function ModeratorComposerPage() {
         }}
       />
 
+      <input
+        ref={aiImportInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+        className="hidden"
+        onChange={(event) => {
+          setAiImportFile(event.target.files?.[0] ?? null);
+          setAiImportError("");
+        }}
+      />
+
+      {isAiImportModalOpen ? (
+        <div className="fixed inset-0 z-[1260] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <button type="button" className="absolute inset-0" onClick={closeAiImportModal} aria-label="Đóng" />
+          <section className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-white shadow-[0_28px_64px_rgba(15,23,42,0.22)]">
+            <div className="border-b border-[var(--line-soft)] bg-[linear-gradient(135deg,#f5f9ff_0%,#eef6ff_100%)] px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--brand-100)] text-[var(--brand-700)]">
+                    <Sparkles size={20} />
+                  </div>
+                  <h2 className="pt-2 text-xl font-black text-[var(--ink-900)]">Tạo đề bằng AI từ PDF hoặc ảnh</h2>
+                  <p className="text-sm text-[var(--ink-600)]">
+                    AI sẽ bóc tách câu hỏi và đổ vào form moderator để bạn rà soát, chỉnh sửa và lưu như luồng tạo đề hiện tại.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAiImportModal}
+                  disabled={isSubmittingAiImport}
+                  className="rounded-xl p-2 text-[var(--ink-500)] transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5 px-6 py-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Tiêu đề đề thi</span>
+                  <input
+                    value={aiImportTitle}
+                    onChange={(event) => setAiImportTitle(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  />
+                </label>
+                <label className="space-y-2 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Môn học</span>
+                  <select
+                    value={aiImportSubjectId}
+                    onChange={(event) => setAiImportSubjectId(event.target.value ? Number(event.target.value) : "")}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport || availableComposerSubjects.length === 0}
+                  >
+                    {availableComposerSubjects.length === 0 ? (
+                      <option value="">Chưa có môn học</option>
+                    ) : null}
+                    {availableComposerSubjects.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-2 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Lớp học</span>
+                  <select
+                    value={aiImportClassName}
+                    onChange={(event) => setAiImportClassName(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  >
+                    {AI_IMPORT_CLASS_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-2 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Thời lượng (phút)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={aiImportDurationMinutes}
+                    onChange={(event) => setAiImportDurationMinutes(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2.5 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-[var(--line-soft)] bg-[var(--bg-soft)]/50 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink-800)]">File nguồn cho AI</p>
+                    <p className="mt-1 text-sm text-[var(--ink-500)]">
+                      Hỗ trợ PDF và ảnh. AI sẽ parse nội dung rồi chuyển sang form moderator để bạn duyệt lại.
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--ink-700)]">{aiImportFile ? aiImportFile.name : "Chưa chọn file"}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => aiImportInputRef.current?.click()}
+                      disabled={isSubmittingAiImport}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line-soft)] bg-white px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Upload size={14} /> Chọn file
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {aiImportError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{aiImportError}</div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeAiImportModal}
+                  disabled={isSubmittingAiImport}
+                  className="inline-flex h-11 items-center rounded-xl border border-[var(--line-soft)] bg-white px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void submitAiImport();
+                  }}
+                  disabled={isSubmittingAiImport}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600)_0%,var(--brand-700)_100%)] px-5 text-sm font-bold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSubmittingAiImport ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {isSubmittingAiImport ? "Đang xử lý AI..." : "Tạo bản nháp AI"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <section className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
           <h1 className="font-[var(--font-display)] text-4xl font-black tracking-tight text-[var(--ink-900)]">Quản lý Đề thi</h1>
@@ -1128,6 +1381,13 @@ export default function ModeratorComposerPage() {
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--line-soft)] bg-white px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)]"
           >
             <Upload size={14} /> Nhập từ JSON
+          </button>
+          <button
+            type="button"
+            onClick={openAiImportModal}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 text-sm font-semibold text-[var(--brand-700)] transition hover:border-[var(--brand-300)] hover:bg-[var(--brand-100)]"
+          >
+            <Sparkles size={14} /> Tạo đề bằng AI
           </button>
           <button
             type="button"

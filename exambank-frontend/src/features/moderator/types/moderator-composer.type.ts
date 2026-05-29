@@ -112,3 +112,74 @@ export type ComposerQuestionListParams = {
 export type ComposerTopicListParams = {
   subjectId?: number;
 };
+
+export type ComposerAiDraftQuestion = {
+  content: string;
+  latexContent?: string;
+  contentEditable?: boolean;
+  detectedNumber?: number;
+  type: "MCQ" | "FILL_IN_BLANK" | "TRUE_FALSE";
+  options: string[];
+  answer: string;
+  answerExplanation?: string;
+  imageUrl?: string | null;
+  imageUrls?: string[];
+  selectedImageIds?: string[];
+  difficulty?: number;
+  maxScore?: number;
+  orderIndex?: number;
+  pageNo?: number | null;
+  needsReview?: boolean;
+};
+
+export type ComposerAiDraft = {
+  title: string;
+  subjectId: number | null;
+  className: string;
+  durationMinutes: number;
+  questions: ComposerAiDraftQuestion[];
+  warnings?: string[];
+  contentEditable?: boolean;
+};
+
+export type ComposerAiImportAsset = {
+  id: number;
+  imageId?: string;
+  pageNo?: number | null;
+  originalPage?: number | null;
+  bboxJson?: string | null;
+  sourceType: string;
+  confidence?: number | null;
+  fileUrl?: string | null;
+  previewUrl?: string | null;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  fileSize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  extractionOrder?: number | null;
+  linkedQuestionOrder?: number | null;
+  createdAt?: string;
+};
+
+export type ComposerAiImportJob = {
+  id: number;
+  status: string;
+  originalFileName: string;
+  contentType?: string;
+  fileSize?: number;
+  title?: string;
+  subjectId?: number;
+  className?: string;
+  durationMinutes?: number;
+  extractedText?: string;
+  draftJson?: string;
+  errorMessage?: string;
+  progressPercent?: number;
+  progressMessage?: string;
+  createdExamId?: number;
+  assets?: ComposerAiImportAsset[];
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string;
+};

@@ -38,16 +38,20 @@ import {
   listComposerExamQuestions,
   listComposerSubjects,
   listComposerTopics,
+  parseModeratorAiDraft,
   removeComposerExamQuestion,
   uploadComposerQuestionImage,
   updateComposerExam,
 } from "@/features/moderator/services/moderator-composer.service";
 import type {
+  ComposerAiDraft,
+  ComposerAiDraftQuestion,
   ComposerQuestionPayload,
   ComposerQuestionRecord,
   ComposerSubjectRecord,
   ComposerTopicRecord,
 } from "@/features/moderator/types/moderator-composer.type";
+import { COMPOSER_AI_IMPORT_DRAFT_KEY, COMPOSER_FLASH_NOTICE_KEY } from "@/features/moderator/services/moderator-ai-import-tracker";
 import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 type QuestionType =
@@ -125,7 +129,6 @@ const questionTypeConfigs: QuestionTypeConfig[] = [
   },
 ];
 
-const COMPOSER_FLASH_NOTICE_KEY = "moderator-composer-flash-notice";
 const DEFAULT_EXAM_TITLE = "Kiểm tra cuối kỳ";
 const DEFAULT_SUBJECT = "Toán học";
 const DEFAULT_DURATION_MINUTES = 90;
@@ -248,6 +251,40 @@ function findSubjectByName(subjects: ComposerSubjectRecord[], subjectName: strin
   return (
     subjects.find((item) => normalizeSubjectName(item.name) === normalizedName) ?? null
   );
+}
+
+function parseStoredAiDraft(): ComposerAiDraft | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawDraft = window.sessionStorage.getItem(COMPOSER_AI_IMPORT_DRAFT_KEY);
+  if (!rawDraft) {
+    return null;
+  }
+
+  const parsedDraft = parseModeratorAiDraft(rawDraft);
+  if (!parsedDraft) {
+    window.sessionStorage.removeItem(COMPOSER_AI_IMPORT_DRAFT_KEY);
+    return null;
+  }
+
+  return parsedDraft;
+}
+
+function resolveAiDraftSubjectName(
+  draft: ComposerAiDraft,
+  subjects: ComposerSubjectRecord[],
+  fallbackSubject: string
+) {
+  if (draft.subjectId != null) {
+    const matchedSubject = subjects.find((item) => item.id === draft.subjectId);
+    if (matchedSubject?.name?.trim()) {
+      return toDisplaySubjectName(matchedSubject.name);
+    }
+  }
+
+  return fallbackSubject;
 }
 
 function extractApiErrorMessage(error: unknown, fallbackMessage: string) {
@@ -407,6 +444,74 @@ function mapBackendQuestionToDraft(question: ComposerQuestionRecord, subjectName
     tags: question.topicTag ?? "",
     options: normalizedOptions,
     correctOption: resolveMcqAnswerIndex(question.answer, normalizedOptions),
+  };
+}
+
+function resolveAiDraftQuestionType(question: ComposerAiDraftQuestion): QuestionType {
+  const normalizedType = String(question.type ?? "").trim().toUpperCase();
+  if (normalizedType === "TRUE_FALSE") {
+    return "Đúng/Sai (True/False)";
+  }
+  if (normalizedType === "FILL_IN_BLANK") {
+    return "Tự điền đáp án (Fill in blank)";
+  }
+  return "Trắc nghiệm (Multiple Choice)";
+}
+
+function resolveAiDraftMcqAnswerIndex(answer: string | null | undefined, options: string[]) {
+  const normalized = (answer ?? "").trim().toLowerCase();
+  const byLabel = ["a", "b", "c", "d"].indexOf(normalized);
+  if (byLabel >= 0) {
+    return byLabel;
+  }
+
+  const byOptionText = options.findIndex((option) => option.trim().toLowerCase() === normalized);
+  if (byOptionText >= 0) {
+    return byOptionText;
+  }
+
+  return 0;
+}
+
+function mapAiDraftQuestionToComposerDraft(
+  question: ComposerAiDraftQuestion,
+  subjectName: string,
+  index: number
+): QuestionDraft {
+  const type = resolveAiDraftQuestionType(question);
+  const baseDraft = {
+    subjectLine: subjectName,
+    content: question.content ?? "",
+    imageUrl: question.imageUrl ?? question.imageUrls?.[0] ?? null,
+    points: question.maxScore && question.maxScore > 0 ? question.maxScore : 1,
+    tags: "",
+  };
+
+  if (type === "Đúng/Sai (True/False)") {
+    return {
+      id: `AI-TF-${index + 1}`,
+      type,
+      ...baseDraft,
+      trueAnswer: resolveTrueFalseAnswer(question.answer ?? null),
+    };
+  }
+
+  if (type === "Tự điền đáp án (Fill in blank)") {
+    return {
+      id: `AI-FIB-${index + 1}`,
+      type,
+      ...baseDraft,
+      answer: question.answer ?? "",
+    };
+  }
+
+  const normalizedOptions = normalizeMcqOptions(Array.isArray(question.options) ? question.options : []);
+  return {
+    id: `AI-MCQ-${index + 1}`,
+    type,
+    ...baseDraft,
+    options: normalizedOptions,
+    correctOption: resolveAiDraftMcqAnswerIndex(question.answer ?? null, normalizedOptions),
   };
 }
 
@@ -813,6 +918,54 @@ export default function ModeratorComposerFormPage() {
       );
 
       if (!editingExamIdFromQuery) {
+        const storedAiDraft = parseStoredAiDraft();
+        if (storedAiDraft) {
+          const subjectFromDraft = resolveAiDraftSubjectName(storedAiDraft, fetchedSubjects, fallbackSubject);
+          const normalizedTitle = storedAiDraft.title?.trim() || DEFAULT_EXAM_TITLE;
+          const normalizedClassName = storedAiDraft.className?.trim() || DEFAULT_CLASS_NAME;
+          const normalizedDuration =
+            storedAiDraft.durationMinutes && storedAiDraft.durationMinutes > 0
+              ? storedAiDraft.durationMinutes
+              : DEFAULT_DURATION_MINUTES;
+          const mappedQuestions = (storedAiDraft.questions ?? []).map((item, index) =>
+            mapAiDraftQuestionToComposerDraft(item, subjectFromDraft, index)
+          );
+
+          if (typeof window !== "undefined") {
+            window.sessionStorage.removeItem(COMPOSER_AI_IMPORT_DRAFT_KEY);
+          }
+
+          setIsPublishedReadonly(false);
+          setActiveExamId(null);
+          setExamTitle(normalizedTitle);
+          setSubject(subjectFromDraft);
+          setClassName(normalizedClassName);
+          setDurationMinutes(normalizedDuration);
+          setStartAtInput("");
+          setEndAtInput("");
+          setQuestions((previousQuestions) => {
+            previousQuestions.forEach((question) => {
+              revokeObjectPreviewUrl(question.localImagePreviewUrl);
+            });
+            return mappedQuestions;
+          });
+          setFormErrors({});
+          setNewQuestionForms((previousForms) => {
+            Object.values(previousForms).forEach((form) => {
+              revokeObjectPreviewUrl(form.localImagePreviewUrl);
+            });
+            return buildQuestionForms(subjectFromDraft);
+          });
+          setSavedSnapshot(null);
+          toast.info({
+            title: "AI import",
+            message: `Đã nạp ${mappedQuestions.length} câu hỏi từ file AI import vào form moderator. Hãy rà soát lại trước khi lưu.`,
+            duration: 4200,
+            showProgress: true,
+          });
+          return;
+        }
+
         setIsPublishedReadonly(false);
         setStartAtInput("");
         setEndAtInput("");
@@ -1663,7 +1816,7 @@ export default function ModeratorComposerFormPage() {
                         value={currentForm.tags}
                         topics={filteredTopics}
                         disabled={isFormLocked}
-                        emptyLabel={activeSubjectRecord ? "Môn này chưa có tag trong danh mục." : "Hãy chọn môn học trước để hiện danh mục tag."}
+                        emptyLabel={activeSubjectRecord ? "Môn này chưa có tag trong danh mục." : "Hãy chọn môn học trước để hiển thị danh mục tag."}
                         onChange={(nextValue) => updateCreateForm(config.type, { tags: nextValue })}
                       />
                     </div>
@@ -1921,22 +2074,17 @@ export default function ModeratorComposerFormPage() {
                                   <Tag size={14} />
                                   <span>Tags theo môn học</span>
                                 </div>
-                                {parseTagNames(question.tags).length > 0 ? (
-                                  <div className="flex flex-wrap gap-2">
-                                    {parseTagNames(question.tags).map((tag) => (
-                                      <span
-                                        key={`${question.id}-${tag}`}
-                                        className="rounded-full border border-[var(--brand-200)] bg-[var(--brand-100)] px-3 py-1 text-xs font-semibold text-[var(--brand-700)]"
-                                      >
-                                        {tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="rounded-xl border border-dashed border-[var(--line-soft)] bg-[var(--bg-soft)] px-3 py-3 text-sm text-[var(--ink-500)]">
-                                    Chưa chọn tag cho câu hỏi này.
-                                  </div>
-                                )}
+                                <TopicTagSelector
+                                  value={question.tags}
+                                  topics={filteredTopics}
+                                  disabled={isFormLocked}
+                                  emptyLabel={
+                                    activeSubjectRecord
+                                      ? "Môn này chưa có tag trong danh mục."
+                                      : "Hãy chọn môn học trước để hiển thị danh mục tag."
+                                  }
+                                  onChange={(nextValue) => updateQuestion(question.id, { tags: nextValue })}
+                                />
                               </div>
                             </div>
 
