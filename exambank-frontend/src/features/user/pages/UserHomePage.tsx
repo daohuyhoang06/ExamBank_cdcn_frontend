@@ -438,11 +438,11 @@ export default function UserHomePage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate('/user/exambank')}
+                  onClick={() => navigate('/user/online-exam')}
                   className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <BookOpen className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  Bắt đầu làm bài
+                  Luyện tập
                 </button>
               </div>
             )}
@@ -622,11 +622,11 @@ export default function UserHomePage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate('/user/exambank')}
+                  onClick={() => navigate('/user/online-exam')}
                   className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/20 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <BookOpen className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  Vào ngân hàng đề
+                  Luyện tập
                 </button>
               </div>
             )}
