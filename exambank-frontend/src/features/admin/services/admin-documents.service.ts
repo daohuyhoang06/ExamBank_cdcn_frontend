@@ -59,6 +59,11 @@ export type AdminDocumentMetadataPayload = {
   moderatorNote?: string | null;
 };
 
+export type AdminDocumentPreviewBlob = {
+  blob: Blob;
+  fileType: string | null;
+};
+
 function toObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -358,6 +363,19 @@ export async function updateAdminDocumentMetadata(
 
     throw error;
   }
+}
+
+export async function getAdminDocumentPreviewBlob(documentId: number): Promise<AdminDocumentPreviewBlob> {
+  const response = await apiClient.get(`/api/v1/moderator/documents/${documentId}/preview/content`, {
+    ...buildAuthConfig(),
+    responseType: "blob",
+  });
+
+  const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
+  return {
+    blob,
+    fileType: toStringOrNull(response.headers?.["content-type"]) ?? (blob.type || null),
+  };
 }
 
 function toMinioPublicUrl(fileUrl: string | null | undefined) {
