@@ -26,26 +26,26 @@ function getWindowState(exam: ExamListItem, nowMs: number) {
   const hasValidEnd = typeof endMs === "number" && !Number.isNaN(endMs);
 
   if (normalizedStatus === "LOCKED") {
-    return { canStart: false, message: "Bai thi dang bi khoa boi quan tri vien." };
+    return { canStart: false, message: "Bài thi đang bị khóa bởi quản trị viên." };
   }
 
   if (normalizedStatus === "CLOSED") {
-    return { canStart: false, message: "Bai thi da het thoi gian mo." };
+    return { canStart: false, message: "Bài thi đã hết thời gian mở." };
   }
 
   if (normalizedStatus && normalizedStatus !== "PUBLISHED" && normalizedStatus !== "ONGOING") {
-    return { canStart: false, message: "Bai thi hien chua san sang cho thi sinh." };
+    return { canStart: false, message: "Bài thi hiện chưa sẵn sàng cho thí sinh." };
   }
 
   if (hasValidStart && nowMs < startMs) {
-    return { canStart: false, message: "Bai thi chua duoc mo." };
+    return { canStart: false, message: "Bài thi chưa được mở." };
   }
 
   if (hasValidEnd && nowMs > endMs) {
-    return { canStart: false, message: "Bai thi da het thoi gian mo." };
+    return { canStart: false, message: "Bài thi đã hết thời gian mở." };
   }
 
-  return { canStart: true, message: "Da den thoi gian cho phep lam bai." };
+  return { canStart: true, message: "Đã đến thời gian cho phép làm bài." };
 }
 
 export default function OnlineExamIntroPage() {

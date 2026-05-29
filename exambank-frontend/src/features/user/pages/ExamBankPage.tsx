@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Star, Calendar, School, ChevronDown, Check, BookMarked } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { Pagination } from '@/components/ui/Pagination/pagination';
@@ -126,6 +126,7 @@ const matchesSelectedLevel = (document: DocumentSummary, selectedLevelId: string
 
 export default function ExamBankPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [selectedLevel, setSelectedLevel] = useState<EducationLevel | null>(ALL_LEVELS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
@@ -215,7 +216,9 @@ export default function ExamBankPage() {
         setSubjects(dedupedSubjects);
         setSelectedSubject(ALL_SUBJECTS);
 
-        await loadApprovedDocuments('', ALL_SUBJECTS);
+        const initialQ = searchParams.get('q') ?? '';
+        if (initialQ) setKeyword(initialQ);
+        await loadApprovedDocuments(initialQ, ALL_SUBJECTS);
       } catch (error) {
         console.error('Fetch error:', error);
       }
