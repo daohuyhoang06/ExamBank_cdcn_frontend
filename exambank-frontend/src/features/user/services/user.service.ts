@@ -175,6 +175,9 @@ type BackendReviewRecommendation = {
   content?: string | null;
   type?: string | null;
   options?: string | null;
+  answer?: string | null;
+  correctAnswer?: string | null;
+  correct_answer?: string | null;
   imageUrl?: string | null;
   difficulty?: number | string | null;
   maxScore?: number | string | null;
@@ -221,6 +224,7 @@ type BackendExamQuestion = {
   imageUrl?: string | null;
   options?: string | null;
   answer?: string | null;
+  topicTag?: BackendTopicTag[] | null;
   score?: number | string | null;
   maxScore?: number | string | null;
   max_score?: number | string | null;
@@ -231,6 +235,10 @@ type BackendExamQuestion = {
 
 type BackendQuestionDetail = {
   id?: number;
+  options?: string | null;
+  answer?: string | null;
+  correctAnswer?: string | null;
+  correct_answer?: string | null;
   maxScore?: number | string | null;
   max_score?: number | string | null;
   score?: number | string | null;
@@ -441,6 +449,7 @@ const mapReviewRecommendation = (item: BackendReviewRecommendation): ReviewRecom
   content: item.content ?? "",
   type: item.type ?? undefined,
   options: item.options ?? undefined,
+  answer: item.answer ?? item.correctAnswer ?? item.correct_answer ?? undefined,
   imageUrl: item.imageUrl ?? undefined,
   difficulty: toFiniteNumberOrUndefined(item.difficulty),
   maxScore: toFiniteNumberOrUndefined(item.maxScore),
@@ -1120,6 +1129,9 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
   const options = parseOptions(item.options);
   const answerText = (item.answer ?? "").trim();
   const questionContent = appendQuestionImageHtml(item.content, item.imageUrl);
+  const topicTags = (item.topicTag ?? [])
+    .map((tag) => tag?.name?.trim() ?? '')
+    .filter((name) => name.length > 0);
   const scoreCandidates = [
     item.score,
     item.maxScore,
@@ -1139,6 +1151,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
       question: questionContent,
       correctAnswer: answerText.toLowerCase() === "đúng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
       score,
+      topicTags,
     };
   }
 
@@ -1150,6 +1163,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
       options,
       correctAnswer: parseMcqAnswerIndex(answerText, options),
       score,
+      topicTags,
     };
   }
 
@@ -1160,6 +1174,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
       question: questionContent,
       correctAnswer: answerText.toLowerCase() === "true",
       score,
+      topicTags,
     };
   }
 
@@ -1169,6 +1184,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
     question: questionContent,
     correctAnswer: answerText,
     score,
+    topicTags,
   };
 };
 
@@ -1300,6 +1316,20 @@ export const userService = {
     }
   },
 
+  getSubjectCatalog: async (): Promise<Array<{ id: number; name: string }>> => {
+    try {
+      const { data } = await api.get<BackendSubject[]>("/api/subjects");
+      return data
+        .map((item) => ({
+          id: item.id,
+          name: item.name.trim(),
+        }))
+        .filter((item) => item.name.length > 0);
+    } catch {
+      return [];
+    }
+  },
+
   getRankings: async (): Promise<Ranking[]> => {
     try {
       const { data } = await api.get<BackendLeaderBoardResponse | BackendLeaderBoardEntry[]>("/api/v1/leaderboard", {
@@ -1335,6 +1365,24 @@ export const userService = {
       return data.map(mapReviewRecommendation).filter((item) => item.questionId > 0 && item.content.trim().length > 0);
     } catch {
       return [];
+    }
+  },
+
+  getQuestionReviewFallback: async (
+    questionId: number,
+  ): Promise<Pick<ReviewRecommendation, "questionId" | "answer" | "options"> | null> => {
+    if (!Number.isFinite(questionId) || questionId <= 0) {
+      return null;
+    }
+    try {
+      const { data } = await api.get<BackendQuestionDetail>(`/api/questions/${questionId}`);
+      return {
+        questionId,
+        answer: data.answer ?? data.correctAnswer ?? data.correct_answer ?? undefined,
+        options: data.options ?? undefined,
+      };
+    } catch {
+      return null;
     }
   },
 

@@ -5,6 +5,7 @@ import { extractApiErrorMessage } from "@/lib/error-utils";
 import { premiumUpgradeService } from "@/features/user/services/premium-upgrade.service";
 import type { PremiumPlan, PremiumStatus, PremiumUpgradeOrder } from "@/features/user/types/premium-upgrade.type";
 import { useToast } from "@/components/ui/Toast/toast-system";
+import { getStoredAuthToken } from "@/lib/api-client";
 
 const PENDING_REVIEW_TEXT =
   "Đơn hàng của bạn đang được xử lý, hệ thống sẽ phản hồi sớm nhất (thường trong ngày).";
@@ -134,11 +135,14 @@ export default function PremiumUpgradePage() {
     setError("");
 
     try {
-      const [loadedPlans, latestOrder, status] = await Promise.all([
-        premiumUpgradeService.getPlans(),
-        premiumUpgradeService.getMyLatestOrder(),
-        premiumUpgradeService.getStatus(),
-      ]);
+      const token = getStoredAuthToken();
+      const loadedPlans = await premiumUpgradeService.getPlans();
+      const [latestOrder, status] = token
+        ? await Promise.all([
+            premiumUpgradeService.getMyLatestOrder(),
+            premiumUpgradeService.getStatus(),
+          ])
+        : [null, null];
 
       setPlans(loadedPlans);
       setOrder(latestOrder);

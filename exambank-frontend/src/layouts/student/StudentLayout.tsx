@@ -3,6 +3,9 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppShell } from "@/layouts/shared/AppShell";
 import { buildStudentSidebarItems } from "./studentSidebar.config";
 import { premiumUpgradeService } from "@/features/user/services/premium-upgrade.service";
+import { getStoredAuthToken } from "@/lib/api-client";
+import { userService } from "@/features/user/services/user.service";
+import { getStoredAuthUser, syncStoredAuthUser } from "@/features/auth/services/auth.service";
 
 export function StudentLayout() {
   const location = useLocation();
@@ -10,6 +13,12 @@ export function StudentLayout() {
 
   useEffect(() => {
     let mounted = true;
+    if (!getStoredAuthToken()) {
+      setIsPremiumUser(false);
+      return () => {
+        mounted = false;
+      };
+    }
     premiumUpgradeService
       .getStatus()
       .then((status) => {
@@ -24,6 +33,39 @@ export function StudentLayout() {
         }
         setIsPremiumUser(false);
       });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!getStoredAuthToken()) {
+      return () => {
+        mounted = false;
+      };
+    }
+    userService
+      .getMyProfile()
+      .then((profile) => {
+        if (!mounted) {
+          return;
+        }
+        const currentUser = getStoredAuthUser();
+        if (!currentUser) {
+          return;
+        }
+        syncStoredAuthUser({
+          ...currentUser,
+          fullName: profile.name || currentUser.fullName,
+          email: profile.email || currentUser.email,
+          coinBalance: profile.coinBalance,
+        });
+      })
+      .catch(() => {
+        // Ignore profile sync failure; existing auth state is still valid.
+      });
+
     return () => {
       mounted = false;
     };

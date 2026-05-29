@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  Crown,
   FileText,
   LayoutDashboard,
   LockKeyhole,

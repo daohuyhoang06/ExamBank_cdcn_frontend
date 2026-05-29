@@ -19,6 +19,7 @@ export type AuthUser = {
   role?: string;
   roles?: string[];
   avatarUrl?: string;
+  coinBalance?: number;
 };
 
 export type AuthSuccess = {

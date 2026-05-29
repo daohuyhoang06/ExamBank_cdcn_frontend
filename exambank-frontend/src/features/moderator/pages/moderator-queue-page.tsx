@@ -1,5 +1,5 @@
 ﻿
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -22,6 +22,7 @@ import {
 } from "@/features/moderator/components/moderator-queue-item-card";
 import {
   approveModeratorQueueItem,
+  getModeratorDocumentPreviewBlob,
   getModeratorDocumentPreview,
   listModeratorQueueItems,
   rejectModeratorQueueItem,
@@ -261,6 +262,7 @@ export default function ModeratorQueuePage() {
   const [previewFileType, setPreviewFileType] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const previewObjectUrlRef = useRef<string | null>(null);
 
 
   const refreshQueue = useCallback(async (refreshingState = false) => {
@@ -394,6 +396,15 @@ export default function ModeratorQueuePage() {
   }, [selected]);
 
   useEffect(() => {
+    return () => {
+      if (previewObjectUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadPreview(documentId: number, fallbackFileUrl: string | null) {
@@ -401,27 +412,54 @@ export default function ModeratorQueuePage() {
       setPreviewError("");
 
       try {
-        const preview = await getModeratorDocumentPreview(documentId);
+        const preview = await getModeratorDocumentPreviewBlob(documentId);
         if (cancelled) {
           return;
         }
 
-        // Backend now returns proper public/presigned URLs in previewUrl.
-        // Use directly if it's already an HTTP URL; fallback to storage endpoint for raw storage paths.
-        const resolvedUrl = preview.fileUrl ?? fallbackFileUrl;
-        const finalUrl = resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))
-          ? resolvedUrl
-          : toPublicStorageUrl(resolvedUrl);
-
-        setPreviewUrl(finalUrl);
+        const nextPreviewUrl = URL.createObjectURL(preview.blob);
+        setPreviewUrl((current) => {
+          if (current?.startsWith("blob:")) {
+            URL.revokeObjectURL(current);
+          }
+          previewObjectUrlRef.current = nextPreviewUrl;
+          return nextPreviewUrl;
+        });
         setPreviewFileType(preview.fileType);
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        setPreviewUrl(toPublicStorageUrl(fallbackFileUrl));
-        setPreviewFileType(null);
+        try {
+          const preview = await getModeratorDocumentPreview(documentId);
+          if (cancelled) {
+            return;
+          }
+
+          const resolvedUrl = preview.fileUrl ?? fallbackFileUrl;
+          const finalUrl = resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))
+            ? resolvedUrl
+            : toPublicStorageUrl(resolvedUrl);
+
+          setPreviewUrl((current) => {
+            if (current?.startsWith("blob:")) {
+              URL.revokeObjectURL(current);
+            }
+            previewObjectUrlRef.current = null;
+            return finalUrl;
+          });
+          setPreviewFileType(preview.fileType);
+        } catch {
+          setPreviewUrl((current) => {
+            if (current?.startsWith("blob:")) {
+              URL.revokeObjectURL(current);
+            }
+            previewObjectUrlRef.current = null;
+            return toPublicStorageUrl(fallbackFileUrl);
+          });
+          setPreviewFileType(null);
+        }
         setPreviewError(extractApiErrorMessage(error, "Không thể tải preview tài liệu."));
       } finally {
         if (!cancelled) {
@@ -431,7 +469,13 @@ export default function ModeratorQueuePage() {
     }
 
     if (!selected) {
-      setPreviewUrl(null);
+      setPreviewUrl((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+        previewObjectUrlRef.current = null;
+        return null;
+      });
       setPreviewFileType(null);
       setPreviewError("");
       setIsPreviewLoading(false);
@@ -569,7 +613,14 @@ export default function ModeratorQueuePage() {
       return;
     }
 
-    window.open(rawUrl, "_blank", "noopener,noreferrer");
+    const link = document.createElement("a");
+    link.href = rawUrl;
+    if (selected?.title?.trim()) {
+      link.download = selected.title.trim();
+    }
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   function openDocumentInNewTab() {

@@ -1,37 +1,41 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Brain,
   Sparkles,
-  Target,
   ArrowRight,
   Trophy,
   Crown,
   Check,
   Zap,
-  Flame,
-  AlertTriangle,
+  Coins,
+  UploadCloud,
+  Download,
   TrendingUp,
-  RotateCcw,
   ChevronRight,
-  Clock,
   BookOpen,
+  CalendarDays,
+  Calculator,
+  Languages,
+  Code2,
+  Atom,
+  FlaskConical,
+  Landmark,
+  Library,
+  Rocket,
+  X,
 } from "lucide-react";
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
 import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 import { premiumUpgradeService } from '@/features/user/services/premium-upgrade.service';
+import { getStoredAuthToken } from '@/lib/api-client';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 
 const stripHtml = (value: string): string =>
   value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-
-const formatPercent = (value: number): string => {
-  const normalized = value > 1 ? value : value * 100;
-  return `${Math.round(normalized)}%`;
-};
 
 const formatScoreValue = (raw: number | string): string => {
   const text = typeof raw === "number" ? String(raw) : raw;
@@ -40,114 +44,213 @@ const formatScoreValue = (raw: number | string): string => {
   return Number.isFinite(parsed) ? parsed.toLocaleString("vi-VN") : numerator;
 };
 
-/** Trả về ngày tương đối dễ đọc ("Hôm nay", "Ngày mai", "3 ngày nữa", …) */
-const formatRelativeDate = (value?: string): string => {
-  if (!value) return "Chưa xác định";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000);
-  if (diff < -1) return `${Math.abs(diff)} ngày trước`;
-  if (diff === -1) return "Hôm qua";
-  if (diff === 0) return "Hôm nay";
-  if (diff === 1) return "Ngày mai";
-  if (diff <= 7) return `${diff} ngày nữa`;
-  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "short" }).format(date);
+const normalizeSubjectKey = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const SUBJECT_NAME_OVERRIDES = new Map<string, string>([
+  ["toan", "Toán"],
+  ["toan hoc", "Toán học"],
+  ["vat ly", "Vật lý"],
+  ["vat li", "Vật lý"],
+  ["hoa hoc", "Hóa học"],
+  ["hoa", "Hóa"],
+  ["sinh hoc", "Sinh học"],
+  ["ngu van", "Ngữ văn"],
+  ["van", "Ngữ văn"],
+  ["tieng anh", "Tiếng Anh"],
+  ["anh", "Tiếng Anh"],
+  ["dia ly", "Địa lý"],
+  ["lich su", "Lịch sử"],
+  ["tin hoc", "Tin học"],
+  ["lap trinh", "Lập trình"],
+  ["tieng nhat", "Tiếng Nhật"],
+  ["nhat", "Tiếng Nhật"],
+  ["giao duc cong dan", "Giáo dục công dân"],
+  ["cong nghe", "Công nghệ"],
+  ["quoc phong an ninh", "Quốc phòng an ninh"],
+  ["khoa hoc tu nhien", "Khoa học tự nhiên"],
+  ["khoa hoc xa hoi", "Khoa học xã hội"],
+]);
+
+const formatSubjectNameWithAccents = (name: string): string => {
+  const normalized = normalizeSubjectKey(name);
+  const mapped = SUBJECT_NAME_OVERRIDES.get(normalized);
+  if (mapped) return mapped;
+
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+
+  // Title-case fallback for unknown subjects.
+  return trimmed
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-/**
- * Chuyển ease factor (1.3 – 3.0) thành % sức khỏe ghi nhớ.
- * 1.3 = hay quên nhất → 0%, 3.0+ = ghi nhớ tốt → 100%.
- */
-const getMemoryHealthPercent = (avgEase: number): number => {
-  if (avgEase <= 0) return 0;
-  return Math.min(100, Math.max(0, Math.round(((avgEase - 1.3) / (3.0 - 1.3)) * 100)));
+type SubjectCatalogItem = {
+  id: number;
+  name: string;
 };
 
-/* ─── config objects ──────────────────────────────────────────── */
-
-const MEMORY_CONFIG: Record<
-  string,
-  { label: string; sublabel: string; bg: string; text: string; border: string; icon: React.ReactNode }
-> = {
-  FORGOTTEN: {
-    label: "Đã quên",
-    sublabel: "Cần ôn ngay",
-    bg: "bg-rose-500/15",
-    text: "text-rose-300",
-    border: "border-rose-500/30",
-    icon: <RotateCcw className="w-3 h-3" strokeWidth={2.5} />,
-  },
-  HARD: {
-    label: "Còn khó",
-    sublabel: "Cần luyện thêm",
-    bg: "bg-amber-500/15",
-    text: "text-amber-300",
-    border: "border-amber-500/30",
-    icon: <AlertTriangle className="w-3 h-3" strokeWidth={2.5} />,
-  },
-  REMEMBERED: {
-    label: "Đã nhớ",
-    sublabel: "Đúng lịch ôn",
-    bg: "bg-emerald-500/15",
-    text: "text-emerald-300",
-    border: "border-emerald-500/30",
-    icon: <Check className="w-3 h-3" strokeWidth={2.5} />,
-  },
-  EASY: {
-    label: "Dễ nhớ",
-    sublabel: "Ôn định kỳ",
-    bg: "bg-sky-500/15",
-    text: "text-sky-300",
-    border: "border-sky-500/30",
-    icon: <Sparkles className="w-3 h-3" strokeWidth={2.5} />,
-  },
+type SmartReviewSubjectItem = {
+  key: string;
+  name: string;
+  count: number;
+  subjectId?: number;
 };
 
-const SEVERITY_CONFIG = {
-  critical: {
-    label: "Cần ôn gấp",
-    bg: "bg-rose-50",
-    text: "text-rose-700",
-    border: "border-rose-200",
-    dot: "bg-rose-500",
-    bar: "bg-rose-500",
-    score: "text-rose-600",
-    icon: <Flame className="w-3 h-3" strokeWidth={2.5} />,
+type SmartReviewTopicItem = {
+  key: string;
+  topicName: string;
+  subjectName: string;
+  subjectId?: number;
+  questionCount: number;
+  dueCount: number;
+  priorityScore: number;
+  difficulty: "easy" | "medium" | "hard";
+};
+
+const SUBJECT_VISUALS = [
+  {
+    matchers: ["toán", "math"],
+    icon: Calculator,
+    iconClass: "text-blue-600",
+    iconBgClass: "bg-blue-100",
+    badgeClass: "bg-blue-100 text-blue-700 border-blue-200",
   },
-  warning: {
-    label: "Cần cải thiện",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    border: "border-amber-200",
-    dot: "bg-amber-500",
-    bar: "bg-amber-500",
-    score: "text-amber-600",
-    icon: <TrendingUp className="w-3 h-3" strokeWidth={2.5} />,
+  {
+    matchers: ["nhật", "japanese"],
+    icon: Languages,
+    iconClass: "text-emerald-600",
+    iconBgClass: "bg-emerald-100",
+    badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
-  good: {
-    label: "Đạt yêu cầu",
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
-    dot: "bg-emerald-500",
-    bar: "bg-emerald-500",
-    score: "text-emerald-600",
-    icon: <Check className="w-3 h-3" strokeWidth={2.5} />,
+  {
+    matchers: ["lập trình", "tin học", "thuật toán", "code", "program"],
+    icon: Code2,
+    iconClass: "text-violet-600",
+    iconBgClass: "bg-violet-100",
+    badgeClass: "bg-violet-100 text-violet-700 border-violet-200",
   },
-} as const;
+  {
+    matchers: ["vật lý", "physics"],
+    icon: Atom,
+    iconClass: "text-amber-600",
+    iconBgClass: "bg-amber-100",
+    badgeClass: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  {
+    matchers: ["hóa", "chem"],
+    icon: FlaskConical,
+    iconClass: "text-rose-600",
+    iconBgClass: "bg-rose-100",
+    badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
+  },
+  {
+    matchers: ["lịch sử", "history"],
+    icon: Landmark,
+    iconClass: "text-slate-600",
+    iconBgClass: "bg-slate-100",
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+  },
+];
+
+const getSubjectVisual = (subjectName: string) => {
+  const normalized = subjectName.trim().toLowerCase();
+  return (
+    SUBJECT_VISUALS.find((item) => item.matchers.some((matcher) => normalized.includes(matcher))) ?? {
+      icon: Library,
+      iconClass: "text-cyan-600",
+      iconBgClass: "bg-cyan-100",
+      badgeClass: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    }
+  );
+};
+
+const getRecommendationPrimaryTopic = (item: ReviewRecommendation): string => {
+  const topicName = item.topicTags.find((tag) => tag.trim().length > 0)?.trim();
+  if (topicName) {
+    return topicName;
+  }
+  const fallback = stripHtml(item.content);
+  return fallback.length > 0 ? fallback.slice(0, 60) : `Chủ đề #${item.questionId}`;
+};
+
+const getRecommendationDifficulty = (
+  item: ReviewRecommendation,
+  weakTopicByName: Map<string, WeakTopicInsight>,
+): "easy" | "medium" | "hard" => {
+  const primaryTopic = getRecommendationPrimaryTopic(item);
+  const weakTopic = weakTopicByName.get(primaryTopic.toLowerCase());
+
+  if (item.memoryLevel === "FORGOTTEN" || item.source === "WEAK_TOPIC" || (weakTopic?.accuracyRate ?? 1) < 0.5) {
+    return "hard";
+  }
+
+  if (item.memoryLevel === "HARD" || (weakTopic?.accuracyRate ?? 1) < 0.7) {
+    return "medium";
+  }
+
+  return "easy";
+};
+
+
+
+const COIN_RULES = [
+  {
+    icon: UploadCloud,
+    title: "Upload tài liệu được duyệt",
+    value: "+10 coin",
+    iconColor: "text-emerald-600 bg-emerald-50",
+    valueColor: "text-emerald-600",
+  },
+  {
+    icon: Download,
+    title: "Tải tài liệu đã duyệt",
+    value: "-5 coin",
+    iconColor: "text-rose-600 bg-rose-50",
+    valueColor: "text-rose-600",
+  },
+];
 
 /* ─── component ───────────────────────────────────────────────── */
 
 export default function UserHomePage() {
   const navigate = useNavigate();
+  const currentUser = useMemo(() => getStoredAuthUser(), []);
+  const [coinBalance, setCoinBalance] = useState(() =>
+    typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0,
+  );
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [weakTopics, setWeakTopics] = useState<WeakTopicInsight[]>([]);
   const [reviewRecommendations, setReviewRecommendations] = useState<ReviewRecommendation[]>([]);
+  const [subjectCatalog, setSubjectCatalog] = useState<SubjectCatalogItem[]>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
+
+  const [showRulesPopover, setShowRulesPopover] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const displayName = useMemo(() => {
+    return currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? "Học viên";
+  }, [currentUser]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setShowRulesPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const reviewStats = useMemo(() => {
     const dueCount = reviewRecommendations.filter((item) => item.due).length;
@@ -155,24 +258,120 @@ export default function UserHomePage() {
       .map((item) => item.nextReviewDate)
       .filter((d): d is string => Boolean(d))
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
-    const avgEase = reviewRecommendations.length
-      ? reviewRecommendations.reduce((sum, item) => sum + (item.easeFactor ?? 0), 0) /
-        reviewRecommendations.length
-      : 0;
-    return { dueCount, nextReviewDate, avgEase };
+    return { dueCount, nextReviewDate };
   }, [reviewRecommendations]);
 
-  const memoryHealthPercent = useMemo(
-    () => getMemoryHealthPercent(reviewStats.avgEase),
-    [reviewStats.avgEase],
-  );
+  const subjectNameById = useMemo(() => {
+    return new Map(subjectCatalog.map((item) => [item.id, item.name]));
+  }, [subjectCatalog]);
 
-  const criticalTopicCount = useMemo(
-    () => weakTopics.filter((t) => t.accuracyRate < 0.7).length,
-    [weakTopics],
-  );
+  const weakTopicByName = useMemo(() => {
+    return new Map(
+      weakTopics.map((item) => [item.topicTag.trim().toLowerCase(), item] as const),
+    );
+  }, [weakTopics]);
 
-  const currentUser = useMemo(() => getStoredAuthUser(), []);
+  const dueRecommendations = useMemo(() => {
+    const dueItems = reviewRecommendations.filter((item) => item.due);
+    return dueItems.length > 0 ? dueItems : reviewRecommendations;
+  }, [reviewRecommendations]);
+
+  const smartReviewSubjects = useMemo<SmartReviewSubjectItem[]>(() => {
+    const counts = new Map<string, SmartReviewSubjectItem>();
+
+    for (const item of dueRecommendations) {
+      const subjectName =
+        (item.subjectId ? subjectNameById.get(item.subjectId) : undefined) ??
+        "Chưa phân loại";
+      const key = `${item.subjectId ?? "unknown"}:${subjectName}`;
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(key, {
+          key,
+          name: subjectName,
+          count: 1,
+          subjectId: item.subjectId,
+        });
+      }
+    }
+
+    return Array.from(counts.values()).sort((left, right) => right.count - left.count);
+  }, [dueRecommendations, subjectNameById]);
+
+  const smartReviewTopics = useMemo<SmartReviewTopicItem[]>(() => {
+    const topics = new Map<string, SmartReviewTopicItem>();
+
+    for (const item of dueRecommendations) {
+      const topicName = getRecommendationPrimaryTopic(item);
+      const subjectName =
+        (item.subjectId ? subjectNameById.get(item.subjectId) : undefined) ??
+        "Chưa phân loại";
+      const difficulty = getRecommendationDifficulty(item, weakTopicByName);
+      const difficultyScore = difficulty === "hard" ? 3 : difficulty === "medium" ? 2 : 1;
+      const dueScore = item.due ? 2 : 0;
+      const key = `${item.subjectId ?? "unknown"}:${topicName.toLowerCase()}`;
+      const existing = topics.get(key);
+
+      if (existing) {
+        existing.questionCount += 1;
+        existing.dueCount += item.due ? 1 : 0;
+        existing.priorityScore += difficultyScore + dueScore;
+        if (difficultyScore > (existing.difficulty === "hard" ? 3 : existing.difficulty === "medium" ? 2 : 1)) {
+          existing.difficulty = difficulty;
+        }
+      } else {
+        topics.set(key, {
+          key,
+          topicName,
+          subjectName,
+          subjectId: item.subjectId,
+          questionCount: 1,
+          dueCount: item.due ? 1 : 0,
+          priorityScore: difficultyScore + dueScore,
+          difficulty,
+        });
+      }
+    }
+
+    return Array.from(topics.values())
+      .sort((left, right) => {
+        if (right.priorityScore !== left.priorityScore) {
+          return right.priorityScore - left.priorityScore;
+        }
+        if (right.questionCount !== left.questionCount) {
+          return right.questionCount - left.questionCount;
+        }
+        return left.topicName.localeCompare(right.topicName, "vi");
+      })
+      .slice(0, 6);
+  }, [dueRecommendations, subjectNameById, weakTopicByName]);
+
+  const smartReviewStats = useMemo(() => {
+    const itemsDueToday = dueRecommendations.length;
+    const subjectCount = smartReviewSubjects.length;
+    const totalPlannedToday = reviewRecommendations.length > 0 ? reviewRecommendations.length : itemsDueToday;
+    const completedToday =
+      totalPlannedToday === 0 ? 0 : reviewStats.dueCount > 0
+        ? Math.max(0, totalPlannedToday - reviewStats.dueCount)
+        : totalPlannedToday;
+    const progressPercent =
+      totalPlannedToday > 0 ? Math.min(100, Math.round((completedToday / totalPlannedToday) * 100)) : 0;
+    const estimatedMinutes =
+      itemsDueToday === 0 ? 0 : Math.max(itemsDueToday * 2, smartReviewTopics.length * 4);
+
+    return {
+      itemsDueToday,
+      subjectCount,
+      completedToday,
+      totalPlannedToday,
+      progressPercent,
+      estimatedMinutes,
+    };
+  }, [dueRecommendations.length, reviewRecommendations.length, reviewStats.dueCount, smartReviewSubjects.length, smartReviewTopics.length]);
+
+
 
   const currentUserRanking = useMemo(() => {
     if (!currentUser) return null;
@@ -189,7 +388,14 @@ export default function UserHomePage() {
 
   useEffect(() => {
     let isActive = true;
+    const token = getStoredAuthToken();
     const loadPremiumStatus = async () => {
+      if (!token) {
+        if (isActive) {
+          setIsPremiumUser(false);
+        }
+        return;
+      }
       try {
         const status = await premiumUpgradeService.getStatus();
         if (isActive) setIsPremiumUser(Boolean(status.premium && status.confirmed));
@@ -199,16 +405,46 @@ export default function UserHomePage() {
     };
     const fetchData = async () => {
       setInsightsLoading(true);
+      if (!token) {
+        if (isActive) {
+          setWeakTopics([]);
+          setReviewRecommendations([]);
+          setSubjectCatalog([]);
+          setCoinBalance(typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0);
+          setInsightsLoading(false);
+        }
+        try {
+          const ranks = await userService.getRankings();
+          if (isActive) {
+            setRankings(ranks);
+          }
+        } catch (error) {
+          if (isActive) {
+            console.error('Error loading rankings:', error);
+          }
+        }
+        return;
+      }
       try {
-        const [ranks, topics, recommendations] = await Promise.all([
+        const [ranks, topics, recommendations, profile, subjects] = await Promise.all([
           userService.getRankings(),
-          userService.getWeakTopics(5),
+          userService.getWeakTopics(100),
           userService.getReviewRecommendations(8),
+          userService.getMyProfile().catch(() => null),
+          userService.getSubjectCatalog().catch(() => []),
         ]);
         if (!isActive) return;
         setRankings(ranks);
         setWeakTopics(topics);
         setReviewRecommendations(recommendations);
+        setSubjectCatalog(subjects);
+        setCoinBalance(
+          typeof profile?.coinBalance === "number"
+            ? profile.coinBalance
+            : typeof currentUser?.coinBalance === "number"
+              ? currentUser.coinBalance
+              : 0,
+        );
       } catch (error) {
         if (isActive) console.error('Error loading data:', error);
       } finally {
@@ -216,12 +452,88 @@ export default function UserHomePage() {
       }
     };
     void loadPremiumStatus();
-    void fetchData();
-    return () => { isActive = false; };
-  }, []);
+    fetchData();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUser]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      {/* ── HEADER ROW: Greeting & Coins ── */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            Xin chào, {displayName} <span className="inline-block transition-transform hover:rotate-12 duration-300 cursor-default select-none">👋</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Hôm nay bạn muốn học gì?</p>
+        </div>
+
+        <div className="flex items-center gap-2.5 self-start md:self-auto relative" ref={popoverRef}>
+          {/* Coins Pill */}
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/30 px-3.5 py-1.5 shadow-sm transition-all hover:bg-amber-50/50 hover:scale-[1.02]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white shadow-[0_1.5px_3px_rgba(217,119,6,0.3)]">
+              <Coins className="h-3 w-3" strokeWidth={2.8} />
+            </span>
+            <span className="text-sm font-extrabold text-slate-800 tabular-nums">
+              {coinBalance.toLocaleString("vi-VN")}
+            </span>
+          </div>
+
+          {/* Help Button */}
+          <button
+            type="button"
+            onClick={() => setShowRulesPopover(!showRulesPopover)}
+            className={`flex h-7.5 w-7.5 items-center justify-center rounded-full transition-all cursor-pointer ${
+              showRulesPopover
+                ? "bg-slate-800 text-white shadow-md shadow-slate-800/10"
+                : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+            }`}
+            title="Quy tắc nhận coin"
+          >
+            <span className="font-semibold text-sm">?</span>
+          </button>
+
+          {/* Popover */}
+          {showRulesPopover && (
+            <div className="absolute right-0 top-full mt-2.5 z-50 w-80 rounded-[20px] border border-slate-100 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+              {/* Popover Arrow */}
+              <div className="absolute -top-1.5 right-9 h-3 w-3 rotate-45 border-l border-t border-slate-100 bg-white" />
+
+              {/* Header */}
+              <div className="relative z-10 flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-slate-900 text-sm">Quy tắc cộng trừ coin</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowRulesPopover(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md hover:bg-slate-50 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="relative z-10 mt-4 space-y-3.5">
+                {COIN_RULES.map((rule, idx) => {
+                  const RuleIcon = rule.icon;
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${rule.iconColor}`}>
+                          <RuleIcon className="h-4 w-4" strokeWidth={2.2} />
+                        </span>
+                        <span className="text-[12.5px] font-medium text-slate-700 truncate">{rule.title}</span>
+                      </div>
+                      <span className={`text-[12.5px] font-extrabold shrink-0 ${rule.valueColor}`}>{rule.value}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ── SECTION 1: Hero & Ranking ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -392,332 +704,217 @@ export default function UserHomePage() {
         </section>
       </div>
 
-      {/* ── SECTION 2: Weakness & SM-2 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* ── SECTION 2: Dashboard Grid (Full Width) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-        {/* ── Điểm yếu ── */}
-        <section className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.06)] overflow-hidden flex flex-col">
-
-          <header className="px-5 pt-4 pb-3.5 border-b border-slate-100">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
-                  <Target className="w-4 h-4" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-slate-900 text-sm leading-tight">Chủ đề cần ôn luyện</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">Phân tích từ lịch sử làm bài</p>
-                </div>
-              </div>
-              {!insightsLoading && criticalTopicCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">
-                  <Flame className="w-2.5 h-2.5" strokeWidth={2.5} />
-                  {criticalTopicCount} cần ôn
-                </span>
-              )}
-            </div>
-          </header>
-
-          <div className="px-5 flex-1">
-            {insightsLoading && (
-              <div className="space-y-2.5 py-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={`weak-sk-${i}`} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
-                ))}
-              </div>
-            )}
-
-            {!insightsLoading && weakTopics.length === 0 && (
-              <div className="py-10 text-center flex flex-col items-center">
-                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
-                  <Target className="w-5 h-5 text-slate-400" strokeWidth={1.5} />
-                </div>
-                <p className="text-sm font-medium text-slate-700 mb-1">Chưa có dữ liệu điểm yếu</p>
-                <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">
-                  Hoàn thành vài bài thi để xem chủ đề cần cải thiện.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/user/online-exam')}
-                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <BookOpen className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  Luyện tập
-                </button>
-              </div>
-            )}
-
-            {!insightsLoading && weakTopics.length > 0 && (
-              <ul className="divide-y divide-slate-50">
-                {weakTopics.slice(0, 5).map((topic, index) => {
-                  const accuracy = topic.accuracyRate;
-                  const severityKey =
-                    accuracy < 0.5 ? "critical" : accuracy < 0.7 ? "warning" : "good";
-                  const cfg = SEVERITY_CONFIG[severityKey];
-
-                  return (
-                    <li key={`${topic.topicTag}-${index}`} className="flex items-center gap-3 py-2.5">
-
-                      {/* Rank */}
-                      <span className="text-[11px] font-mono font-bold text-slate-300 w-4 shrink-0 tabular-nums select-none">
-                        {index + 1}
-                      </span>
-
-                      {/* Name + progress */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <p className="font-medium text-slate-800 text-[13px] truncate">{topic.topicTag}</p>
-                          <span className={`text-xs font-bold tabular-nums shrink-0 ${cfg.score}`}>
-                            {formatPercent(accuracy)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${cfg.bar} rounded-full transition-all duration-500`}
-                              style={{ width: formatPercent(accuracy) }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap shrink-0">
-                            {topic.correctCount}/{topic.totalAttempts}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/user/review?topic=${encodeURIComponent(topic.topicTag)}&accuracy=${topic.accuracyRate}&total=${topic.totalAttempts}`,
-                          )
-                        }
-                        className={`shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border} hover:opacity-80`}
-                      >
-                        Luyện
-                        <ArrowRight className="w-3 h-3" strokeWidth={2.5} />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {!insightsLoading && weakTopics.length > 0 && (
-            <footer className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-400 truncate">
-                {weakTopics.reduce((s, t) => s + t.totalAttempts, 0)} lượt làm bài đã phân tích
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const t = weakTopics[0];
-                  if (t) navigate(`/user/review?topic=${encodeURIComponent(t.topicTag)}&accuracy=${t.accuracyRate}&total=${t.totalAttempts}`);
-                  else navigate('/user/exambank');
-                }}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors whitespace-nowrap shrink-0"
-              >
-                Xem tất cả
-                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </button>
-            </footer>
-          )}
-        </section>
-
-        {/* ── SM-2 Ôn tập thông minh ── */}
-        <section className="lg:col-span-7 bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden relative shadow-[0_1px_3px_rgba(15,23,42,0.06)] flex flex-col">
-          <div
-            className="absolute inset-0 opacity-[0.04] pointer-events-none"
-            style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "20px 20px" }}
-          />
-
-          {/* Header */}
-          <header className="relative flex items-center justify-between gap-3 px-5 pt-4 pb-3.5 border-b border-white/[0.08]">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
-                <Brain className="w-4 h-4" strokeWidth={2.2} />
+        {/* ── Right Column: Ôn tập thông minh (Full Width) ── */}
+        <section className="lg:col-span-12 relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <header className="relative border-b border-slate-100 px-6 py-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 border border-violet-100/50">
+                <Brain className="h-5 w-5" strokeWidth={2} />
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold text-white text-sm leading-tight">Ôn tập thông minh</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                  Câu hỏi được chọn theo điểm yếu và mức ghi nhớ của bạn
+                <h3 className="text-base font-bold tracking-tight text-slate-900">Ôn tập thông minh</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Lộ trình cá nhân hóa theo độ quên – Học đúng cái bạn cần vào đúng thời điểm
                 </p>
               </div>
             </div>
-
-            {reviewStats.dueCount > 0 ? (
-              <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-400/25 px-2.5 py-1 rounded-full text-[11px] font-semibold text-emerald-300 whitespace-nowrap shrink-0">
-                <span className="relative flex w-1.5 h-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-                </span>
-                {reviewStats.dueCount} đến hạn
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full text-[11px] font-medium text-slate-400 whitespace-nowrap shrink-0">
-                <Check className="w-3 h-3" strokeWidth={2.5} />
-                Đã ôn hôm nay
-              </span>
-            )}
           </header>
 
-          {/* Stats row */}
-          <div className="relative grid grid-cols-3 divide-x divide-white/[0.07] border-b border-white/[0.07]">
-            <div className="px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-slate-600 font-medium flex items-center gap-1">
-                <Clock className="w-3 h-3" strokeWidth={2} />
-                Ôn tiếp
-              </p>
-              <p className="text-sm font-semibold text-white mt-1 truncate">
-                {formatRelativeDate(reviewStats.nextReviewDate)}
-              </p>
-            </div>
-
-            <div className="px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">Sức khỏe nhớ</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      memoryHealthPercent >= 60 ? "bg-emerald-400"
-                        : memoryHealthPercent >= 30 ? "bg-amber-400"
-                        : "bg-rose-400"
-                    }`}
-                    style={{ width: reviewStats.avgEase > 0 ? `${memoryHealthPercent}%` : "0%" }}
-                  />
-                </div>
-                <span className="text-sm font-bold text-white tabular-nums shrink-0">
-                  {reviewStats.avgEase > 0 ? `${memoryHealthPercent}%` : "—"}
-                </span>
-              </div>
-            </div>
-
-            <div className="px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">Hôm nay</p>
-              <p className="text-sm font-semibold text-white mt-1 tabular-nums">
-                {reviewRecommendations.length} câu
-              </p>
-            </div>
-          </div>
-
-          {/* Danh sách câu hỏi */}
-          <div className="relative flex-1 px-2 py-1.5">
+          <div className="relative px-6 py-5">
             {insightsLoading && (
-              <div className="space-y-1.5 p-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`review-sk-${i}`} className="h-14 rounded-xl bg-white/[0.04] animate-pulse" />
-                ))}
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={`sm2-stat-${index}`} className="h-24 rounded-[18px] bg-slate-100 animate-pulse" />
+                  ))}
+                </div>
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                  <div className="h-72 rounded-[22px] bg-slate-100 animate-pulse" />
+                  <div className="h-72 rounded-[22px] bg-slate-100 animate-pulse" />
+                </div>
               </div>
             )}
 
             {!insightsLoading && reviewRecommendations.length === 0 && (
-              <div className="py-10 text-center flex flex-col items-center">
-                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-3">
-                  <Brain className="w-5 h-5 text-slate-600" strokeWidth={1.5} />
+              <div className="flex flex-col items-center rounded-[22px] border border-dashed border-blue-200 bg-white/80 px-6 py-14 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[18px] bg-blue-50 text-blue-600">
+                  <Brain className="h-6 w-6" strokeWidth={1.8} />
                 </div>
-                <p className="text-sm font-medium text-slate-300 mb-1">Chưa có lịch ôn tập</p>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-[220px]">
-                  Làm thêm bài để hệ thống xây dựng lịch ôn cá nhân hóa cho bạn.
+                <p className="text-base font-semibold text-slate-800">Chưa có lịch ôn tập thông minh</p>
+                <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                  Làm thêm bài và chấm điểm vài lần để hệ thống xây dựng lịch ôn cá nhân hóa theo thuật toán SM-2.
                 </p>
                 <button
                   type="button"
                   onClick={() => navigate('/user/online-exam')}
-                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/20 px-3 py-1.5 rounded-lg transition-colors"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition-colors hover:bg-blue-700 cursor-pointer"
                 >
-                  <BookOpen className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  Luyện tập
+                  <BookOpen className="h-4 w-4" strokeWidth={2.3} />
+                  Làm bài để tạo lịch ôn
                 </button>
               </div>
             )}
 
             {!insightsLoading && reviewRecommendations.length > 0 && (
-              <ul>
-                {reviewRecommendations.slice(0, 4).map((item, index) => {
-                  const content = stripHtml(item.content);
-                  const snippet = content.length > 80 ? `${content.slice(0, 80)}…` : content;
-                  const mem = item.memoryLevel ? MEMORY_CONFIG[item.memoryLevel] : null;
-                  const isFromWeakTopic = item.source === 'WEAK_TOPIC';
-                  const relDate = formatRelativeDate(item.nextReviewDate);
-                  const isDueToday = relDate === 'Hôm nay';
-
-                  return (
-                    <li
-                      key={`${item.questionId}-${index}`}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.05] transition-colors cursor-pointer"
-                      onClick={() => navigate('/user/review')}
-                    >
-                      {/* Memory badge */}
-                      {mem ? (
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-1 rounded-lg border shrink-0 ${mem.bg} ${mem.text} ${mem.border}`}
-                        >
-                          {mem.icon}
-                          <span className="hidden sm:inline">{mem.label}</span>
-                        </span>
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
-                      )}
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] text-slate-200 leading-snug truncate">
-                          {snippet || "Câu hỏi trong lịch ôn tập của bạn."}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-medium ${
-                              isFromWeakTopic ? "text-rose-400" : "text-blue-400"
-                            }`}
-                          >
-                            {isFromWeakTopic ? (
-                              <><Target className="w-2.5 h-2.5" strokeWidth={2.5} /> Điểm yếu</>
-                            ) : (
-                              <><Clock className="w-2.5 h-2.5" strokeWidth={2.5} /> Đến hạn</>
-                            )}
-                          </span>
-                          {Array.isArray(item.topicTags) && item.topicTags[0] && (
-                            <span className="text-[10px] text-slate-600 truncate max-w-[80px]">
-                              {typeof item.topicTags[0] === 'string'
-                                ? item.topicTags[0]
-                                : (item.topicTags[0] as { name?: string }).name ?? ''}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Date */}
-                      <span
-                        className={`text-[11px] font-semibold shrink-0 tabular-nums whitespace-nowrap ${
-                          isDueToday ? "text-emerald-400" : "text-slate-600"
-                        }`}
-                      >
-                        {relDate}
+              <>
+                {/* Grid of 3 Stat Cards */}
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                  {/* Stat Card 1 */}
+                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
+                    <div className="flex items-center gap-3">
+                      <CalendarDays className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-2xl font-extrabold tracking-tight text-blue-700 tabular-nums">
+                        {smartReviewStats.itemsDueToday.toLocaleString('vi-VN')}
                       </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                    </div>
+                    <div className="mt-1">
+                      <p className="text-[10px] font-normal text-slate-400 leading-tight">Mục cần ôn hôm nay</p>
+                    </div>
+                  </div>
+
+                  {/* Stat Card 2 */}
+                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
+                    <div className="flex items-center gap-3">
+                      <Library className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums">
+                        {smartReviewStats.subjectCount.toLocaleString('vi-VN')}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <p className="text-[10px] font-normal text-slate-400 leading-tight">Môn học</p>
+                    </div>
+                  </div>
+
+                  {/* Stat Card 3 */}
+                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
+                    <div className="flex items-center gap-3">
+                      <TrendingUp className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-2xl font-extrabold tracking-tight text-blue-700 tabular-nums">
+                        {smartReviewStats.completedToday}/{smartReviewStats.totalPlannedToday}
+                      </span>
+                    </div>
+                    <div className="mt-1 w-full">
+                      <p className="text-[10px] font-normal text-slate-400 leading-tight mb-1.5">Đã hoàn thành</p>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                          style={{ width: `${smartReviewStats.progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2-Column Content Grid */}
+                <div className="mt-6 grid gap-5 md:grid-cols-12">
+                  {/* Left Column: Phân bổ theo môn */}
+                  <div className="md:col-span-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="mb-4">
+                      <h4 className="text-sm font-bold text-slate-900">Phân bổ theo môn</h4>
+                    </div>
+
+                    <div className="space-y-3">
+                      {smartReviewSubjects.map((subject) => {
+                        const visual = getSubjectVisual(subject.name);
+                        const SubjectIcon = visual.icon;
+
+                        return (
+                          <div
+                            key={subject.key}
+                            className="flex items-center justify-between gap-3 px-0.5 py-0.5"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${visual.iconBgClass} ${visual.iconClass}`}>
+                                <SubjectIcon className="h-4 w-4" strokeWidth={2} />
+                              </div>
+                              <span className="truncate text-xs font-semibold text-slate-800">
+                                {formatSubjectNameWithAccents(subject.name)}
+                              </span>
+                            </div>
+                            <span className={`inline-flex shrink-0 items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-bold w-6 h-6 ${visual.badgeClass}`}>
+                              {subject.count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Đề xuất ưu tiên hôm nay */}
+                  <div className="md:col-span-7 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="mb-4">
+                      <h4 className="text-sm font-bold text-slate-900">Đề xuất ưu tiên hôm nay</h4>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {smartReviewTopics.map((topic, index) => {
+                        const subjectVisual = getSubjectVisual(topic.subjectName);
+
+                        return (
+                          <button
+                            key={topic.key}
+                            type="button"
+                            onClick={() => navigate(`/user/review?topic=${encodeURIComponent(topic.topicName)}`)}
+                            className="w-full flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/20 px-3 py-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer"
+                          >
+                            {/* Index circle */}
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-blue-50/50 text-xs font-bold text-blue-600">
+                              {index + 1}
+                            </div>
+
+                            {/* Title */}
+                            <div className="min-w-0 flex-1">
+                              <span className="truncate text-xs font-semibold text-slate-800 block">
+                                {index + 1}. {topic.topicName}
+                              </span>
+                            </div>
+
+                            {/* Badges on the right */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="w-20 shrink-0">
+                                <span className={`inline-flex w-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${subjectVisual.badgeClass}`}>
+                                  {formatSubjectNameWithAccents(topic.subjectName)}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Centered blue link */}
+                    <div className="mt-4 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/user/review')}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline transition-all cursor-pointer"
+                      >
+                        Xem tất cả {smartReviewStats.totalPlannedToday} mục
+                        <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-6 flex items-center justify-center border-t border-slate-100 pt-5">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/user/review')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
+                  >
+                    <Rocket className="h-4 w-4" strokeWidth={2} />
+                    Bắt đầu ôn tập
+                  </button>
+                </div>
+              </>
             )}
           </div>
-
-          {/* Footer */}
-          <footer className="relative px-5 py-3.5 border-t border-white/[0.07] flex items-center justify-between gap-4">
-            <p className="text-[11px] text-slate-600 truncate">
-              Lịch ôn tự điều chỉnh theo kết quả của bạn
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate(reviewStats.dueCount > 0 ? '/user/review' : '/user/exambank')}
-              className="inline-flex items-center gap-1.5 bg-white text-slate-900 px-4 py-2 rounded-xl font-semibold text-xs hover:bg-slate-100 transition-colors whitespace-nowrap shrink-0"
-            >
-              {reviewStats.dueCount > 0
-                ? `Ôn ${reviewStats.dueCount} câu`
-                : "Ngân hàng đề"}
-              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-            </button>
-          </footer>
         </section>
+
       </div>
 
     </div>

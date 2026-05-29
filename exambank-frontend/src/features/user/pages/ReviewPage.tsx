@@ -2,6 +2,7 @@
  * ReviewPage — hai chế độ:
  *  1. /user/review            → Ôn tập thông minh (SM-2, DUE_REVIEW + WEAK_TOPIC)
  *  2. /user/review?topic=X    → Luyện tập chủ đề X (lọc câu hỏi theo topicTag)
+ *  3. /user/review?questionId=123 → Ôn đúng 1 câu hỏi được chọn từ trang chủ
  *     &accuracy=0.45          → tỉ lệ đúng hiện tại (0-1)
  *     &total=20               → tổng số lần thử
  */
@@ -122,6 +123,165 @@ const parseOptions = (raw?: string): string[] => {
   return [];
 };
 
+const normalizeText = (value?: string): string =>
+  (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const stripAnswerPrefix = (value: string): string =>
+  value
+    .trim()
+    .replace(/^(đáp\s*án|dap\s*an|answer|correct\s*answer)\s*[:\-]?\s*/i, '')
+    .trim();
+
+const parseAnswerTokens = (raw?: string): string[] => {
+  if (!raw) return [];
+  const cleaned = raw.trim();
+  if (!cleaned) return [];
+
+  const tokensFromString = (source: string): string[] => {
+    const parts = source
+      .split(/[\n,;|]/)
+      .map((item) => stripAnswerPrefix(item))
+      .filter(Boolean);
+    return parts.length > 0 ? parts : [stripAnswerPrefix(source)];
+  };
+
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .flatMap((item) => tokensFromString(String(item)))
+        .filter(Boolean);
+    }
+    if (typeof parsed === 'string') {
+      return tokensFromString(parsed);
+    }
+    if (typeof parsed === 'object' && parsed !== null) {
+      return Object.values(parsed as Record<string, unknown>)
+        .flatMap((item) => tokensFromString(String(item)))
+        .filter(Boolean);
+    }
+  } catch {
+    // raw answer is plain text
+  }
+
+  return tokensFromString(cleaned);
+};
+
+const isTrueLike = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = normalizeText(value);
+    return normalized === 'true'
+      || normalized === '1'
+      || normalized === 'yes'
+      || normalized === 'y'
+      || normalized === 'dung'
+      || normalized === 'đúng'
+      || normalized === 'correct';
+  }
+  return false;
+};
+
+const resolveCorrectIndexesFromOptionFlags = (raw?: string): number[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : typeof parsed === 'object' && parsed !== null
+      ? Object.values(parsed as Record<string, unknown>)
+      : [];
+    const indexes = new Set<number>();
+    entries.forEach((entry, idx) => {
+      if (typeof entry !== 'object' || entry === null) return;
+      const option = entry as Record<string, unknown>;
+      if (
+        isTrueLike(option.isCorrect)
+        || isTrueLike(option.correct)
+        || isTrueLike(option.isAnswer)
+        || isTrueLike(option.right)
+      ) {
+        indexes.add(idx);
+      }
+    });
+    return Array.from(indexes).sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+};
+
+const resolveCorrectOptionIndexes = (answer?: string, options: string[] = []): number[] => {
+  if (!answer || options.length === 0) return [];
+
+  const indexes = new Set<number>();
+  const normalizedOptions = options.map((opt) => normalizeText(opt));
+
+  parseAnswerTokens(answer).forEach((token) => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+
+    const normalized = normalizeText(trimmed);
+    const asNumber = Number(normalized);
+    if (!Number.isNaN(asNumber)) {
+      if (asNumber >= 0 && asNumber < options.length) {
+        indexes.add(asNumber);
+        return;
+      }
+      if (asNumber >= 1 && asNumber <= options.length) {
+        indexes.add(asNumber - 1);
+        return;
+      }
+    }
+
+    if (/^[A-Za-z]$/.test(trimmed)) {
+      const idx = trimmed.toUpperCase().charCodeAt(0) - 65;
+      if (idx >= 0 && idx < options.length) {
+        indexes.add(idx);
+        return;
+      }
+    }
+
+    const leadingLetterMatch = trimmed.match(/^([A-Za-z])[\.\):\-\s]/);
+    if (leadingLetterMatch) {
+      const idx = leadingLetterMatch[1].toUpperCase().charCodeAt(0) - 65;
+      if (idx >= 0 && idx < options.length) {
+        indexes.add(idx);
+        return;
+      }
+    }
+
+    const trailingLetterMatch = stripAnswerPrefix(trimmed).match(/([A-Za-z])$/);
+    if (trailingLetterMatch) {
+      const idx = trailingLetterMatch[1].toUpperCase().charCodeAt(0) - 65;
+      if (idx >= 0 && idx < options.length) {
+        indexes.add(idx);
+        return;
+      }
+    }
+
+    const exactIndex = normalizedOptions.findIndex((opt) => opt === normalized);
+    if (exactIndex >= 0) {
+      indexes.add(exactIndex);
+    }
+  });
+
+  return Array.from(indexes).sort((a, b) => a - b);
+};
+
+const formatCorrectAnswer = (answer?: string, options: string[] = []): string => {
+  const indexes = resolveCorrectOptionIndexes(answer, options);
+  if (indexes.length > 0) {
+    return indexes
+      .map((idx) => `${OPTION_LABELS[idx] ?? String(idx + 1)}${options[idx] ? `. ${options[idx]}` : ''}`)
+      .join(' | ');
+  }
+  return answer?.trim() || 'Không xác định';
+};
+
 const getTopicString = (tag: unknown): string => {
   if (typeof tag === 'string') return tag;
   if (typeof tag === 'object' && tag !== null) {
@@ -205,6 +365,10 @@ export default function ReviewPage() {
   const topicFilter = searchParams.get('topic') ?? '';
   const topicAccuracy = searchParams.get('accuracy') ? parseFloat(searchParams.get('accuracy')!) : null;
   const topicTotal = searchParams.get('total') ? parseInt(searchParams.get('total')!, 10) : null;
+  const selectedQuestionId = searchParams.get('questionId')
+    ? parseInt(searchParams.get('questionId')!, 10)
+    : null;
+  const isSingleQuestionMode = Number.isInteger(selectedQuestionId) && (selectedQuestionId ?? 0) > 0;
   const isTopicMode = Boolean(topicFilter);
 
   // State
@@ -213,6 +377,9 @@ export default function ReviewPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<ReviewPhase>('loading');
   const [qualityResults, setQualityResults] = useState<Record<number, number>>({});
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  const [answerChecked, setAnswerChecked] = useState(false);
+  const [isSelectedAnswerCorrect, setIsSelectedAnswerCorrect] = useState<boolean | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -224,14 +391,16 @@ export default function ReviewPage() {
 
     const load = async () => {
       try {
-        const limit = isTopicMode ? 50 : 20;
+        const limit = isSingleQuestionMode ? 120 : isTopicMode ? 50 : 20;
         const data = await userService.getReviewRecommendations(limit);
         if (!mountedRef.current) return;
 
         let resolved: ReviewRecommendation[] = data;
         let fallback = false;
 
-        if (isTopicMode) {
+        if (isSingleQuestionMode && selectedQuestionId) {
+          resolved = data.filter((q) => q.questionId === selectedQuestionId);
+        } else if (isTopicMode) {
           const matched = data.filter((q) => matchesTopic(q, topicFilter));
           if (matched.length > 0) {
             resolved = matched;
@@ -240,6 +409,32 @@ export default function ReviewPage() {
             resolved = weakOnes.length > 0 ? weakOnes : data;
             fallback = weakOnes.length > 0 || data.length > 0;
           }
+        }
+
+        const missingAnswerIds = resolved
+          .filter((q) => !(q.answer && q.answer.trim().length > 0))
+          .map((q) => q.questionId)
+          .filter((id) => Number.isFinite(id) && id > 0);
+        if (missingAnswerIds.length > 0) {
+          const fallbackEntries = await Promise.all(
+            Array.from(new Set(missingAnswerIds)).map((questionId) =>
+              userService.getQuestionReviewFallback(questionId),
+            ),
+          );
+          const fallbackMap = new Map(
+            fallbackEntries
+              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+              .map((entry) => [entry.questionId, entry]),
+          );
+          resolved = resolved.map((q) => {
+            const fallback = fallbackMap.get(q.questionId);
+            if (!fallback) return q;
+            return {
+              ...q,
+              answer: q.answer && q.answer.trim().length > 0 ? q.answer : fallback.answer,
+              options: q.options ?? fallback.options,
+            };
+          });
         }
 
         setQuestions(resolved);
@@ -253,13 +448,32 @@ export default function ReviewPage() {
     void load();
     return () => { mountedRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicFilter]);
+  }, [topicFilter, isSingleQuestionMode, selectedQuestionId]);
 
   const totalCount = questions.length;
   const currentQuestion = questions[currentIndex];
+  const options = parseOptions(currentQuestion?.options);
+  const correctOptionIndexes = useMemo(() => {
+    const fromAnswer = resolveCorrectOptionIndexes(currentQuestion?.answer, options);
+    const fromOptions = resolveCorrectIndexesFromOptionFlags(currentQuestion?.options);
+    return Array.from(new Set([...fromAnswer, ...fromOptions])).sort((a, b) => a - b);
+  }, [currentQuestion?.answer, currentQuestion?.options, options]);
   const progressPercent = totalCount > 0 ? Math.round((currentIndex / totalCount) * 100) : 0;
 
-  const handleFlip = () => setPhase('rating');
+  useEffect(() => {
+    setSelectedOptionIndex(null);
+    setAnswerChecked(false);
+    setIsSelectedAnswerCorrect(null);
+  }, [currentQuestion?.questionId]);
+
+  const handleFlip = () => {
+    if (selectedOptionIndex === null) return;
+    const hasAnswerKey = correctOptionIndexes.length > 0 || Boolean(currentQuestion?.answer?.trim());
+    const correct = hasAnswerKey ? correctOptionIndexes.includes(selectedOptionIndex) : null;
+    setAnswerChecked(true);
+    setIsSelectedAnswerCorrect(correct);
+    setPhase('rating');
+  };
 
   const handleRate = useCallback(
     async (quality: number) => {
@@ -334,11 +548,15 @@ export default function ReviewPage() {
               <h2 className="text-lg font-bold text-slate-900 mb-2">
                 {isTopicMode
                   ? `Chưa có câu hỏi cho "${topicFilter}"`
+                  : isSingleQuestionMode
+                  ? 'Không tìm thấy câu hỏi đã chọn'
                   : 'Chưa có lịch ôn tập'}
               </h2>
               <p className="text-slate-500 text-sm leading-relaxed mb-6">
                 {isTopicMode
                   ? 'Câu hỏi sẽ xuất hiện sau khi bạn làm bài và hệ thống ghi nhận kết quả của chủ đề này.'
+                  : isSingleQuestionMode
+                  ? 'Câu hỏi này hiện không nằm trong danh sách ôn tập thông minh. Hãy chọn câu khác hoặc ôn toàn bộ lịch.'
                   : 'Hoàn thành vài bài thi để hệ thống xây dựng lịch ôn cá nhân hóa cho bạn.'}
               </p>
 
@@ -560,7 +778,6 @@ export default function ReviewPage() {
 
   if (!currentQuestion) return null;
 
-  const options = parseOptions(currentQuestion.options);
   const mem = currentQuestion.memoryLevel ? MEMORY_CONFIG[currentQuestion.memoryLevel] : null;
   const isRating = phase === 'rating' || phase === 'submitting';
 
@@ -729,15 +946,40 @@ export default function ReviewPage() {
         {options.length > 0 && (
           <div className="px-6 pb-5 grid grid-cols-1 gap-2">
             {options.map((opt, i) => (
-              <div
+              <button
                 key={`opt-${i}`}
-                className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50 text-sm text-slate-700"
+                type="button"
+                disabled={answerChecked}
+                onClick={() => setSelectedOptionIndex(i)}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-xl border text-sm transition-colors ${
+                  answerChecked
+                    ? correctOptionIndexes.includes(i)
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : selectedOptionIndex === i
+                      ? 'border-rose-300 bg-rose-50 text-rose-800'
+                      : 'border-slate-100 bg-slate-50 text-slate-700'
+                    : selectedOptionIndex === i
+                    ? isTopicMode
+                      ? 'border-rose-300 bg-rose-50 text-rose-800'
+                      : 'border-blue-300 bg-blue-50 text-blue-800'
+                    : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-slate-100'
+                } ${answerChecked ? 'cursor-default' : 'cursor-pointer'}`}
               >
-                <span className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-500 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                <span className={`w-6 h-6 rounded-md border font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 ${
+                  answerChecked && correctOptionIndexes.includes(i)
+                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
+                    : answerChecked && selectedOptionIndex === i
+                    ? 'bg-rose-100 border-rose-300 text-rose-700'
+                    : selectedOptionIndex === i
+                    ? isTopicMode
+                      ? 'bg-rose-100 border-rose-300 text-rose-700'
+                      : 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-white border-slate-200 text-slate-500'
+                }`}>
                   {OPTION_LABELS[i] ?? String(i + 1)}
                 </span>
                 <span className="leading-snug">{opt}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -747,20 +989,39 @@ export default function ReviewPage() {
           {phase === 'thinking' && (
             <button
               type="button"
+              disabled={selectedOptionIndex === null}
               onClick={handleFlip}
-              className={`w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm text-white transition-all active:scale-[0.98] ${
+              className={`w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm text-white transition-all active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:shadow-none ${
                 isTopicMode
                   ? 'bg-rose-600 hover:bg-rose-700 shadow-[0_4px_12px_-2px_rgba(225,29,72,0.4)]'
                   : 'bg-slate-900 hover:bg-slate-800 shadow-[0_4px_12px_-2px_rgba(15,23,42,0.3)]'
               }`}
             >
-              Tôi đã nghĩ xong — Đánh giá mức nhớ
+              Kiểm tra đáp án và đánh giá mức nhớ
               <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
             </button>
           )}
 
           {isRating && (
             <div>
+              <div className={`mb-3 rounded-xl border px-3 py-2.5 text-xs ${
+                isSelectedAnswerCorrect === null
+                  ? 'border-slate-200 bg-slate-50 text-slate-700'
+                  : isSelectedAnswerCorrect
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-700'
+              }`}>
+                {isSelectedAnswerCorrect === null ? (
+                  <p className="font-semibold">Câu này chưa có đáp án chuẩn để đối chiếu.</p>
+                ) : isSelectedAnswerCorrect ? (
+                  <p className="font-semibold">Bạn chọn đúng đáp án.</p>
+                ) : (
+                  <p>
+                    <span className="font-semibold">Bạn chọn chưa đúng.</span>{' '}
+                    Đáp án đúng: {formatCorrectAnswer(currentQuestion.answer, options)}
+                  </p>
+                )}
+              </div>
               <p className="text-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                 Bạn nhớ câu này ở mức nào?
               </p>

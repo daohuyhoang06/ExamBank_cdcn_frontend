@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { examService, userService } from '../../../services/user.service';
-import type { TopicData, LeaderboardUser, ExamSessionResult } from '../../../types/user.type';
+import type { LeaderboardUser, ExamSessionResult } from '../../../types/user.type';
 
 const RESULT_POLL_INTERVAL_MS = 5000;
 
 export const useExamreview = (sessionId?: number) => {
-  const [topics, setTopics] = useState<TopicData[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [examResult, setExamResult] = useState<ExamSessionResult | null>(null);
   const [isLoadingResult, setIsLoadingResult] = useState(false);
@@ -17,12 +16,6 @@ export const useExamreview = (sessionId?: number) => {
     let pollTimer: number | undefined;
 
     const fetchData = async () => {
-      const t = await userService.getTopics();
-      if (!isActive) {
-        return;
-      }
-      setTopics(t);
-
       if (!sessionId) {
         setExamResult(null);
         setResultError(null);
@@ -145,5 +138,5 @@ export const useExamreview = (sessionId?: number) => {
     };
   }, [sessionId]);
 
-  return { topics, leaderboard, examResult, isLoadingResult, resultError, leaderboardError };
+  return { leaderboard, examResult, isLoadingResult, resultError, leaderboardError };
 };

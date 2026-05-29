@@ -27,6 +27,10 @@ export const parseDraftJson = (draftJson?: string): ExamDraft | null => {
               ? ((question as { imageUrls: unknown[] }).imageUrls
                   .filter((item): item is string => typeof item === "string" && item.trim().length > 0))
               : [],
+            selectedImageIds: Array.isArray((question as { selectedImageIds?: unknown }).selectedImageIds)
+              ? ((question as { selectedImageIds: unknown[] }).selectedImageIds
+                  .filter((item): item is string => typeof item === "string" && item.trim().length > 0))
+              : [],
           }))
         : [],
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],

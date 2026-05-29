@@ -52,6 +52,12 @@ export type ComposerSubjectPayload = {
   name: string;
 };
 
+export type ComposerTopicRecord = {
+  id: number;
+  name: string;
+  subjectId: number;
+};
+
 export type ComposerQuestionType = "MCQ" | "FILL_IN_BLANK" | "ESSAY" | string;
 
 export type ComposerQuestionRecord = {
@@ -101,4 +107,8 @@ export type ComposerExamQuestionLink = {
 export type ComposerQuestionListParams = {
   subjectId?: number;
   topicTag?: string;
+};
+
+export type ComposerTopicListParams = {
+  subjectId?: number;
 };

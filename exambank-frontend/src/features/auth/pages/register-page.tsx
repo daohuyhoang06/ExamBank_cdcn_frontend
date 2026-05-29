@@ -164,6 +164,14 @@ export default function RegisterPage() {
 
       navigate('/login', { replace: true });
     } catch (error) {
+      if ((error as { isAxiosError?: boolean })?.isAxiosError) {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status === 400) {
+          setEmailError('Email đã được sử dụng.');
+          setSubmitError('');
+          return;
+        }
+      }
       setSubmitError(getApiErrorMessage(error));
     } finally {
       setIsSubmitting(false);
@@ -239,7 +247,11 @@ export default function RegisterPage() {
                   label="Họ và Tên"
                   placeholder="Nguyễn Văn A"
                   value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
+                  onChange={(event) => {
+                    setFullName(event.target.value);
+                    if (fullNameError) setFullNameError('');
+                    if (submitError) setSubmitError('');
+                  }}
                   error={fullNameError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
@@ -252,7 +264,11 @@ export default function RegisterPage() {
                   label="Email"
                   placeholder="name@example.com"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    if (emailError) setEmailError('');
+                    if (submitError) setSubmitError('');
+                  }}
                   error={emailError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                 />
@@ -267,7 +283,12 @@ export default function RegisterPage() {
                   label="Mật khẩu"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (passwordError) setPasswordError('');
+                    if (confirmPasswordError) setConfirmPasswordError('');
+                    if (submitError) setSubmitError('');
+                  }}
                   error={passwordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                   endAdornment={
@@ -290,7 +311,11 @@ export default function RegisterPage() {
                   label="Xác nhận mật khẩu"
                   placeholder="••••••••"
                   value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                    if (confirmPasswordError) setConfirmPasswordError('');
+                    if (submitError) setSubmitError('');
+                  }}
                   error={confirmPasswordError}
                   labelClassName="text-[0.96rem] font-semibold tracking-normal text-[var(--ink-900)]"
                   endAdornment={
@@ -312,7 +337,11 @@ export default function RegisterPage() {
                   id="termsAgree"
                   type="checkbox"
                   checked={termsAgree}
-                  onChange={(event) => setTermsAgree(event.target.checked)}
+                  onChange={(event) => {
+                    setTermsAgree(event.target.checked);
+                    if (termsError) setTermsError('');
+                    if (submitError) setSubmitError('');
+                  }}
                 />
                 <span>
                   Tôi đồng ý với <Button className="h-auto rounded-sm border-none bg-transparent p-0 font-bold text-[var(--brand-700)]" type="button" size="sm" variant="ghost">Điều khoản</Button> và{' '}
