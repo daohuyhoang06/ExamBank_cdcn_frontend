@@ -71,6 +71,11 @@ export type ModeratorDocumentPreview = {
   fileType: string | null;
 };
 
+export type ModeratorDocumentPreviewBlob = {
+  blob: Blob;
+  fileType: string | null;
+};
+
 export type ModeratorQueueMetrics = {
   totalDocuments: number;
   pendingDocuments: number;
@@ -584,6 +589,19 @@ export async function getModeratorDocumentPreview(documentId: number): Promise<M
       fileType: toStringOrNull(target.fileType),
     };
   }
+}
+
+export async function getModeratorDocumentPreviewBlob(documentId: number): Promise<ModeratorDocumentPreviewBlob> {
+  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/${documentId}/preview/content`, {
+    ...buildAuthConfig(),
+    responseType: "blob",
+  });
+
+  const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
+  return {
+    blob,
+    fileType: toStringOrNull(response.headers?.["content-type"]) ?? (blob.type || null),
+  };
 }
 
 

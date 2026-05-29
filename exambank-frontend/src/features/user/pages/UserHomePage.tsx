@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Brain,
@@ -24,6 +24,7 @@ import {
   Landmark,
   Library,
   Rocket,
+  X,
 } from "lucide-react";
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
@@ -200,6 +201,23 @@ const getRecommendationDifficulty = (
 
 
 
+const COIN_RULES = [
+  {
+    icon: UploadCloud,
+    title: "Upload tài liệu được duyệt",
+    value: "+10 coin",
+    iconColor: "text-emerald-600 bg-emerald-50",
+    valueColor: "text-emerald-600",
+  },
+  {
+    icon: Download,
+    title: "Tải tài liệu đã duyệt",
+    value: "-5 coin",
+    iconColor: "text-rose-600 bg-rose-50",
+    valueColor: "text-rose-600",
+  },
+];
+
 /* ─── component ───────────────────────────────────────────────── */
 
 export default function UserHomePage() {
@@ -214,6 +232,25 @@ export default function UserHomePage() {
   const [subjectCatalog, setSubjectCatalog] = useState<SubjectCatalogItem[]>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
+
+  const [showRulesPopover, setShowRulesPopover] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const displayName = useMemo(() => {
+    return currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? "Học viên";
+  }, [currentUser]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setShowRulesPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const reviewStats = useMemo(() => {
     const dueCount = reviewRecommendations.filter((item) => item.due).length;
@@ -424,54 +461,79 @@ export default function UserHomePage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <div className="border-b border-slate-100 bg-slate-950 px-6 py-6 text-white lg:border-b-0 lg:border-r lg:border-slate-800">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-300 text-slate-950">
-                <Coins className="h-5 w-5" strokeWidth={2.4} />
-              </span>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200">Coin hiện có</p>
-                <p className="mt-1 text-3xl font-black tabular-nums">{coinBalance.toLocaleString("vi-VN")}</p>
-              </div>
-            </div>
-            <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-              Coin dùng để tải tài liệu đã được duyệt trong thư viện. Số dư được cập nhật theo hồ sơ tài khoản của bạn.
-            </p>
-          </div>
-
-          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:p-6">
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700 ring-1 ring-emerald-100">
-                  <UploadCloud className="h-4 w-4" strokeWidth={2.3} />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Tích lũy coin</h3>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Tải tài liệu lên hệ thống. Khi moderator duyệt tài liệu, tài khoản được cộng 10 coin.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 ring-1 ring-blue-100">
-                  <Download className="h-4 w-4" strokeWidth={2.3} />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Sử dụng coin</h3>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Mỗi lượt tải tài liệu đã duyệt trừ 5 coin. Nếu số dư không đủ, hệ thống sẽ chặn lượt tải.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* ── HEADER ROW: Greeting & Coins ── */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            Xin chào, {displayName} <span className="inline-block transition-transform hover:rotate-12 duration-300 cursor-default select-none">👋</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Hôm nay bạn muốn học gì?</p>
         </div>
-      </section>
+
+        <div className="flex items-center gap-2.5 self-start md:self-auto relative" ref={popoverRef}>
+          {/* Coins Pill */}
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/30 px-3.5 py-1.5 shadow-sm transition-all hover:bg-amber-50/50 hover:scale-[1.02]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white shadow-[0_1.5px_3px_rgba(217,119,6,0.3)]">
+              <Coins className="h-3 w-3" strokeWidth={2.8} />
+            </span>
+            <span className="text-sm font-extrabold text-slate-800 tabular-nums">
+              {coinBalance.toLocaleString("vi-VN")}
+            </span>
+          </div>
+
+          {/* Help Button */}
+          <button
+            type="button"
+            onClick={() => setShowRulesPopover(!showRulesPopover)}
+            className={`flex h-7.5 w-7.5 items-center justify-center rounded-full transition-all cursor-pointer ${
+              showRulesPopover
+                ? "bg-slate-800 text-white shadow-md shadow-slate-800/10"
+                : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+            }`}
+            title="Quy tắc nhận coin"
+          >
+            <span className="font-semibold text-sm">?</span>
+          </button>
+
+          {/* Popover */}
+          {showRulesPopover && (
+            <div className="absolute right-0 top-full mt-2.5 z-50 w-80 rounded-[20px] border border-slate-100 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+              {/* Popover Arrow */}
+              <div className="absolute -top-1.5 right-9 h-3 w-3 rotate-45 border-l border-t border-slate-100 bg-white" />
+
+              {/* Header */}
+              <div className="relative z-10 flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-slate-900 text-sm">Quy tắc cộng trừ coin</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowRulesPopover(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md hover:bg-slate-50 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="relative z-10 mt-4 space-y-3.5">
+                {COIN_RULES.map((rule, idx) => {
+                  const RuleIcon = rule.icon;
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${rule.iconColor}`}>
+                          <RuleIcon className="h-4 w-4" strokeWidth={2.2} />
+                        </span>
+                        <span className="text-[12.5px] font-medium text-slate-700 truncate">{rule.title}</span>
+                      </div>
+                      <span className={`text-[12.5px] font-extrabold shrink-0 ${rule.valueColor}`}>{rule.value}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ── SECTION 1: Hero & Ranking ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
