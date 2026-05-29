@@ -60,6 +60,7 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
         photoUrl?: string;
         profileImageUrl?: string;
         coinBalance?: number;
+        streak?: number;
       }
     | undefined;
 
@@ -75,6 +76,7 @@ function normalizeAuthResponse(payload: unknown): AuthSuccess {
           avatarUrl: (rawUser as { avatarUrl?: string }).avatarUrl,
           fullName: rawUser.fullName ?? rawUser.name,
           coinBalance: typeof rawUser.coinBalance === "number" ? rawUser.coinBalance : undefined,
+          streak: typeof rawUser.streak === "number" ? rawUser.streak : undefined,
         }
       : undefined,
     message: raw.message,
@@ -233,7 +235,7 @@ export const authService = {
     setAuthToken(normalizedToken, persistSession);
     saveUser(result.user, persistSession);
     try {
-      const { data: profile } = await apiClient.get<{ coinBalance?: number; name?: string; email?: string }>("/api/v1/users/me");
+      const { data: profile } = await apiClient.get<{ coinBalance?: number; streak?: number; name?: string; email?: string }>("/api/v1/users/me");
       if (result.user) {
         const refreshedUser: AuthSuccess["user"] = {
           ...result.user,
@@ -243,6 +245,10 @@ export const authService = {
             typeof profile?.coinBalance === "number"
               ? profile.coinBalance
               : result.user.coinBalance,
+          streak:
+            typeof profile?.streak === "number"
+              ? profile.streak
+              : result.user.streak,
         };
         saveUser(refreshedUser, persistSession);
       }

@@ -20,6 +20,7 @@ export type AuthUser = {
   roles?: string[];
   avatarUrl?: string;
   coinBalance?: number;
+  streak?: number;
 };
 
 export type AuthSuccess = {

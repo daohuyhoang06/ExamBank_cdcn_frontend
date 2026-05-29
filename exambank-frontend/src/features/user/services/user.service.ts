@@ -17,6 +17,7 @@ import type {
   SaveAnswerItem,
   SelectedFile,
   StartExamSessionResponse,
+  StreakStatus,
   Subject,
   SubmitReason,
   Submission,
@@ -85,6 +86,9 @@ type BackendDocument = {
   submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
 };
 
 type BackendReview = {
@@ -216,6 +220,11 @@ type BackendExam = {
   endAt?: string | null;
   status?: string;
   createdAt?: string;
+  source?: string | null;
+  vip?: boolean | null;
+  fullAccess?: boolean | null;
+  requiresUnlock?: boolean | null;
+  unlockCoinCost?: number | null;
 };
 
 type BackendExamQuestion = {
@@ -305,6 +314,10 @@ type BackendUser = {
   xp?: number;
   coinBalance?: number;
   streak?: number;
+  lastStreakRewardDate?: string;
+  streakRestoreAvailable?: boolean;
+  streakRestoreCost?: number;
+  streakRestoreStreak?: number;
   status?: string;
   phone?: string;
   birthDate?: string;
@@ -616,6 +629,10 @@ const mapBackendUserToProfile = (user: BackendUser): UserProfile => ({
   xp: user.xp ?? 0,
   coinBalance: user.coinBalance ?? 0,
   streak: user.streak ?? 0,
+  lastStreakRewardDate: user.lastStreakRewardDate,
+  streakRestoreAvailable: Boolean(user.streakRestoreAvailable),
+  streakRestoreCost: user.streakRestoreCost,
+  streakRestoreStreak: user.streakRestoreStreak,
   premiumConfirmed: Boolean(user.premiumConfirmed),
   createdAt: user.createdAt,
 });
@@ -644,8 +661,8 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
     phone: undefined,
     birthDate: undefined,
     xp: 0,
-    coinBalance: 0,
-    streak: 0,
+    coinBalance: storedUser.coinBalance ?? 0,
+    streak: storedUser.streak ?? 0,
     premiumConfirmed: false,
     createdAt: undefined,
   };
@@ -901,6 +918,9 @@ const mapDocumentToSummary = (doc: BackendDocument): DocumentSummary => ({
   submittedAt: doc.submittedAt,
   createdAt: doc.createdAt,
   moderatorNote: doc.moderatorNote,
+  fullAccess: doc.fullAccess,
+  requiresUnlock: doc.requiresUnlock,
+  unlockCoinCost: doc.unlockCoinCost,
 });
 
 const getSubmissionStorageKey = (): string => {
@@ -1515,6 +1535,36 @@ export const userService = {
     }
   },
 
+  getStreakStatus: async (): Promise<StreakStatus> => {
+    const { data } = await api.get<StreakStatus>("/api/v1/me/streak");
+    return {
+      currentStreak: data.currentStreak ?? 0,
+      coinBalance: data.coinBalance ?? 0,
+      lastRewardDate: data.lastRewardDate,
+      rewardedToday: Boolean(data.rewardedToday),
+      rewardToday: data.rewardToday,
+      nextDailyReward: data.nextDailyReward ?? 5,
+      restoreAvailable: Boolean(data.restoreAvailable),
+      restoreStreak: data.restoreStreak,
+      restoreCost: data.restoreCost,
+    };
+  },
+
+  restoreStreak: async (): Promise<StreakStatus> => {
+    const { data } = await api.post<StreakStatus>("/api/v1/me/streak/restore");
+    return {
+      currentStreak: data.currentStreak ?? 0,
+      coinBalance: data.coinBalance ?? 0,
+      lastRewardDate: data.lastRewardDate,
+      rewardedToday: Boolean(data.rewardedToday),
+      rewardToday: data.rewardToday,
+      nextDailyReward: data.nextDailyReward ?? 5,
+      restoreAvailable: Boolean(data.restoreAvailable),
+      restoreStreak: data.restoreStreak,
+      restoreCost: data.restoreCost,
+    };
+  },
+
   updateMyProfile: async (payload: UpdateUserProfilePayload): Promise<UserProfile> => {
     try {
       const { data: current } = await api.get<BackendUser>("/api/v1/users/me");
@@ -1670,6 +1720,10 @@ export const userService = {
     }
   },
 
+  unlockDocument: async (documentId: number): Promise<void> => {
+    await api.post(`/api/v1/documents/${documentId}/unlock`, undefined, buildAuthConfig());
+  },
+
   uploadDocument: async (payload: UploadDocumentPayload, file: File): Promise<DocumentSummary> => {
     const formData = new FormData();
 
@@ -1728,6 +1782,10 @@ export const examService = {
         description: `Đề thi số #${examData.id}`,
         duration: examData.durationMinutes ?? 30,
         createdAt: examData.createdAt ?? new Date().toISOString(),
+        vip: Boolean(examData.vip ?? examData.source === "AI_IMPORT"),
+        fullAccess: Boolean(examData.fullAccess),
+        requiresUnlock: Boolean(examData.requiresUnlock),
+        unlockCoinCost: examData.unlockCoinCost ?? undefined,
         questions: questionData.map(mapQuestion),
       };
     } catch {
@@ -1769,6 +1827,10 @@ export const examService = {
           endAt: item.endAt ?? null,
           status: item.status,
           createdAt: item.createdAt,
+          vip: Boolean(item.vip ?? item.source === "AI_IMPORT"),
+          fullAccess: Boolean(item.fullAccess),
+          requiresUnlock: Boolean(item.requiresUnlock),
+          unlockCoinCost: item.unlockCoinCost ?? undefined,
         }));
     } catch {
       return [];
@@ -1810,6 +1872,10 @@ export const examService = {
         endAt: data.endAt ?? null,
         status: data.status,
         createdAt: data.createdAt,
+        vip: Boolean(data.vip ?? data.source === "AI_IMPORT"),
+        fullAccess: Boolean(data.fullAccess),
+        requiresUnlock: Boolean(data.requiresUnlock),
+        unlockCoinCost: data.unlockCoinCost ?? undefined,
       };
     } catch {
       return null;
@@ -1820,6 +1886,10 @@ export const examService = {
   startExamSession: async (examId: number): Promise<StartExamSessionResponse> => {
     const { data } = await api.post<BackendStartExamSession>(`/api/exams/${examId}/sessions/start`, undefined, buildAuthConfig());
     return mapStartSession(data);
+  },
+
+  unlockExam: async (examId: number): Promise<void> => {
+    await api.post(`/api/exams/${examId}/unlock`, undefined, buildAuthConfig());
   },
 
   saveExamAnswers: async (sessionId: number, answers: SaveAnswerItem[]): Promise<void> => {

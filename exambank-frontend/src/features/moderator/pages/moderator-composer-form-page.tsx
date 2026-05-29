@@ -821,6 +821,7 @@ export default function ModeratorComposerFormPage() {
   const [availableSubjects, setAvailableSubjects] = useState<ComposerSubjectRecord[]>([]);
   const [availableTopics, setAvailableTopics] = useState<ComposerTopicRecord[]>([]);
   const [activeExamId, setActiveExamId] = useState<number | null>(null);
+  const [isAiImportedDraft, setIsAiImportedDraft] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState<SavedSnapshot | null>(null);
 
   const [newQuestionForms, setNewQuestionForms] = useState<Record<QuestionType, NewQuestionForm>>(() =>
@@ -936,6 +937,7 @@ export default function ModeratorComposerFormPage() {
           }
 
           setIsPublishedReadonly(false);
+          setIsAiImportedDraft(true);
           setActiveExamId(null);
           setExamTitle(normalizedTitle);
           setSubject(subjectFromDraft);
@@ -967,6 +969,7 @@ export default function ModeratorComposerFormPage() {
         }
 
         setIsPublishedReadonly(false);
+        setIsAiImportedDraft(false);
         setStartAtInput("");
         setEndAtInput("");
         setSubject((currentSubject) => {
@@ -1014,6 +1017,7 @@ export default function ModeratorComposerFormPage() {
         return mappedQuestions;
       });
       setActiveExamId(exam.id);
+      setIsAiImportedDraft(exam.source === "AI_IMPORT");
       setIsPublishedReadonly(nextReadonly);
       setFormErrors({});
       const noticeKey = `${exam.id}:${nextReadonly ? "view" : "edit"}`;
@@ -1286,6 +1290,7 @@ export default function ModeratorComposerFormPage() {
         startAt: normalizedStartAt,
         endAt: normalizedEndAt,
         status: "DRAFT",
+        source: !activeExamId && isAiImportedDraft ? "AI_IMPORT" : undefined,
       } as const;
 
       const updatingExisting = Boolean(activeExamId);

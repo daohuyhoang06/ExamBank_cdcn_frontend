@@ -18,6 +18,7 @@ export type ComposerExamRecord = {
   approvedBy: number | null;
   durationMinutes: number | null;
   status: BackendExamStatus;
+  source?: "MANUAL" | "AI_IMPORT" | "MODERATOR_UPLOAD" | string | null;
   moderatorNote: string | null;
   startAt?: string | null;
   endAt?: string | null;
@@ -35,6 +36,7 @@ export type ComposerExamPayload = {
   approvedBy?: number | null;
   durationMinutes?: number | null;
   status?: BackendExamStatus;
+  source?: "MANUAL" | "AI_IMPORT" | "MODERATOR_UPLOAD" | string;
   moderatorNote?: string | null;
   startAt?: string | null;
   endAt?: string | null;

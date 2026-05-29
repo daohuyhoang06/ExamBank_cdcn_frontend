@@ -237,6 +237,7 @@ function normalizeExam(value: unknown): ComposerExamRecord | null {
     approvedBy: toNumber(objectValue.approvedBy),
     durationMinutes: toNumber(objectValue.durationMinutes),
     status: toStringOrNull(objectValue.status) ?? "DRAFT",
+    source: toStringOrNull(objectValue.source),
     moderatorNote: toStringOrNull(objectValue.moderatorNote),
     startAt: toIsoDateTimeOrNull(
       objectValue.startAt ??

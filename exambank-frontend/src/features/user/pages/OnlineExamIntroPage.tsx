@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ListChecks, PlayCircle, ShieldCheck, Timer, Trophy } from "lucide-react";
+import { AlertCircle, Crown, ListChecks, Lock, PlayCircle, ShieldCheck, Timer, Trophy } from "lucide-react";
 import { examService } from "@/features/user/services/user.service";
 import type { ExamListItem } from "@/features/user/types/user.type";
 import { getStoredAuthToken } from "@/lib/api-client";
@@ -53,6 +53,8 @@ export default function OnlineExamIntroPage() {
   const { examId } = useParams();
   const [isLoading, setIsLoading] = useState(true);
   const [exam, setExam] = useState<ExamListItem | null>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [maxScore, setMaxScore] = useState(0);
   const [attempts, setAttempts] = useState<
@@ -116,8 +118,32 @@ export default function OnlineExamIntroPage() {
     if (!exam) {
       return { canStart: false, message: "Không tìm thấy đề thi hoặc đề chưa được công khai." };
     }
+    if (exam.vip && exam.requiresUnlock) {
+      return { canStart: false, message: "Day la de VIP. Mo khoa bang coin hoac dung premium de lam bai." };
+    }
     return getWindowState(exam, Date.now());
   }, [exam]);
+
+  const handleUnlock = async () => {
+    if (!exam || isUnlocking) return;
+
+    setIsUnlocking(true);
+    setUnlockError("");
+    try {
+      await examService.unlockExam(exam.id);
+      const [nextExam, fullExam] = await Promise.all([
+        examService.getExamListItemById(exam.id),
+        examService.getExamById(String(exam.id)),
+      ]);
+      setExam(nextExam);
+      setQuestionCount(fullExam?.questions.length ?? 0);
+      setMaxScore(fullExam?.questions.reduce((sum, item) => sum + (Number(item.score) || 0), 0) ?? 0);
+    } catch {
+      setUnlockError("Khong the mo khoa de VIP. Vui long kiem tra coin hoac nang cap premium.");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
 
   if (isLoading) {
     return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">Đang tải thông tin đề thi...</div>;
@@ -145,6 +171,12 @@ export default function OnlineExamIntroPage() {
             <span className="inline-flex rounded-full bg-[#bdece5] px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-[#0f5c6e]">
               Đề thi chính thức
             </span>
+            {exam.vip ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
+                <Crown size={12} className="fill-current" />
+                VIP
+              </span>
+            ) : null}
             <h1 className="text-[1.7rem] font-black leading-tight text-[#083c72]">{exam.title}</h1>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.83rem] font-semibold text-slate-600">
               <span>Môn học: <strong className="text-slate-800">{exam.subjectName || "Chưa cập nhật"}</strong></span>
@@ -179,7 +211,30 @@ export default function OnlineExamIntroPage() {
       <section className="grid gap-4 lg:grid-cols-[7fr_3fr]">
         <div className="space-y-4">
           <div className="rounded-2xl border border-[#c7e6e2] bg-white/90 p-4 md:p-5">
-            {availability.canStart ? (
+            {exam.vip && exam.requiresUnlock ? (
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200 text-amber-900">
+                    <Lock size={16} />
+                  </span>
+                  <div>
+                    <p className="font-black">De VIP can mo khoa</p>
+                    <p className="mt-1 text-xs text-amber-800">
+                      Tai khoan premium duoc truy cap tu do. User thuong se bi tru {exam.unlockCoinCost ?? 5} coin.
+                    </p>
+                  </div>
+                </div>
+                {unlockError ? <p className="text-xs text-red-700">{unlockError}</p> : null}
+                <button
+                  onClick={() => void handleUnlock()}
+                  disabled={isUnlocking}
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-xs font-black text-amber-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Crown size={14} />
+                  {isUnlocking ? "Dang mo khoa..." : `Mo khoa (${exam.unlockCoinCost ?? 5} coin)`}
+                </button>
+              </div>
+            ) : availability.canStart ? (
               <div className="flex justify-center">
                 <button
                   onClick={() => navigate(`/user/exam/${exam.id}`)}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Calendar } from "lucide-react";
+import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Calendar, Crown } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import { examService, userService } from "../services/user.service";
 import type { ExamListItem, Subject } from "../types/user.type";
@@ -398,9 +398,17 @@ export default function OnlineExamPage() {
                     <div className="absolute inset-0 bg-black/25" />
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
                     <div className="relative flex items-start justify-between gap-3">
-                      <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
-                        {subjectLabel}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
+                          {subjectLabel}
+                        </span>
+                        {exam.vip ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950 shadow-sm">
+                            <Crown size={11} className="fill-current" />
+                            VIP
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
                         {exam.className ?? exam.educationLevelName ?? "T\u1ef1 do"}
                       </span>
