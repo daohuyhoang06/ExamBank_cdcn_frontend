@@ -119,7 +119,17 @@ export default function SubmitExamPage() {
   }, []);
 
   const handleChooseFile = () => {
-    fileInputRef.current?.click();
+    if (!fileInputRef.current) {
+      return;
+    }
+
+    fileInputRef.current.value = '';
+    if (typeof fileInputRef.current.showPicker === 'function') {
+      fileInputRef.current.showPicker();
+      return;
+    }
+
+    fileInputRef.current.click();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,6 +164,7 @@ export default function SubmitExamPage() {
       name: file.name,
       size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
     });
+    event.target.value = '';
   };
 
   const handleUpload = async () => {
@@ -328,7 +339,10 @@ export default function SubmitExamPage() {
               <p className="text-xs text-slate-400 mt-2 z-10">Hỗ trợ PDF, DOCX, ảnh (Tối đa 50MB)</p>
               <button
                 type="button"
-                onClick={handleChooseFile}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleChooseFile();
+                }}
                 className="mt-6 px-6 py-2 bg-white text-blue-600 font-bold text-xs rounded-full shadow-sm border border-slate-200 hover:shadow-md transition-all z-10"
               >
                 Chọn từ máy tính

@@ -398,7 +398,7 @@ export default function OnlineExamPage() {
                     <div className="absolute inset-0 bg-black/25" />
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
                     <div className="relative flex items-start justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
                           {subjectLabel}
                         </span>
@@ -408,21 +408,25 @@ export default function OnlineExamPage() {
                             VIP
                           </span>
                         ) : null}
-                        {exam.requiresUnlock ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">
-                            <Lock size={11} />
-                            {exam.unlockCoinCost ?? (exam.vip ? 50 : 10)} coin
-                          </span>
-                        ) : null}
                       </div>
-                      <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
+                      <span className="shrink-0 whitespace-nowrap rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
                         {exam.className ?? exam.educationLevelName ?? "T\u1ef1 do"}
                       </span>
                     </div>
                   </div>
 
                   <div className="space-y-3 p-4">
-                    <h2 className="min-h-[2.5rem] overflow-hidden text-sm font-black leading-tight text-slate-900">{exam.title}</h2>
+                    <div className="flex items-start gap-3">
+                      <h2 className="min-h-[2.5rem] flex-1 overflow-hidden text-sm font-black leading-tight text-slate-900">
+                        {exam.title}
+                      </h2>
+                      {exam.requiresUnlock ? (
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">
+                          <Lock size={11} />
+                          {exam.vip ? 10 : 5} coin
+                        </span>
+                      ) : null}
+                    </div>
 
                     <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
                       <span className="inline-flex items-center gap-1.5">

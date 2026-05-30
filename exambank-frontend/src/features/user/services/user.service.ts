@@ -43,22 +43,22 @@ const buildAuthConfig = () => {
 };
 
 const DEFAULT_EDUCATION_LEVELS: EducationLevel[] = [
-  { id: "10", name: "Lá»›p 10", group: "THPT" },
-  { id: "11", name: "Lá»›p 11", group: "THPT" },
-  { id: "12", name: "Lá»›p 12", group: "THPT" },
-  { id: "uni", name: "Sinh viÃªn Äáº¡i há»c", group: "Äáº¡i há»c" },
+  { id: "10", name: "Lớp 10", group: "THPT" },
+  { id: "11", name: "Lớp 11", group: "THPT" },
+  { id: "12", name: "Lớp 12", group: "THPT" },
+  { id: "uni", name: "Sinh viên Đại học", group: "Đại học" },
 ];
 
 const DEFAULT_SUBJECTS: Subject[] = [
-  "ToÃ¡n há»c",
-  "Váº­t lÃ½",
-  "HÃ³a há»c",
-  "Sinh há»c",
-  "Ngá»¯ vÄƒn",
-  "Tiáº¿ng Anh",
-  "Lá»‹ch sá»­",
-  "Äá»‹a lÃ½",
-  "Tin há»c",
+  "Toán học",
+  "Vật lý",
+  "Hóa học",
+  "Sinh học",
+  "Ngữ văn",
+  "Tiếng Anh",
+  "Lịch sử",
+  "Địa lý",
+  "Tin học",
 ];
 const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
 const STORAGE_PUBLIC_ENDPOINT = (
@@ -659,7 +659,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
 
   return {
     id: resolvedId,
-    name: storedUser.fullName?.trim() || storedUser.email || "NgÆ°á»i dÃ¹ng",
+    name: storedUser.fullName?.trim() || storedUser.email || "Người dùng",
     email: storedUser.email || "",
     username: storedUser.email ? deriveUsername(storedUser.email, resolvedId) : `user_${resolvedId}`,
     avatarUrl: storedUser.avatarUrl,
@@ -679,7 +679,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
   const storedFallback = mapStoredAuthUserToProfile();
   const id = selfUser.id ?? storedFallback?.id ?? 0;
   const email = toNonEmptyString(selfUser.email) ?? storedFallback?.email ?? "";
-  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "NgÆ°á»i dÃ¹ng");
+  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "Người dùng");
   const roles = storedFallback?.roles?.length ? storedFallback.roles : ["USER"];
 
   return {
@@ -718,7 +718,7 @@ const isLegacyMeFallbackStatus = (status?: number): boolean => status === 404 ||
 
 const toRelativeTime = (isoDate?: string): string => {
   if (!isoDate) {
-    return "Vá»«a xong";
+    return "Vừa xong";
   }
 
   const date = new Date(isoDate);
@@ -726,17 +726,17 @@ const toRelativeTime = (isoDate?: string): string => {
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (Number.isNaN(diffMins) || diffMins < 1) {
-    return "Vá»«a xong";
+    return "Vừa xong";
   }
   if (diffMins < 60) {
-    return `${diffMins} phÃºt trÆ°á»›c`;
+    return `${diffMins} phút trước`;
   }
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) {
-    return `${diffHours} giá» trÆ°á»›c`;
+    return `${diffHours} giờ trước`;
   }
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} ngÃ y trÆ°á»›c`;
+  return `${diffDays} ngày trước`;
 };
 
 const toDisplayDate = (isoDate?: string): string => {
@@ -882,7 +882,7 @@ const looksLikeTrueFalseOptions = (source: string[]): boolean => {
   }
 
   const normalized = source.map((item) => item.trim().toLowerCase());
-  const hasTrue = normalized.some((item) => item === "Ä‘Ãºng" || item === "dung" || item === "true");
+  const hasTrue = normalized.some((item) => item === "đúng" || item === "dung" || item === "true");
   const hasFalse = normalized.some((item) => item === "sai" || item === "false");
   return hasTrue && hasFalse;
 };
@@ -1140,10 +1140,10 @@ const mapDocumentToSubmission = (doc: DocumentSummary): Submission => {
   return {
     id: doc.id,
     title: doc.title,
-    university: doc.school ?? "ChÆ°a cáº­p nháº­t",
+    university: doc.school ?? "Chưa cập nhật",
     year: doc.semesterYear ?? "N/A",
-    subject: doc.subject ?? "ChÆ°a phÃ¢n loáº¡i",
-    type: doc.type ?? "TÃ i liá»‡u",
+    subject: doc.subject ?? "Chưa phân loại",
+    type: doc.type ?? "Tài liệu",
     status,
     submittedAt: toDisplayDateTime(doc.submittedAt ?? doc.createdAt),
     note: doc.moderatorNote,
@@ -1176,7 +1176,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
       id: String(item.questionId),
       type: "true_false",
       question: questionContent,
-      correctAnswer: answerText.toLowerCase() === "Ä‘Ãºng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
+      correctAnswer: answerText.toLowerCase() === "đúng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
       score,
       topicTags,
     };
@@ -1338,7 +1338,7 @@ export const userService = {
       "Khoa h\u1ecdc t\u1ef1 nhi\u00ean",
       "Khoa h\u1ecdc x\u00e3 h\u1ed9i",
     ];
-    const allSubjectsOption = "Táº¥t cáº£ mÃ´n há»c";
+    const allSubjectsOption = "Tất cả môn học";
     const normalizeSubjectKey = (value: string): string => value.trim().toLowerCase();
     const mergeSubjects = (dynamicSubjects: string[]): Subject[] => {
       const merged = [...DEFAULT_SUBJECTS, ...supplementalSubjects, ...dynamicSubjects]
@@ -1555,7 +1555,7 @@ export const userService = {
         }
       }
 
-      throw error instanceof Error ? error : new Error("KhÃ´ng thá»ƒ táº£i thÃ´ng tin há»“ sÆ¡.");
+      throw error instanceof Error ? error : new Error("Không thể tải thông tin hồ sơ.");
     }
   },
 
@@ -1992,6 +1992,7 @@ export const examService = {
       );
 
       return enriched
+        .filter((attempt) => Boolean(attempt.submittedAt))
         .sort((a, b) => {
           const aTime = (a.submittedAt ?? a.startedAt) ? new Date((a.submittedAt ?? a.startedAt) as string).getTime() : 0;
           const bTime = (b.submittedAt ?? b.startedAt) ? new Date((b.submittedAt ?? b.startedAt) as string).getTime() : 0;
