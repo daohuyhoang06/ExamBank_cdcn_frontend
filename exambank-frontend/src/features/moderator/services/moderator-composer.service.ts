@@ -55,6 +55,66 @@ function toStringOrNull(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function looksLikeMojibake(value: string): boolean {
+  return /(Ã.|Â.|Æ.|Ð.|áº|á»|Ä.)/.test(value);
+}
+
+function repairMojibakeText(value?: string): string {
+  const raw = (value ?? "").trim();
+  if (!raw || !looksLikeMojibake(raw)) {
+    return raw;
+  }
+
+  let repaired = raw;
+  for (let index = 0; index < 2; index += 1) {
+    try {
+      const bytes = Uint8Array.from(repaired, (character) => character.charCodeAt(0) & 0xff);
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) {
+        break;
+      }
+
+      repaired = decoded;
+      if (!looksLikeMojibake(repaired)) {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return repaired;
+}
+
+function normalizeVietnameseComparable(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("vi-VN");
+}
+
+function normalizeAiImportProgressMessage(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalizedValue = repairMojibakeText(value).trim();
+  if (!normalizedValue) {
+    return undefined;
+  }
+
+  const comparable = normalizeVietnameseComparable(normalizedValue);
+  if (comparable === "da nhan file dang xu ly ai" || comparable === "da nhan file dang xu ly ai...") {
+    return "Đã nhận file, đang xử lý AI...";
+  }
+
+  return normalizedValue;
+}
+
 function toTopicTagString(value: unknown): string | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -264,7 +324,7 @@ function normalizeSubject(value: unknown): ComposerSubjectRecord | null {
   }
 
   const id = toNumber(objectValue.id);
-  const name = toStringOrNull(objectValue.name);
+  const name = repairMojibakeText(toStringOrNull(objectValue.name) ?? "");
   if (id === null || !name) {
     return null;
   }
@@ -433,7 +493,7 @@ function normalizeAiImportJob(value: unknown): ComposerAiImportJob | null {
     draftJson: toStringOrNull(objectValue.draftJson) ?? undefined,
     errorMessage: toStringOrNull(objectValue.errorMessage) ?? undefined,
     progressPercent: toNumber(objectValue.progressPercent) ?? undefined,
-    progressMessage: toStringOrNull(objectValue.progressMessage) ?? undefined,
+    progressMessage: normalizeAiImportProgressMessage(objectValue.progressMessage),
     createdExamId: toNumber(objectValue.createdExamId) ?? undefined,
     assets: Array.isArray(objectValue.assets)
       ? objectValue.assets
