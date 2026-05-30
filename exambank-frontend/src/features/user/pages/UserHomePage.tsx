@@ -27,9 +27,9 @@ import {
   Rocket,
   X,
 } from "lucide-react";
-import type { Ranking, ReviewRecommendation, StreakStatus, WeakTopicInsight } from '../types/user.type';
+import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
 import { userService } from '../services/user.service';
-import { getStoredAuthUser, syncStoredAuthUser } from '@/features/auth/services/auth.service';
+import { getStoredAuthUser } from '@/features/auth/services/auth.service';
 import { premiumUpgradeService } from '@/features/user/services/premium-upgrade.service';
 import { getStoredAuthToken } from '@/lib/api-client';
 
@@ -92,6 +92,11 @@ const formatSubjectNameWithAccents = (name: string): string => {
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
+
+const normalizeRoles = (user: { role?: string; roles?: string[] } | null | undefined): string[] =>
+  [user?.role, ...(user?.roles ?? [])]
+    .filter((role): role is string => Boolean(role))
+    .map((role) => role.toUpperCase().replace("ROLE_", ""));
 
 type SubjectCatalogItem = {
   id: number;
@@ -205,21 +210,21 @@ const getRecommendationDifficulty = (
 const COIN_RULES = [
   {
     icon: Flame,
-    title: "Dang nhap ngay dau",
+    title: "Đăng nhập ngày đầu",
     value: "+20 coin",
     iconColor: "text-orange-600 bg-orange-50",
     valueColor: "text-orange-600",
   },
   {
     icon: Flame,
-    title: "Chuoi ngay 2-49",
+    title: "Chuỗi ngày 2-49",
     value: "+5 coin/ngay",
     iconColor: "text-orange-600 bg-orange-50",
     valueColor: "text-orange-600",
   },
   {
     icon: Flame,
-    title: "Chuoi 50+ / 100+",
+    title: "Chuỗi 50+ / 100+",
     value: "+10 / +15 coin",
     iconColor: "text-orange-600 bg-orange-50",
     valueColor: "text-orange-600",
@@ -245,15 +250,17 @@ const COIN_RULES = [
 export default function UserHomePage() {
   const navigate = useNavigate();
   const currentUser = useMemo(() => getStoredAuthUser(), []);
+  const currentUserRoles = useMemo(() => normalizeRoles(currentUser), [currentUser]);
+  const isStandardUserRole =
+    currentUserRoles.includes("USER") &&
+    !currentUserRoles.includes("ADMIN") &&
+    !currentUserRoles.includes("MODERATOR");
   const [coinBalance, setCoinBalance] = useState(() =>
     typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0,
   );
   const [currentStreak, setCurrentStreak] = useState(() =>
     typeof currentUser?.streak === "number" ? currentUser.streak : 0,
   );
-  const [streakStatus, setStreakStatus] = useState<StreakStatus | null>(null);
-  const [isRestoringStreak, setIsRestoringStreak] = useState(false);
-  const [streakRestoreError, setStreakRestoreError] = useState("");
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [weakTopics, setWeakTopics] = useState<WeakTopicInsight[]>([]);
   const [reviewRecommendations, setReviewRecommendations] = useState<ReviewRecommendation[]>([]);
@@ -418,7 +425,7 @@ export default function UserHomePage() {
     let isActive = true;
     const token = getStoredAuthToken();
     const loadPremiumStatus = async () => {
-      if (!token) {
+      if (!token || !isStandardUserRole) {
         if (isActive) {
           setIsPremiumUser(false);
         }
@@ -486,7 +493,6 @@ export default function UserHomePage() {
                 : 0;
         setCoinBalance(nextCoinBalance);
         setCurrentStreak(nextStreak);
-        setStreakStatus(streak);
       } catch (error) {
         if (isActive) console.error('Error loading data:', error);
       } finally {
@@ -499,34 +505,7 @@ export default function UserHomePage() {
     return () => {
       isActive = false;
     };
-  }, [currentUser]);
-
-  const handleRestoreStreak = async () => {
-    if (!streakStatus?.restoreAvailable || !streakStatus.restoreCost) {
-      return;
-    }
-
-    setIsRestoringStreak(true);
-    setStreakRestoreError("");
-    try {
-      const restored = await userService.restoreStreak();
-      setStreakStatus(restored);
-      setCoinBalance(restored.coinBalance);
-      setCurrentStreak(restored.currentStreak);
-      const storedUser = getStoredAuthUser();
-      if (storedUser) {
-        syncStoredAuthUser({
-          ...storedUser,
-          coinBalance: restored.coinBalance,
-          streak: restored.currentStreak,
-        });
-      }
-    } catch (error) {
-      setStreakRestoreError(error instanceof Error ? error.message : "Khong the khoi phuc chuoi.");
-    } finally {
-      setIsRestoringStreak(false);
-    }
-  };
+  }, [currentUser, isStandardUserRole]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -550,8 +529,8 @@ export default function UserHomePage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 rounded-xl border border-orange-200/70 bg-orange-50/40 px-3.5 py-1.5 shadow-sm transition-all hover:bg-orange-50/70 hover:scale-[1.02]">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_1.5px_3px_rgba(234,88,12,0.28)]">
+                    <div className="flex items-center gap-2 rounded-xl border border-orange-200/70 bg-orange-50/40 px-2.5 py-1.5 shadow-sm transition-all hover:bg-orange-50/70 hover:scale-[1.02]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_1.5px_3px_rgba(234,88,12,0.28)]" title="Chuỗi đăng nhập">
               <Flame className="h-3 w-3" strokeWidth={2.8} fill="currentColor" />
             </span>
             <span className="text-sm font-extrabold text-slate-800 tabular-nums">
@@ -613,51 +592,16 @@ export default function UserHomePage() {
         </div>
       </div>
 
-      <section className="grid gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4 shadow-sm md:grid-cols-[1fr_auto] md:items-center">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm">
-            <Flame className="h-5 w-5" fill="currentColor" />
-          </span>
-          <div>
-            <p className="text-sm font-extrabold text-slate-900">
-              Chuoi dang nhap {currentStreak.toLocaleString("vi-VN")} ngay
-            </p>
-            <p className="mt-1 text-xs font-medium text-slate-600">
-              Hom nay {streakStatus?.rewardedToday ? "da nhan thuong" : "chua ghi nhan"} · Thuong ngay ke tiep +{(streakStatus?.nextDailyReward ?? 5).toLocaleString("vi-VN")} coin
-            </p>
-            {streakRestoreError ? (
-              <p className="mt-2 text-xs font-semibold text-rose-600">{streakRestoreError}</p>
-            ) : null}
-          </div>
-        </div>
 
-        {streakStatus?.restoreAvailable && streakStatus.restoreCost ? (
-          <button
-            type="button"
-            onClick={() => void handleRestoreStreak()}
-            disabled={isRestoringStreak}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-extrabold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            <Flame className="h-4 w-4" fill="currentColor" />
-            {isRestoringStreak
-              ? "Dang khoi phuc"
-              : `Khoi phuc ${streakStatus.restoreStreak ?? 0} ngay · ${streakStatus.restoreCost.toLocaleString("vi-VN")} coin`}
-          </button>
-        ) : (
-          <div className="inline-flex h-10 items-center justify-center rounded-xl border border-orange-100 bg-white/70 px-4 text-xs font-bold text-orange-700">
-            Moc 50 ngay: +10 coin · moc 100 ngay: +15 coin
-          </div>
-        )}
-      </section>
 
       {/* ── SECTION 1: Hero & Ranking ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className={`grid grid-cols-1 gap-8 ${isStandardUserRole ? "lg:grid-cols-3" : ""}`}>
 
-        {/* Premium Banner */}
-        <section
-          onClick={() => navigate('/user/premium/upgrade')}
-          className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 border border-indigo-400/15 shadow-[0_20px_60px_-20px_rgba(59,7,100,0.5)] group cursor-pointer transition-all hover:shadow-[0_24px_70px_-20px_rgba(251,191,36,0.25)] text-white"
-        >
+        {isStandardUserRole ? (
+          <section
+            onClick={() => navigate('/user/premium/upgrade')}
+            className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 border border-indigo-400/15 shadow-[0_20px_60px_-20px_rgba(59,7,100,0.5)] group cursor-pointer transition-all hover:shadow-[0_24px_70px_-20px_rgba(251,191,36,0.25)] text-white"
+          >
           <div
             className="absolute inset-0 opacity-[0.06] pointer-events-none"
             style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "22px 22px" }}
@@ -692,13 +636,13 @@ export default function UserHomePage() {
                 </span>
               </h2>
               <p className="text-[13px] mt-3 leading-relaxed max-w-md" style={{ color: "rgba(226,232,240,0.85)" }}>
-                Mở khoá AI tạo đề thông minh, competition private và phân tích học tập sâu — tăng tốc hành trình ôn luyện của bạn.
+                Mở khoá xem tài liệu không giới hạn và truy cập các đề thi premium — tăng tốc hành trình ôn luyện của bạn.
               </p>
             </div>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2.5 max-w-lg">
               {[
-                "AI tạo đề & câu hỏi tức thì",
-                "Tạo competition private",
+                "Xem tài liệu không giới hạn",
+                "Truy cập các đề thi premium",
                 "Phân tích học tập nâng cao",
                 "Hỗ trợ ưu tiên 24/7",
               ].map((feature) => (
@@ -746,7 +690,8 @@ export default function UserHomePage() {
               </span>
             </div>
           </div>
-        </section>
+          </section>
+        ) : null}
 
         {/* Weekly Ranking */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] overflow-hidden flex flex-col">

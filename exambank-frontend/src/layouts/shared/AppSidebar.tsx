@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, Building2, ChevronLeft, ChevronRight, Crown, Headset, LogOut, User } from 'lucide-react';
+import { Bell, Building2, ChevronLeft, ChevronRight, Crown, LogOut, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { NotificationPopover } from './notification-popover';
@@ -74,28 +74,28 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
 
 const formatRelativeTime = (isoDate?: string | null): string => {
   if (!isoDate) {
-    return 'Vá»«a xong';
+    return 'Vừa xong';
   }
 
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) {
-    return 'Vá»«a xong';
+    return 'Vừa xong';
   }
 
   const diffMs = Date.now() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) {
-    return 'Vá»«a xong';
+    return 'Vừa xong';
   }
   if (diffMins < 60) {
-    return `${diffMins} phÃºt trÆ°á»›c`;
+    return `${diffMins} phút trước`;
   }
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) {
-    return `${diffHours} giá» trÆ°á»›c`;
+    return `${diffHours} giờ trước`;
   }
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} ngÃ y trÆ°á»›c`;
+  return `${diffDays} ngày trước`;
 };
 
 const localizeNotificationContent = (
@@ -109,29 +109,29 @@ const localizeNotificationContent = (
 
   if (type === 'DOC_APPROVED') {
     return {
-      title: 'TÃ i liá»‡u Ä‘Æ°á»£c duyá»‡t',
+      title: 'Tài liệu được duyệt',
       description: docTitle
-        ? `TÃ i liá»‡u '${docTitle}' Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t.`
-        : 'TÃ i liá»‡u cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t.',
+        ? `Tài liệu '${docTitle}' đã được duyệt.`
+        : 'Tài liệu của bạn đã được duyệt.',
     };
   }
 
   if (type === 'DOC_REJECTED') {
     const base = docTitle
-      ? `TÃ i liá»‡u '${docTitle}' Ä‘Ã£ bá»‹ tá»« chá»‘i.`
-      : 'TÃ i liá»‡u cá»§a báº¡n Ä‘Ã£ bá»‹ tá»« chá»‘i.';
+      ? `Tài liệu '${docTitle}' đã bị từ chối.`
+      : 'Tài liệu của bạn đã bị từ chối.';
     return {
-      title: 'TÃ i liá»‡u bá»‹ tá»« chá»‘i',
-      description: note ? `${base} Ghi chÃº: ${note}` : base,
+      title: 'Tài liệu bị từ chối',
+      description: note ? `${base} Ghi chú: ${note}` : base,
     };
   }
 
   if (type === 'DOC_SUBMITTED_FOR_REVIEW') {
     return {
-      title: 'TÃ i liá»‡u chá» duyá»‡t',
+      title: 'Tài liệu chờ duyệt',
       description: docTitle
-        ? `TÃ i liá»‡u má»›i '${docTitle}' Ä‘ang chá» duyá»‡t.`
-        : 'CÃ³ tÃ i liá»‡u má»›i Ä‘ang chá» duyá»‡t.',
+        ? `Tài liệu mới '${docTitle}' đang chờ duyệt.`
+        : 'Có tài liệu mới đang chờ duyệt.',
     };
   }
 
@@ -139,46 +139,46 @@ const localizeNotificationContent = (
     const normalized = rawMessage.toLowerCase();
     let description = rawMessage;
     if (!description) {
-      description = 'CÃ³ cáº­p nháº­t má»›i trong tháº£o luáº­n.';
+      description = 'Có cập nhật mới trong thảo luận.';
     } else if (normalized.includes('moderation visibility') || normalized.includes('discussion thread')) {
-      description = 'CÃ³ tháº£o luáº­n má»›i cáº§n theo dÃµi.';
+      description = 'Có thảo luận mới cần theo dõi.';
     } else if (normalized.includes('new reply') || normalized.includes('reply')) {
-      description = 'Tháº£o luáº­n cá»§a báº¡n cÃ³ pháº£n há»“i má»›i.';
+      description = 'Thảo luận của bạn có phản hồi mới.';
     }
 
     return {
-      title: 'Hoáº¡t Ä‘á»™ng tháº£o luáº­n',
+      title: 'Hoạt động thảo luận',
       description,
     };
   }
 
   if (type === 'COIN_EARNED') {
     return {
-      title: 'Xu thÆ°á»Ÿng',
-      description: rawMessage || 'Báº¡n vá»«a nháº­n Ä‘Æ°á»£c xu thÆ°á»Ÿng.',
+      title: 'Xu thưởng',
+      description: rawMessage || 'Bạn vừa nhận được xu thưởng.',
     };
   }
 
   if (type === 'SCORE_UPDATED') {
     return {
-      title: 'Cáº­p nháº­t Ä‘iá»ƒm',
-      description: rawMessage || 'Äiá»ƒm cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c cáº­p nháº­t.',
+      title: 'Cập nhật điểm',
+      description: rawMessage || 'Điểm của bạn đã được cập nhật.',
     };
   }
 
   if (type === 'REPORT_HANDLED') {
     return {
-      title: 'BÃ¡o cÃ¡o Ä‘Ã£ xá»­ lÃ½',
+      title: 'Báo cáo đã xử lý',
       description: docTitle
-        ? `BÃ¡o cÃ¡o vá» tÃ i liá»‡u '${docTitle}' Ä‘Ã£ Ä‘Æ°á»£c xá»­ lÃ½.`
-        : 'BÃ¡o cÃ¡o cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c xá»­ lÃ½.',
+        ? `Báo cáo về tài liệu '${docTitle}' đã được xử lý.`
+        : 'Báo cáo của bạn đã được xử lý.',
     };
   }
 
   if (type === 'SR_REMINDER') {
     return {
-      title: 'Nháº¯c nhá»Ÿ',
-      description: rawMessage || 'Báº¡n cÃ³ má»™t nháº¯c nhá»Ÿ má»›i.',
+      title: 'Nhắc nhở',
+      description: rawMessage || 'Bạn có một nhắc nhở mới.',
     };
   }
 
@@ -196,8 +196,8 @@ const localizeNotificationContent = (
     };
   }
   return {
-    title: rawTitle || 'ThÃ´ng bÃ¡o',
-    description: rawMessage || 'Báº¡n cÃ³ má»™t thÃ´ng bÃ¡o má»›i.',
+    title: rawTitle || 'Thông báo',
+    description: rawMessage || 'Bạn có một thông báo mới.',
   };
 };
 
@@ -278,14 +278,12 @@ export type SidebarNavItem = {
 type Props = {
   items: SidebarNavItem[];
   subtitle: string;
-  showAdminExtras?: boolean;
   notificationItems?: NotificationItem[];
 };
 
 export function AppSidebar({
   items,
   subtitle,
-  showAdminExtras = false,
   notificationItems: notificationItemsProp,
 }: Props) {
   const location = useLocation();
@@ -304,7 +302,7 @@ export function AppSidebar({
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState(() => {
-    const fallbackName = 'NgÆ°á»i dÃ¹ng';
+    const fallbackName = 'Người dùng';
     const currentUser = getStoredAuthUser() as
       | {
           fullName?: string;
@@ -324,11 +322,18 @@ export function AppSidebar({
 
     return currentUser?.avatarUrl ?? '';
   });
+  const [currentUserRoles, setCurrentUserRoles] = useState(() =>
+    normalizeRoles(getStoredAuthUser() as { role?: string; roles?: string[] } | null)
+  );
 
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   const avatarInitial = (currentUserDisplayName.trim().charAt(0) || 'A').toUpperCase();
+  const isStandardUserRole =
+    currentUserRoles.includes('USER') &&
+    !currentUserRoles.includes('ADMIN') &&
+    !currentUserRoles.includes('MODERATOR');
 
   const refreshNotifications = useCallback(async () => {
     if (isNotificationOverride) {
@@ -366,13 +371,18 @@ export function AppSidebar({
       return;
     }
 
+    if (!isStandardUserRole) {
+      setIsPremiumUser(false);
+      return;
+    }
+
     try {
       const status = await premiumUpgradeService.getStatus();
       setIsPremiumUser(Boolean(status.premium && status.confirmed));
     } catch {
       setIsPremiumUser(false);
     }
-  }, []);
+  }, [isStandardUserRole]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -414,7 +424,7 @@ export function AppSidebar({
 
   useEffect(() => {
     function handleAuthUserUpdated() {
-      const fallbackName = 'NgÆ°á»i dÃ¹ng';
+      const fallbackName = 'Người dùng';
       const currentUser = getStoredAuthUser() as
         | {
             fullName?: string;
@@ -428,6 +438,7 @@ export function AppSidebar({
 
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
       setCurrentUserAvatarUrl(currentUser?.avatarUrl ?? '');
+      setCurrentUserRoles(normalizeRoles(currentUser));
       void refreshNotifications();
       void refreshPremiumStatus();
     }
@@ -509,6 +520,7 @@ export function AppSidebar({
   };
 
   const currentPath = normalizePath(location.pathname);
+  const isExamReviewPath = currentPath.startsWith('/user/exambank/examreview');
   const matchedItemPaths = items
     .map((item) => {
       const targetPath = normalizePath(item.path);
@@ -516,7 +528,9 @@ export function AppSidebar({
       const isTopLevelRoot = depth === 1;
       const matches = isTopLevelRoot
         ? currentPath === targetPath
-        : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
+        : (targetPath === '/user/exambank' && isExamReviewPath)
+          ? false
+          : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 
       return { path: item.path, targetPath, matches };
     })
@@ -538,7 +552,7 @@ export function AppSidebar({
     >
       <button
         onClick={toggleSidebar}
-        aria-label={isCollapsed ? 'Má»Ÿ rá»™ng sidebar' : 'Thu gá»n sidebar'}
+        aria-label={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
         className="sidebar-toggle-fab absolute top-20 -right-3 w-7 h-7 rounded-full bg-white border border-[rgba(0,0,0,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center transition-all duration-200 ease-in-out hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] hover:text-[var(--brand-700)] hover:border-[var(--brand-200)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -617,8 +631,8 @@ export function AppSidebar({
                 setIsNotificationOpen((prev) => !prev);
                 setIsAvatarMenuOpen(false);
               }}
-              title={!isExpanded ? 'ThÃ´ng bÃ¡o' : undefined}
-              aria-label="Má»Ÿ thÃ´ng bÃ¡o"
+              title={!isExpanded ? 'Thông báo' : undefined}
+              aria-label="Mở thông báo"
               aria-haspopup="dialog"
               aria-expanded={isNotificationOpen}
               className={`
@@ -642,7 +656,7 @@ export function AppSidebar({
                 {unreadCount > 0 ? (
                   <span
                     className={`
-                      absolute -top-1 -right-1.5
+                      absolute -top-2 -right-2
                       inline-flex items-center justify-center
                       ${unreadCount > 9 ? 'h-4 min-w-5 px-1.5' : 'h-4 w-4'}
                       rounded-full
@@ -663,7 +677,7 @@ export function AppSidebar({
                   ${isExpanded ? 'opacity-100' : 'hidden'}
                 `}
               >
-                ThÃ´ng bÃ¡o
+                Thông báo
               </span>
             </button>
 
@@ -675,36 +689,6 @@ export function AppSidebar({
               />
             ) : null}
           </div>
-
-          {showAdminExtras && (
-            <button
-              type="button"
-              title={!isExpanded ? 'Support Portal' : undefined}
-              aria-label="Support Portal"
-              className={`
-                group inline-flex items-center text-sm font-medium
-                transition-all duration-200 ease-out
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)]
-                ${isExpanded ? 'gap-3 py-3 px-4 mr-3' : 'h-11 w-11 justify-center self-center'}
-                ${isExpanded ? 'hover:translate-x-1 hover:-translate-y-0.5' : ''}
-                rounded-xl text-[var(--brand-700)] hover:bg-[var(--brand-100)]/55 hover:text-[var(--brand-700)] hover:shadow-[0_10px_18px_rgba(11,59,120,0.10)]
-              `}
-            >
-              <Headset
-                size={isExpanded ? 16 : 20}
-                className="transition-transform duration-200 group-hover:scale-105"
-              />
-
-              <span
-                className={`
-                  transition-opacity duration-200
-                  ${isExpanded ? 'opacity-100' : 'hidden'}
-                `}
-              >
-                Support Portal
-              </span>
-            </button>
-          )}
 
           <div className={`flex ${isExpanded ? 'gap-3 items-center' : 'flex-col gap-2 items-center'}`}>
             <div className="relative" ref={avatarMenuRef}>
@@ -718,10 +702,10 @@ export function AppSidebar({
                 type="button"
                 onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
                 className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[#D6B76A] shadow-[0_0_0_4px_rgba(214,183,106,0.2),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : isPremiumUser ? 'border-[#D6B76A] shadow-[0_0_0_3px_rgba(214,183,106,0.18)]' : 'border-[var(--brand-100)] hover:brightness-110'}`}
-                aria-label="Má»Ÿ menu tÃ i khoáº£n"
+                aria-label="Mở menu tài khoản"
                 aria-haspopup="menu"
                 aria-expanded={isAvatarMenuOpen}
-                title={!isExpanded ? 'TÃ i khoáº£n' : undefined}
+                title={!isExpanded ? 'Tài khoản' : undefined}
               >
                 {currentUserAvatarUrl ? (
                   <img src={currentUserAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
@@ -741,7 +725,7 @@ export function AppSidebar({
                     onClick={handleOpenProfile}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
                   >
-                    <User size={14} /> Xem há»“ sÆ¡
+                    <User size={14} /> Xem hồ sơ
                   </button>
                   <button
                     type="button"
@@ -749,7 +733,7 @@ export function AppSidebar({
                     onClick={handleLogout}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-50"
                   >
-                    <LogOut size={14} /> ÄÄƒng xuáº¥t
+                    <LogOut size={14} /> Đăng xuất
                   </button>
                 </div>
               ) : null}
@@ -760,19 +744,19 @@ export function AppSidebar({
                 <p className="truncate font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">
                   {currentUserDisplayName}
                 </p>
-                {isPremiumUser ? (
+                {isStandardUserRole && isPremiumUser ? (
                   <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#D6B76A] bg-[#FFFCF3] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#B88A20]">
                     <Crown size={10} /> VIP
                   </span>
-                ) : (
+                ) : isStandardUserRole ? (
                   <button
                     type="button"
                     onClick={() => navigate('/user/premium/upgrade')}
                     className="mt-1 inline-flex items-center rounded-full border border-[#a855f7] bg-white px-3 py-1 text-[10px] font-semibold text-[#7c3aed] transition hover:bg-[#f3e8ff]"
                   >
-                    NÃ¢ng cáº¥p
+                    Nâng cấp
                   </button>
-                )}
+                ) : null}
               </div>
             )}
           </div>
