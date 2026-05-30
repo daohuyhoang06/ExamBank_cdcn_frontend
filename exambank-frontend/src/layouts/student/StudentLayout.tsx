@@ -1,42 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppShell } from "@/layouts/shared/AppShell";
 import { buildStudentSidebarItems } from "./studentSidebar.config";
-import { premiumUpgradeService } from "@/features/user/services/premium-upgrade.service";
 import { getStoredAuthToken } from "@/lib/api-client";
 import { userService } from "@/features/user/services/user.service";
 import { getStoredAuthUser, syncStoredAuthUser } from "@/features/auth/services/auth.service";
 
 export function StudentLayout() {
   const location = useLocation();
-  const [isPremiumUser, setIsPremiumUser] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    if (!getStoredAuthToken()) {
-      setIsPremiumUser(false);
-      return () => {
-        mounted = false;
-      };
-    }
-    premiumUpgradeService
-      .getStatus()
-      .then((status) => {
-        if (!mounted) {
-          return;
-        }
-        setIsPremiumUser(Boolean(status.premium && status.confirmed));
-      })
-      .catch(() => {
-        if (!mounted) {
-          return;
-        }
-        setIsPremiumUser(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -71,15 +42,12 @@ export function StudentLayout() {
     };
   }, []);
 
-  const sidebarItems = useMemo(() => buildStudentSidebarItems(isPremiumUser), [isPremiumUser]);
+  const sidebarItems = useMemo(() => buildStudentSidebarItems(), []);
 
   const dynamicHeader = useMemo(() => {
     const currentPath = location.pathname;
     if (currentPath.includes("premium/upgrade")) {
       return { title: "Nâng cấp Premium", sub: "Thanh toán qua QR, upload bill và chờ admin duyệt" };
-    }
-    if (currentPath.includes("premium/import")) {
-      return { title: "AI Premium", sub: "Import đề thi bằng AI và tạo competition private" };
     }
     if (currentPath.includes("comment")) {
       return { title: "Đề của bạn", sub: "Quản lý và theo dõi các đề thi đã đóng góp" };
@@ -99,7 +67,6 @@ export function StudentLayout() {
       headerSubtitle={dynamicHeader.sub}
       sidebarItems={sidebarItems}
       sidebarSubtitle="Student Portal"
-      showAdminExtras
     >
       <div className="animate-in slide-in-from-bottom-2 fade-in p-1 duration-500">
         <Outlet />

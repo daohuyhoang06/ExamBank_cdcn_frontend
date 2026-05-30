@@ -2,10 +2,8 @@ import {
   BarChart3,
   FileText,
   LayoutDashboard,
-  LockKeyhole,
   MonitorPlay,
   Settings,
-  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -21,18 +19,8 @@ const baseItems: SidebarNavItem[] = [
   { label: "Bài đã nộp", path: "/user/exambank/mysubmit", icon: BarChart3 },
   { label: "Tải đề lên", path: "/user/exambank/submit", icon: Settings },
   { label: "Thi online", path: "/user/online-exam", icon: MonitorPlay },
-  { label: "Vào thi private", path: "/user/private-competition", icon: LockKeyhole },
 ];
 
-const aiPremiumItem: SidebarNavItem = {
-  label: "AI Premium",
-  path: "/user/premium/import",
-  icon: Sparkles,
-};
-
-export function buildStudentSidebarItems(isPremium: boolean): SidebarNavItem[] {
-  if (!isPremium) {
-    return baseItems;
-  }
-  return [...baseItems, aiPremiumItem];
+export function buildStudentSidebarItems(): SidebarNavItem[] {
+  return baseItems;
 }

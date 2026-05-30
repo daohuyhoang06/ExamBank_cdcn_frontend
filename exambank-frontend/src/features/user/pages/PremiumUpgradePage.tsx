@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Award, BarChart3, Check, CheckCircle2, Copy, Crown, ImageUp, Lock, Sparkles, Zap } from "lucide-react";
+import { Award, BarChart3, Check, CheckCircle2, Copy, Crown, ImageUp, Sparkles, Zap } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { extractApiErrorMessage } from "@/lib/error-utils";
 import { premiumUpgradeService } from "@/features/user/services/premium-upgrade.service";
@@ -55,20 +55,15 @@ const formatDate = (value?: string): string => {
 };
 
 const premiumBenefits = [
-  { icon: Zap, text: "AI Import để thi và tạo draft câu hỏi nhanh." },
-  { icon: Lock, text: "Tạo private competition có mật khẩu riêng." },
   { icon: Sparkles, text: "Ưu tiên hỗ trợ và cập nhật tính năng mới." },
+  { icon: Zap, text: "Trải nghiệm giao diện và quy trình nâng cao." },
   { icon: BarChart3, text: "Thống kê học tập nâng cao và quản lý tiến độ." },
 ];
 
 const premiumActiveBenefits = [
   {
-    title: "AI Import để thi",
-    description: "Tạo draft câu hỏi nhanh.",
-  },
-  {
-    title: "Tạo private competition",
-    description: "Có mật khẩu riêng.",
+    title: "Trải nghiệm nâng cao",
+    description: "Giao diện và quy trình được tối ưu.",
   },
   {
     title: "Ưu tiên hỗ trợ",

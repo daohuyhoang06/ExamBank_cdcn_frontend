@@ -22,9 +22,6 @@ import Comment from "@/features/user/pages/Comment";
 import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 import UserProfileSettingsPage from "@/features/user/pages/UserProfileSettingsPage";
-import PremiumExamImportPage from "@/features/user/pages/PremiumExamImportPage";
-import PremiumCompetitionsPage from "@/features/user/pages/PremiumCompetitionsPage";
-import PrivateCompetitionJoinPage from "@/features/user/pages/PrivateCompetitionJoinPage";
 import PremiumUpgradePage from "@/features/user/pages/PremiumUpgradePage";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
@@ -129,24 +126,12 @@ export const router = createBrowserRouter([
         element: <OnlineExamPage />,
       },
       {
-        path: "private-competition",
-        element: <PrivateCompetitionJoinPage />,
-      },
-      {
         path: "review",
         element: <ReviewPage />,
       },
       {
         path: "premium/upgrade",
         element: <PremiumUpgradePage />,
-      },
-      {
-        path: "premium/import",
-        element: <PremiumExamImportPage />,
-      },
-      {
-        path: "premium/competitions",
-        element: <PremiumCompetitionsPage />,
       },
     ],
   },
