@@ -24,6 +24,11 @@ type ReviewQuestionRow = {
   userAnswer?: unknown;
 };
 
+type QuestionReviewMeta = {
+  answer?: string;
+  options?: string[];
+};
+
 const REVIEW_SNAPSHOT_STORAGE_PREFIX = 'exambank_exam_review_snapshot';
 const SM2_SYNC_STORAGE_PREFIX = 'exambank_sm2_sync';
 
@@ -74,6 +79,50 @@ const formatScore = (score: number): string => {
 
 const toOptionLabel = (index: number): string => String.fromCharCode(65 + index);
 
+const parseReviewMcqAnswerIndex = (answer: string | undefined, options: string[]): number | null => {
+  const normalized = answer?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const asNumber = Number(normalized);
+  if (!Number.isNaN(asNumber)) {
+    if (asNumber >= 0 && asNumber < options.length) {
+      return asNumber;
+    }
+    if (asNumber >= 1 && asNumber <= options.length) {
+      return asNumber - 1;
+    }
+  }
+
+  if (/^[A-Za-z]$/.test(normalized)) {
+    const optionIndex = normalized.toUpperCase().charCodeAt(0) - 65;
+    if (optionIndex >= 0 && optionIndex < options.length) {
+      return optionIndex;
+    }
+  }
+
+  const matchedIndex = options.findIndex((option) => option.trim() === normalized);
+  return matchedIndex >= 0 ? matchedIndex : null;
+};
+
+const parseReviewTrueFalseAnswer = (answer: string | undefined): boolean | null => {
+  const normalized = answer?.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === 'đúng' || normalized === 'dung' || normalized === 'true' || normalized === 'a') {
+    return true;
+  }
+
+  if (normalized === 'sai' || normalized === 'false' || normalized === 'b') {
+    return false;
+  }
+
+  return null;
+};
+
 const toAnswerText = (question: Question, rawValue: unknown): string => {
   if (rawValue === undefined || rawValue === null) {
     return 'Chưa trả lời';
@@ -108,6 +157,7 @@ const renderQuestionAnswers = (
   row: ReviewQuestionRow,
   hasJudgement: boolean,
   isCorrectQuestion: boolean,
+  questionMeta?: QuestionReviewMeta,
 ) => {
   const question = row.question;
   if (!question) {
@@ -120,11 +170,13 @@ const renderQuestionAnswers = (
 
   if (question.type === 'multiple_choice') {
     const selectedIndex = typeof row.userAnswer === 'number' ? row.userAnswer : Number.NaN;
+    const resolvedOptions = questionMeta?.options && questionMeta.options.length > 0 ? questionMeta.options : question.options;
+    const correctOptionIndex = parseReviewMcqAnswerIndex(questionMeta?.answer, resolvedOptions);
 
     return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {question.options.map((option, index) => {
-          const isCorrectOption = index === question.correctAnswer;
+          const isCorrectOption = correctOptionIndex !== null && index === correctOptionIndex;
           const isSelectedOption = Number.isInteger(selectedIndex) && selectedIndex === index;
 
           let optionClass = 'border border-slate-100 text-slate-500 bg-white';
@@ -157,12 +209,13 @@ const renderQuestionAnswers = (
 
   if (question.type === 'true_false') {
     const selectedValue = typeof row.userAnswer === 'boolean' ? row.userAnswer : undefined;
+    const correctOptionValue = parseReviewTrueFalseAnswer(questionMeta?.answer);
 
     return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {[true, false].map((optionValue, index) => {
           const label = optionValue ? 'Đúng' : 'Sai';
-          const isCorrectOption = optionValue === question.correctAnswer;
+          const isCorrectOption = correctOptionValue !== null && optionValue === correctOptionValue;
           const isSelectedOption = selectedValue === optionValue;
 
           let optionClass = 'border border-slate-100 text-slate-500 bg-white';
@@ -191,7 +244,7 @@ const renderQuestionAnswers = (
   }
 
   const userAnswerText = toAnswerText(question, row.userAnswer);
-  const correctAnswerText = String(question.correctAnswer ?? '');
+  const correctAnswerText = questionMeta?.answer?.trim() || 'Chưa tải được đáp án đúng';
 
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -224,6 +277,7 @@ const Examreview = () => {
   const [fetchedQuestions, setFetchedQuestions] = useState<Exam['questions']>([]);
   const [fetchedExamTitle, setFetchedExamTitle] = useState<string | undefined>();
   const [questionScoreById, setQuestionScoreById] = useState<Record<number, number>>({});
+  const [questionReviewMetaById, setQuestionReviewMetaById] = useState<Record<number, QuestionReviewMeta>>({});
   const [isExamLocked, setIsExamLocked] = useState(false);
   const attemptedQuestionScoreIds = useRef<Set<number>>(new Set());
 
@@ -233,6 +287,7 @@ const Examreview = () => {
 
   useEffect(() => {
     setQuestionScoreById({});
+    setQuestionReviewMetaById({});
     attemptedQuestionScoreIds.current.clear();
   }, [sessionId]);
 
@@ -372,7 +427,7 @@ const Examreview = () => {
 
     const loadQuestionScores = async () => {
       const scoreResults = await Promise.allSettled(
-        questionIdsToFetch.map((questionId) => examService.getQuestionScoreById(questionId)),
+        questionIdsToFetch.map((questionId) => examService.getQuestionReviewMetaById(questionId)),
       );
 
       if (!isActive) {
@@ -388,7 +443,7 @@ const Examreview = () => {
             return;
           }
 
-          const score = result.value;
+          const score = result.value?.score;
           if (typeof score !== 'number' || !Number.isFinite(score) || score <= 0) {
             return;
           }
@@ -399,6 +454,37 @@ const Examreview = () => {
           }
 
           next[questionId] = score;
+          hasChanged = true;
+        });
+
+        return hasChanged ? next : prev;
+      });
+
+      setQuestionReviewMetaById((prev) => {
+        const next = { ...prev };
+        let hasChanged = false;
+
+        scoreResults.forEach((result, index) => {
+          if (result.status !== 'fulfilled' || !result.value) {
+            return;
+          }
+
+          const questionId = questionIdsToFetch[index];
+          const nextMeta: QuestionReviewMeta = {
+            answer: result.value.answer,
+            options: result.value.options,
+          };
+          const currentMeta = prev[questionId];
+          const sameAnswer = currentMeta?.answer === nextMeta.answer;
+          const sameOptions =
+            (currentMeta?.options ?? []).length === (nextMeta.options ?? []).length &&
+            (currentMeta?.options ?? []).every((option, optionIndex) => option === nextMeta.options?.[optionIndex]);
+
+          if (sameAnswer && sameOptions) {
+            return;
+          }
+
+          next[questionId] = nextMeta;
           hasChanged = true;
         });
 
@@ -557,6 +643,14 @@ const Examreview = () => {
                 const validQuestionScore = Number.isFinite(questionScore) && questionScore > 0 ? questionScore : 0;
                 const baseMaxScore = Math.max(validQuestionScore, maxScoreFromResult, 1);
                 const maxScore = earnedScore > baseMaxScore ? earnedScore : baseMaxScore;
+                const fetchedMeta = questionReviewMetaById[row.result.questionId];
+                const questionMeta: QuestionReviewMeta | undefined =
+                  row.result.correctAnswer || fetchedMeta
+                    ? {
+                        answer: row.result.correctAnswer ?? fetchedMeta?.answer,
+                        options: fetchedMeta?.options,
+                      }
+                    : undefined;
 
                 return (
                   <article
@@ -587,7 +681,7 @@ const Examreview = () => {
                       }}
                     />
 
-                    {renderQuestionAnswers(row, hasJudgement, isCorrectQuestion)}
+                    {renderQuestionAnswers(row, hasJudgement, isCorrectQuestion, questionMeta)}
                   </article>
                 );
               })}

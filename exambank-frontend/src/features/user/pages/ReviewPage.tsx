@@ -391,8 +391,7 @@ export default function ReviewPage() {
 
     const load = async () => {
       try {
-        const limit = isSingleQuestionMode ? 120 : isTopicMode ? 50 : 20;
-        const data = await userService.getReviewRecommendations(limit);
+        const data = await userService.getReviewRecommendations();
         if (!mountedRef.current) return;
 
         let resolved: ReviewRecommendation[] = data;

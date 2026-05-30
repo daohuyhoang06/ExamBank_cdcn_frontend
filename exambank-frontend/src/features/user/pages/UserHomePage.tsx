@@ -16,15 +16,19 @@ import {
   TrendingUp,
   ChevronRight,
   BookOpen,
+  BookText,
   CalendarDays,
   Calculator,
   Languages,
   Code2,
   Atom,
   FlaskConical,
+  Globe2,
   Landmark,
   Library,
+  Microscope,
   Rocket,
+  Scale,
   X,
 } from "lucide-react";
 import type { Ranking, ReviewRecommendation, WeakTopicInsight } from '../types/user.type';
@@ -93,6 +97,29 @@ const formatSubjectNameWithAccents = (name: string): string => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+const formatTopicNameForUi = (name: string): string => {
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  return trimmed
+    .split(" ")
+    .map((token) => {
+      if (!token) {
+        return token;
+      }
+
+      if (/^[A-Z0-9]{2,5}$/.test(token)) {
+        return token;
+      }
+
+      const lowerToken = token.toLocaleLowerCase("vi-VN");
+      return lowerToken.charAt(0).toLocaleUpperCase("vi-VN") + lowerToken.slice(1);
+    })
+    .join(" ");
+};
+
 const normalizeRoles = (user: { role?: string; roles?: string[] } | null | undefined): string[] =>
   [user?.role, ...(user?.roles ?? [])]
     .filter((role): role is string => Boolean(role))
@@ -119,6 +146,15 @@ type SmartReviewTopicItem = {
   dueCount: number;
   priorityScore: number;
   difficulty: "easy" | "medium" | "hard";
+};
+
+type WeakAnalysisItem = {
+  key: string;
+  topicName: string;
+  subjectName: string;
+  masteryScore: number;
+  statusLabel: string;
+  statusClassName: string;
 };
 
 const SUBJECT_VISUALS = [
@@ -167,15 +203,141 @@ const SUBJECT_VISUALS = [
 ];
 
 const getSubjectVisual = (subjectName: string) => {
-  const normalized = subjectName.trim().toLowerCase();
-  return (
-    SUBJECT_VISUALS.find((item) => item.matchers.some((matcher) => normalized.includes(matcher))) ?? {
-      icon: Library,
-      iconClass: "text-cyan-600",
+  const normalized = normalizeSubjectKey(subjectName);
+
+  if (normalized.includes("toan") || normalized.includes("math")) {
+    return {
+      icon: Calculator,
+      iconClass: "text-blue-600",
+      iconBgClass: "bg-blue-100",
+      badgeClass: "bg-blue-100 text-blue-700 border-blue-200",
+      progressClass: "bg-gradient-to-r from-blue-500 to-sky-400",
+    };
+  }
+
+  if (normalized.includes("tieng nhat") || normalized.includes("nhat") || normalized.includes("japanese")) {
+    return {
+      icon: Languages,
+      iconClass: "text-emerald-600",
+      iconBgClass: "bg-emerald-100",
+      badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      progressClass: "bg-gradient-to-r from-emerald-500 to-green-400",
+    };
+  }
+
+  if (normalized.includes("tieng anh") || normalized.includes("english")) {
+    return {
+      icon: BookOpen,
+      iconClass: "text-sky-600",
+      iconBgClass: "bg-sky-100",
+      badgeClass: "bg-sky-100 text-sky-700 border-sky-200",
+      progressClass: "bg-gradient-to-r from-sky-500 to-cyan-400",
+    };
+  }
+
+  if (
+    normalized.includes("lap trinh") ||
+    normalized.includes("tin hoc") ||
+    normalized.includes("thuat toan") ||
+    normalized.includes("code") ||
+    normalized.includes("program")
+  ) {
+    return {
+      icon: Code2,
+      iconClass: "text-violet-600",
+      iconBgClass: "bg-violet-100",
+      badgeClass: "bg-violet-100 text-violet-700 border-violet-200",
+      progressClass: "bg-gradient-to-r from-violet-500 to-fuchsia-400",
+    };
+  }
+
+  if (normalized.includes("vat ly") || normalized.includes("vat li") || normalized.includes("physics")) {
+    return {
+      icon: Atom,
+      iconClass: "text-amber-600",
+      iconBgClass: "bg-amber-100",
+      badgeClass: "bg-amber-100 text-amber-700 border-amber-200",
+      progressClass: "bg-gradient-to-r from-amber-500 to-orange-400",
+    };
+  }
+
+  if (normalized.includes("hoa hoc") || normalized === "hoa" || normalized.includes("chem")) {
+    return {
+      icon: FlaskConical,
+      iconClass: "text-rose-600",
+      iconBgClass: "bg-rose-100",
+      badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
+      progressClass: "bg-gradient-to-r from-rose-500 to-red-400",
+    };
+  }
+
+  if (normalized.includes("sinh hoc") || normalized === "sinh" || normalized.includes("biology")) {
+    return {
+      icon: Microscope,
+      iconClass: "text-lime-600",
+      iconBgClass: "bg-lime-100",
+      badgeClass: "bg-lime-100 text-lime-700 border-lime-200",
+      progressClass: "bg-gradient-to-r from-lime-500 to-green-400",
+    };
+  }
+
+  if (normalized.includes("ngu van") || normalized === "van" || normalized.includes("literature")) {
+    return {
+      icon: BookText,
+      iconClass: "text-pink-600",
+      iconBgClass: "bg-pink-100",
+      badgeClass: "bg-pink-100 text-pink-700 border-pink-200",
+      progressClass: "bg-gradient-to-r from-pink-500 to-rose-400",
+    };
+  }
+
+  if (normalized.includes("dia ly") || normalized.includes("geography")) {
+    return {
+      icon: Globe2,
+      iconClass: "text-teal-600",
+      iconBgClass: "bg-teal-100",
+      badgeClass: "bg-teal-100 text-teal-700 border-teal-200",
+      progressClass: "bg-gradient-to-r from-teal-500 to-cyan-400",
+    };
+  }
+
+  if (normalized.includes("lich su") || normalized.includes("history")) {
+    return {
+      icon: Landmark,
+      iconClass: "text-slate-600",
+      iconBgClass: "bg-slate-100",
+      badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+      progressClass: "bg-gradient-to-r from-slate-500 to-slate-400",
+    };
+  }
+
+  if (normalized.includes("giao duc cong dan") || normalized.includes("gdcd") || normalized.includes("law")) {
+    return {
+      icon: Scale,
+      iconClass: "text-cyan-700",
       iconBgClass: "bg-cyan-100",
       badgeClass: "bg-cyan-100 text-cyan-700 border-cyan-200",
-    }
+      progressClass: "bg-gradient-to-r from-cyan-500 to-blue-400",
+    };
+  }
+
+  const legacyVisual = SUBJECT_VISUALS.find((item) =>
+    item.matchers.some((matcher) => subjectName.trim().toLowerCase().includes(matcher.toLowerCase())),
   );
+  if (legacyVisual) {
+    return {
+      ...legacyVisual,
+      progressClass: "bg-gradient-to-r from-cyan-500 to-sky-400",
+    };
+  }
+
+  return {
+    icon: Library,
+    iconClass: "text-cyan-600",
+    iconBgClass: "bg-cyan-100",
+    badgeClass: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    progressClass: "bg-gradient-to-r from-cyan-500 to-sky-400",
+  };
 };
 
 const getRecommendationPrimaryTopic = (item: ReviewRecommendation): string => {
@@ -203,6 +365,49 @@ const getRecommendationDifficulty = (
   }
 
   return "easy";
+};
+
+const toWeakTopicMastery = (accuracyRate?: number): number => {
+  if (typeof accuracyRate !== "number" || Number.isNaN(accuracyRate)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(accuracyRate * 100)));
+};
+
+const getWeakTopicStatusMeta = (masteryScore: number) => {
+  if (masteryScore >= 80) {
+    return {
+      statusLabel: "Mạnh",
+      statusClassName: "text-blue-600",
+    };
+  }
+
+  if (masteryScore >= 65) {
+    return {
+      statusLabel: "Khá",
+      statusClassName: "text-emerald-600",
+    };
+  }
+
+  if (masteryScore >= 45) {
+    return {
+      statusLabel: "Trung bình",
+      statusClassName: "text-amber-500",
+    };
+  }
+
+  if (masteryScore >= 30) {
+    return {
+      statusLabel: "Cần cải thiện",
+      statusClassName: "text-violet-600",
+    };
+  }
+
+  return {
+    statusLabel: "Yếu",
+    statusClassName: "text-rose-500",
+  };
 };
 
 
@@ -380,8 +585,27 @@ export default function UserHomePage() {
         }
         return left.topicName.localeCompare(right.topicName, "vi");
       })
-      .slice(0, 6);
+      ;
   }, [dueRecommendations, subjectNameById, weakTopicByName]);
+
+  const topicSubjectNameByKey = useMemo(() => {
+    const topicSubjectMap = new Map<string, string>();
+
+    for (const item of reviewRecommendations) {
+      const normalizedTopicName = normalizeSubjectKey(getRecommendationPrimaryTopic(item));
+      if (!normalizedTopicName || topicSubjectMap.has(normalizedTopicName)) {
+        continue;
+      }
+
+      const subjectName =
+        (item.subjectId ? subjectNameById.get(item.subjectId) : undefined) ??
+        "Chưa phân loại";
+
+      topicSubjectMap.set(normalizedTopicName, subjectName);
+    }
+
+    return topicSubjectMap;
+  }, [reviewRecommendations, subjectNameById]);
 
   const smartReviewStats = useMemo(() => {
     const itemsDueToday = dueRecommendations.length;
@@ -405,6 +629,33 @@ export default function UserHomePage() {
       estimatedMinutes,
     };
   }, [dueRecommendations.length, reviewRecommendations.length, reviewStats.dueCount, smartReviewSubjects.length, smartReviewTopics.length]);
+
+  const weakAnalysisItems = useMemo<WeakAnalysisItem[]>(() => {
+    return weakTopics
+      .map((item) => {
+        const masteryScore = toWeakTopicMastery(item.accuracyRate);
+        const statusMeta = getWeakTopicStatusMeta(masteryScore);
+        const subjectName =
+          topicSubjectNameByKey.get(normalizeSubjectKey(item.topicTag)) ??
+          "Chưa phân loại";
+
+        return {
+          key: `${item.topicTag}-${item.lastUpdatedAt ?? ""}`,
+          topicName: formatTopicNameForUi(item.topicTag),
+          subjectName,
+          masteryScore,
+          statusLabel: statusMeta.statusLabel,
+          statusClassName: statusMeta.statusClassName,
+        };
+      })
+      .sort((left, right) => {
+        if (left.masteryScore !== right.masteryScore) {
+          return right.masteryScore - left.masteryScore;
+        }
+        return left.topicName.localeCompare(right.topicName, "vi");
+      })
+      .slice(0, 5);
+  }, [topicSubjectNameByKey, weakTopics]);
 
 
 
@@ -465,7 +716,7 @@ export default function UserHomePage() {
         const [ranks, topics, recommendations, profile, streak, subjects] = await Promise.all([
           userService.getRankings(),
           userService.getWeakTopics(100),
-          userService.getReviewRecommendations(8),
+          userService.getReviewRecommendations(),
           userService.getMyProfile().catch(() => null),
           userService.getStreakStatus().catch(() => null),
           userService.getSubjectCatalog().catch(() => []),
@@ -768,11 +1019,11 @@ export default function UserHomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         {/* ── Right Column: Ôn tập thông minh (Full Width) ── */}
-        <section className="lg:col-span-12 relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-          <header className="relative border-b border-slate-100 px-6 py-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 border border-violet-100/50">
-                <Brain className="h-5 w-5" strokeWidth={2} />
+        <section className="lg:col-span-8 relative overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <header className="relative border-b border-slate-100 px-5 py-3.5">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 border border-violet-100/50">
+                <Brain className="h-4.5 w-4.5" strokeWidth={2} />
               </div>
               <div className="min-w-0">
                 <h3 className="text-base font-bold tracking-tight text-slate-900">Ôn tập thông minh</h3>
@@ -783,25 +1034,25 @@ export default function UserHomePage() {
             </div>
           </header>
 
-          <div className="relative px-6 py-5">
+          <div className="relative px-5 py-4">
             {insightsLoading && (
-              <div className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <div key={`sm2-stat-${index}`} className="h-24 rounded-[18px] bg-slate-100 animate-pulse" />
+              <div className="space-y-3.5">
+                <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`sm2-stat-${index}`} className="h-20 rounded-[18px] bg-slate-100 animate-pulse" />
                   ))}
                 </div>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                  <div className="h-72 rounded-[22px] bg-slate-100 animate-pulse" />
-                  <div className="h-72 rounded-[22px] bg-slate-100 animate-pulse" />
+                <div className="grid gap-3.5 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                  <div className="h-60 rounded-[22px] bg-slate-100 animate-pulse" />
+                  <div className="h-60 rounded-[22px] bg-slate-100 animate-pulse" />
                 </div>
               </div>
             )}
 
             {!insightsLoading && reviewRecommendations.length === 0 && (
-              <div className="flex flex-col items-center rounded-[22px] border border-dashed border-blue-200 bg-white/80 px-6 py-14 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[18px] bg-blue-50 text-blue-600">
-                  <Brain className="h-6 w-6" strokeWidth={1.8} />
+              <div className="flex flex-col items-center rounded-[20px] border border-dashed border-blue-200 bg-white/80 px-5 py-12 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-50 text-blue-600">
+                  <Brain className="h-5 w-5" strokeWidth={1.8} />
                 </div>
                 <p className="text-base font-semibold text-slate-800">Chưa có lịch ôn tập thông minh</p>
                 <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
@@ -810,9 +1061,9 @@ export default function UserHomePage() {
                 <button
                   type="button"
                   onClick={() => navigate('/user/online-exam')}
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition-colors hover:bg-blue-700 cursor-pointer"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-[12px] font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition-colors hover:bg-blue-700 cursor-pointer"
                 >
-                  <BookOpen className="h-4 w-4" strokeWidth={2.3} />
+                  <BookOpen className="h-3.5 w-3.5" strokeWidth={2.3} />
                   Làm bài để tạo lịch ôn
                 </button>
               </div>
@@ -821,12 +1072,12 @@ export default function UserHomePage() {
             {!insightsLoading && reviewRecommendations.length > 0 && (
               <>
                 {/* Grid of 3 Stat Cards */}
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-3">
                   {/* Stat Card 1 */}
-                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
-                    <div className="flex items-center gap-3">
-                      <CalendarDays className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
-                      <span className="text-2xl font-extrabold tracking-tight text-blue-700 tabular-nums">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3.5 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[84px]">
+                    <div className="flex items-center gap-2.5">
+                      <CalendarDays className="h-5 w-5 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-xl font-extrabold tracking-tight text-blue-700 tabular-nums">
                         {smartReviewStats.itemsDueToday.toLocaleString('vi-VN')}
                       </span>
                     </div>
@@ -836,10 +1087,10 @@ export default function UserHomePage() {
                   </div>
 
                   {/* Stat Card 2 */}
-                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
-                    <div className="flex items-center gap-3">
-                      <Library className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
-                      <span className="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3.5 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[84px]">
+                    <div className="flex items-center gap-2.5">
+                      <Library className="h-5 w-5 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-xl font-extrabold tracking-tight text-slate-900 tabular-nums">
                         {smartReviewStats.subjectCount.toLocaleString('vi-VN')}
                       </span>
                     </div>
@@ -849,10 +1100,10 @@ export default function UserHomePage() {
                   </div>
 
                   {/* Stat Card 3 */}
-                  <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[96px]">
-                    <div className="flex items-center gap-3">
-                      <TrendingUp className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2} />
-                      <span className="text-2xl font-extrabold tracking-tight text-blue-700 tabular-nums">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3.5 flex flex-col justify-between shadow-[0_1px_2px_rgba(15,23,42,0.03)] min-h-[84px]">
+                    <div className="flex items-center gap-2.5">
+                      <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" strokeWidth={2} />
+                      <span className="text-xl font-extrabold tracking-tight text-blue-700 tabular-nums">
                         {smartReviewStats.completedToday}/{smartReviewStats.totalPlannedToday}
                       </span>
                     </div>
@@ -869,14 +1120,14 @@ export default function UserHomePage() {
                 </div>
 
                 {/* 2-Column Content Grid */}
-                <div className="mt-6 grid gap-5 md:grid-cols-12">
+                <div className="mt-5 grid gap-4 md:grid-cols-12">
                   {/* Left Column: Phân bổ theo môn */}
-                  <div className="md:col-span-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <div className="mb-4">
+                  <div className="md:col-span-5 rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm">
+                    <div className="mb-3">
                       <h4 className="text-sm font-bold text-slate-900">Phân bổ theo môn</h4>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       {smartReviewSubjects.map((subject) => {
                         const visual = getSubjectVisual(subject.name);
                         const SubjectIcon = visual.icon;
@@ -886,15 +1137,15 @@ export default function UserHomePage() {
                             key={subject.key}
                             className="flex items-center justify-between gap-3 px-0.5 py-0.5"
                           >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${visual.iconBgClass} ${visual.iconClass}`}>
-                                <SubjectIcon className="h-4 w-4" strokeWidth={2} />
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${visual.iconBgClass} ${visual.iconClass}`}>
+                                <SubjectIcon className="h-3.5 w-3.5" strokeWidth={2} />
                               </div>
-                              <span className="truncate text-xs font-semibold text-slate-800">
+                              <span className="truncate text-[12px] font-semibold text-slate-800">
                                 {formatSubjectNameWithAccents(subject.name)}
                               </span>
                             </div>
-                            <span className={`inline-flex shrink-0 items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-bold w-6 h-6 ${visual.badgeClass}`}>
+                            <span className={`inline-flex shrink-0 items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-bold w-6 h-6 ${visual.badgeClass}`}>
                               {subject.count}
                             </span>
                           </div>
@@ -904,12 +1155,12 @@ export default function UserHomePage() {
                   </div>
 
                   {/* Right Column: Đề xuất ưu tiên hôm nay */}
-                  <div className="md:col-span-7 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                    <div className="mb-4">
+                  <div className="md:col-span-7 rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm">
+                    <div className="mb-3">
                       <h4 className="text-sm font-bold text-slate-900">Đề xuất ưu tiên hôm nay</h4>
                     </div>
 
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                       {smartReviewTopics.map((topic, index) => {
                         const subjectVisual = getSubjectVisual(topic.subjectName);
 
@@ -918,24 +1169,24 @@ export default function UserHomePage() {
                             key={topic.key}
                             type="button"
                             onClick={() => navigate(`/user/review?topic=${encodeURIComponent(topic.topicName)}`)}
-                            className="w-full flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/20 px-3 py-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer"
+                            className="w-full flex items-center justify-between gap-2.5 rounded-lg border border-slate-100 bg-slate-50/20 px-3 py-2 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/30 cursor-pointer"
                           >
                             {/* Index circle */}
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-blue-50/50 text-xs font-bold text-blue-600">
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-blue-50/50 text-[10px] font-bold text-blue-600">
                               {index + 1}
                             </div>
 
                             {/* Title */}
                             <div className="min-w-0 flex-1">
-                              <span className="truncate text-xs font-semibold text-slate-800 block">
-                                {index + 1}. {topic.topicName}
+                              <span className="truncate text-[12px] font-semibold text-slate-800 block">
+                                {index + 1}. {formatTopicNameForUi(topic.topicName)}
                               </span>
                             </div>
 
                             {/* Badges on the right */}
                             <div className="flex items-center gap-2 shrink-0">
-                              <div className="w-20 shrink-0">
-                                <span className={`inline-flex w-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${subjectVisual.badgeClass}`}>
+                              <div className="w-[88px] shrink-0">
+                                <span className={`inline-flex w-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${subjectVisual.badgeClass}`}>
                                   {formatSubjectNameWithAccents(topic.subjectName)}
                                 </span>
                               </div>
@@ -946,31 +1197,101 @@ export default function UserHomePage() {
                     </div>
 
                     {/* Centered blue link */}
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-3.5 flex justify-center">
                       <button
                         type="button"
                         onClick={() => navigate('/user/review')}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline transition-all cursor-pointer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline transition-all cursor-pointer"
                       >
                         Xem tất cả {smartReviewStats.totalPlannedToday} mục
-                        <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        <ChevronRight className="w-3 h-3" strokeWidth={2.5} />
                       </button>
                     </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="mt-6 flex items-center justify-center border-t border-slate-100 pt-5">
+                <div className="mt-5 flex items-center justify-center border-t border-slate-100 pt-4">
                   <button
                     type="button"
                     onClick={() => navigate('/user/review')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-7 py-2.5 text-[11px] font-bold text-white shadow-sm transition-all hover:bg-blue-700 hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
                   >
-                    <Rocket className="h-4 w-4" strokeWidth={2} />
+                    <Rocket className="h-3.5 w-3.5" strokeWidth={2} />
                     Bắt đầu ôn tập
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        </section>
+
+        <section className="lg:col-span-4 overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <header className="border-b border-slate-100 px-5 py-3.5">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/60">
+                <TrendingUp className="h-4.5 w-4.5" strokeWidth={2} />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-bold tracking-tight text-slate-900">Phân tích điểm yếu</h3>
+                <p className="mt-0.5 text-[11px] leading-5 text-slate-500">
+                  Tổng quan mức độ thành thạo theo các chủ đề bạn đã làm bài.
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <div className="px-5 py-4">
+            {insightsLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={`weak-topic-${index}`} className="h-[54px] rounded-2xl bg-slate-100 animate-pulse" />
+                ))}
+              </div>
+            ) : weakAnalysisItems.length === 0 ? (
+              <div className="flex flex-col items-center rounded-[20px] border border-dashed border-blue-200 bg-white/80 px-4 py-12 text-center">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <TrendingUp className="h-4.5 w-4.5" strokeWidth={2} />
+                </div>
+                <p className="text-[14px] font-semibold text-slate-800">Chưa có dữ liệu phân tích</p>
+                <p className="mt-2 text-[12px] leading-6 text-slate-500">
+                  Hệ thống cần thêm bài đã chấm điểm để xác định các chủ đề bạn đang yếu.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {weakAnalysisItems.map((item) => {
+                  const visual = getSubjectVisual(item.subjectName);
+                  const SubjectIcon = visual.icon;
+
+                  return (
+                    <div
+                      key={item.key}
+                      className="rounded-2xl border border-slate-100 bg-white/90 px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${visual.iconBgClass} ${visual.iconClass}`}>
+                          <SubjectIcon className="h-4 w-4" strokeWidth={2} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-semibold text-slate-800">{formatTopicNameForUi(item.topicName)}</p>
+                          <p className="truncate text-[10px] font-medium text-slate-400">{formatSubjectNameWithAccents(item.subjectName)}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[12px] font-bold text-blue-600">{item.masteryScore}/100</p>
+                          <p className={`text-[10px] font-semibold ${item.statusClassName}`}>{item.statusLabel}</p>
+                        </div>
+                      </div>
+                      <div className="mt-2.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${visual.progressClass} transition-all duration-500`}
+                          style={{ width: `${item.masteryScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </section>

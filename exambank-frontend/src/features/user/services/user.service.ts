@@ -287,6 +287,8 @@ type BackendQuestionResult = {
   score_earned?: number | string;
   maxScore?: number | string;
   max_score?: number | string;
+  correctAnswer?: string | null;
+  correct_answer?: string | null;
 };
 
 type BackendExamSessionResult = {
@@ -540,6 +542,7 @@ const mapSessionResult = (data: BackendExamSessionResult): ExamSessionResult => 
     isCorrect: item.isCorrect ?? item.is_correct,
     scoreEarned: toFiniteNumberOrUndefined(item.scoreEarned ?? item.score_earned),
     maxScore: toFiniteNumberOrUndefined(item.maxScore ?? item.max_score),
+    correctAnswer: item.correctAnswer ?? item.correct_answer ?? undefined,
   })),
 });
 
@@ -1401,10 +1404,10 @@ export const userService = {
     }
   },
 
-  getReviewRecommendations: async (limit = 8): Promise<ReviewRecommendation[]> => {
+  getReviewRecommendations: async (limit?: number): Promise<ReviewRecommendation[]> => {
     try {
       const { data } = await api.get<BackendReviewRecommendation[]>("/api/v1/me/reviews/recommendations", {
-        params: { limit },
+        params: typeof limit === "number" ? { limit } : undefined,
       });
       return data.map(mapReviewRecommendation).filter((item) => item.questionId > 0 && item.content.trim().length > 0);
     } catch {
@@ -1784,6 +1787,26 @@ export const examService = {
       );
     } catch {
       return undefined;
+    }
+  },
+
+  getQuestionReviewMetaById: async (questionId: number): Promise<{ score?: number; answer?: string; options?: string[] } | null> => {
+    try {
+      const { data } = await api.get<BackendQuestionDetail>(`/api/questions/${questionId}`);
+      return {
+        score: toFiniteNumberOrUndefined(
+          data.maxScore ??
+            data.max_score ??
+            data.score ??
+            data.point ??
+            data.points ??
+            data.difficulty,
+        ),
+        answer: data.answer ?? data.correctAnswer ?? data.correct_answer ?? undefined,
+        options: parseOptions(data.options),
+      };
+    } catch {
+      return null;
     }
   },
 

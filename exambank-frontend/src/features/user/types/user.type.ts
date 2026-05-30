@@ -208,6 +208,7 @@ export interface QuestionResult {
   isCorrect?: boolean;
   scoreEarned?: number;
   maxScore?: number;
+  correctAnswer?: string;
 }
 
 export interface ExamSessionResult {
