@@ -148,9 +148,13 @@ export interface Exam {
   questions: Question[];
   createdAt: string;
   vip?: boolean;
+  accessTier?: string;
   fullAccess?: boolean;
   requiresUnlock?: boolean;
   unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
+  totalQuestionCount?: number;
 }
 
 export interface ExamListItem {
@@ -166,9 +170,12 @@ export interface ExamListItem {
   status?: string;
   createdAt?: string;
   vip?: boolean;
+  accessTier?: string;
   fullAccess?: boolean;
   requiresUnlock?: boolean;
   unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
 }
 
 export type SubmitReason = "MANUAL" | "TIMEOUT" | "AUTO";

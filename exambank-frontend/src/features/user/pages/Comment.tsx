@@ -369,7 +369,7 @@ export default function DiscussionDetailPage() {
           setDocumentDownloadCount(Math.max(0, Math.floor(document.downloadCount ?? 0)));
           setDocumentFullAccess(document.fullAccess !== false);
           setDocumentRequiresUnlock(Boolean(document.requiresUnlock));
-          setDocumentUnlockCoinCost(document.unlockCoinCost ?? 5);
+          setDocumentUnlockCoinCost(document.unlockCoinCost ?? 10);
           setDocumentUnlockError('');
         } else {
           setDocumentTitle('Chi tiết đề thi');
@@ -522,8 +522,15 @@ export default function DiscussionDetailPage() {
       setDocumentFullAccess(document.fullAccess !== false);
       setDocumentRequiresUnlock(Boolean(document.requiresUnlock));
       setDocumentUnlockCoinCost(document.unlockCoinCost ?? documentUnlockCoinCost);
+      setPreviewLoadError(false);
+      setInlinePreviewUrl((current) => {
+        if (current && current.startsWith('blob:')) {
+          URL.revokeObjectURL(current);
+        }
+        return null;
+      });
     } catch {
-      setDocumentUnlockError('Khong the mo khoa tai lieu. Vui long kiem tra coin hoac nang cap premium.');
+      setDocumentUnlockError('Không thể mở khóa tài liệu. Vui lòng kiểm tra coin hoặc nâng cấp premium.');
     } finally {
       setIsUnlockingDocument(false);
     }
@@ -848,9 +855,9 @@ export default function DiscussionDetailPage() {
                 <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-200 text-amber-900">
                   <Lock size={18} />
                 </div>
-                <p className="text-sm font-black text-amber-950">Mo khoa de xem toan bo noi dung</p>
+                <p className="text-sm font-black text-amber-950">Mở khóa để xem toàn bộ nội dung</p>
                 <p className="mt-1 text-xs font-semibold text-amber-800">
-                  Tai khoan premium xem tu do. User thuong se bi tru {documentUnlockCoinCost} coin.
+                  Tài khoản premium xem tự do. User thường sẽ bị trừ {documentUnlockCoinCost} coin.
                 </p>
                 {documentUnlockError ? <p className="mt-2 text-xs text-red-700">{documentUnlockError}</p> : null}
                 <button
@@ -858,7 +865,7 @@ export default function DiscussionDetailPage() {
                   disabled={isUnlockingDocument}
                   className="mt-3 rounded-full bg-[#003466] px-5 py-2 text-xs font-black text-white hover:bg-[#0b457e] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isUnlockingDocument ? 'Dang mo khoa...' : `Mo khoa (${documentUnlockCoinCost} coin)`}
+                  {isUnlockingDocument ? 'Đang mở khóa...' : `Mở khóa (${documentUnlockCoinCost} coin)`}
                 </button>
               </div>
             </div>

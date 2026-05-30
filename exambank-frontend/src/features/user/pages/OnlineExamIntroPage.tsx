@@ -57,6 +57,8 @@ export default function OnlineExamIntroPage() {
   const [unlockError, setUnlockError] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [maxScore, setMaxScore] = useState(0);
+  const [previewQuestions, setPreviewQuestions] = useState<string[]>([]);
+  const [lockedQuestionCount, setLockedQuestionCount] = useState(0);
   const [attempts, setAttempts] = useState<
     Array<{
       sessionId: number;
@@ -90,21 +92,25 @@ export default function OnlineExamIntroPage() {
     const load = async () => {
       setIsLoading(true);
       try {
-        const [data, fullExam] = await Promise.all([
+        const [data, previewExam] = await Promise.all([
           examService.getExamListItemById(id),
-          examService.getExamById(String(id)),
+          examService.getExamPreview(id),
         ]);
         setExam(data);
         const myAttempts = await examService.getMyExamAttempts(id);
         setAttempts(myAttempts);
 
-        if (fullExam) {
-          setQuestionCount(fullExam.questions.length);
-          const totalScore = fullExam.questions.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+        if (previewExam) {
+          setQuestionCount(previewExam.totalQuestionCount ?? previewExam.questions.length);
+          setPreviewQuestions(previewExam.questions.map((item) => item.question));
+          setLockedQuestionCount(previewExam.lockedQuestionCount ?? 0);
+          const totalScore = previewExam.questions.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
           setMaxScore(totalScore);
         } else {
           setQuestionCount(0);
           setMaxScore(0);
+          setPreviewQuestions([]);
+          setLockedQuestionCount(0);
         }
       } finally {
         setIsLoading(false);
@@ -118,8 +124,8 @@ export default function OnlineExamIntroPage() {
     if (!exam) {
       return { canStart: false, message: "Không tìm thấy đề thi hoặc đề chưa được công khai." };
     }
-    if (exam.vip && exam.requiresUnlock) {
-      return { canStart: false, message: "Day la de VIP. Mo khoa bang coin hoac dung premium de lam bai." };
+    if (exam.requiresUnlock) {
+      return { canStart: false, message: exam.vip ? "Đây là đề VIP. Mở khóa bằng coin hoặc dùng premium để làm bài." : "Mở khóa đề để xem và làm toàn bộ nội dung." };
     }
     return getWindowState(exam, Date.now());
   }, [exam]);
@@ -137,6 +143,8 @@ export default function OnlineExamIntroPage() {
       ]);
       setExam(nextExam);
       setQuestionCount(fullExam?.questions.length ?? 0);
+      setPreviewQuestions(fullExam?.questions.slice(0, 1).map((item) => item.question) ?? []);
+      setLockedQuestionCount(fullExam?.requiresUnlock ? fullExam.lockedQuestionCount ?? 0 : 0);
       setMaxScore(fullExam?.questions.reduce((sum, item) => sum + (Number(item.score) || 0), 0) ?? 0);
     } catch {
       setUnlockError("Khong the mo khoa de VIP. Vui long kiem tra coin hoac nang cap premium.");
@@ -211,16 +219,46 @@ export default function OnlineExamIntroPage() {
       <section className="grid gap-4 lg:grid-cols-[7fr_3fr]">
         <div className="space-y-4">
           <div className="rounded-2xl border border-[#c7e6e2] bg-white/90 p-4 md:p-5">
-            {exam.vip && exam.requiresUnlock ? (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">Xem trước</p>
+              {previewQuestions.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {previewQuestions.map((content, index) => (
+                    <div
+                      key={`${content}-${index}`}
+                      className="rounded-lg bg-white p-3 text-sm font-semibold leading-relaxed text-slate-700 shadow-sm"
+                      dangerouslySetInnerHTML={{ __html: content }}
+                    />
+                  ))}
+                  {lockedQuestionCount > 0 ? (
+                    <div className="relative overflow-hidden rounded-lg border border-dashed border-amber-200 bg-white p-4">
+                      <div className="space-y-2 blur-[2px]">
+                        <div className="h-3 w-11/12 rounded bg-slate-200" />
+                        <div className="h-3 w-9/12 rounded bg-slate-200" />
+                        <div className="h-3 w-10/12 rounded bg-slate-200" />
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-900">
+                          <Lock size={13} /> {lockedQuestionCount} câu còn lại cần mở khóa
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm font-semibold text-slate-500">Chưa có câu hỏi xem trước.</p>
+              )}
+            </div>
+            {exam.requiresUnlock ? (
               <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200 text-amber-900">
                     <Lock size={16} />
                   </span>
                   <div>
-                    <p className="font-black">De VIP can mo khoa</p>
+                    <p className="font-black">{exam.vip ? "Đề VIP cần mở khóa" : "Đề cần mở khóa"}</p>
                     <p className="mt-1 text-xs text-amber-800">
-                      Tai khoan premium duoc truy cap tu do. User thuong se bi tru {exam.unlockCoinCost ?? 5} coin.
+                      Tài khoản premium được truy cập tự do. User thường sẽ bị trừ {exam.unlockCoinCost ?? (exam.vip ? 50 : 10)} coin.
                     </p>
                   </div>
                 </div>
@@ -231,7 +269,7 @@ export default function OnlineExamIntroPage() {
                   className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-xs font-black text-amber-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Crown size={14} />
-                  {isUnlocking ? "Dang mo khoa..." : `Mo khoa (${exam.unlockCoinCost ?? 5} coin)`}
+                  {isUnlocking ? "Đang mở khóa..." : `${exam.vip ? "Mở khóa VIP" : "Mở khóa"} (${exam.unlockCoinCost ?? (exam.vip ? 50 : 10)} coin)`}
                 </button>
               </div>
             ) : availability.canStart ? (

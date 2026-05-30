@@ -35,6 +35,7 @@ import {
   createComposerQuestion,
   getComposerExamById,
   getComposerQuestionById,
+  getModeratorAiImport,
   listComposerExamQuestions,
   listComposerSubjects,
   listComposerTopics,
@@ -51,7 +52,11 @@ import type {
   ComposerSubjectRecord,
   ComposerTopicRecord,
 } from "@/features/moderator/types/moderator-composer.type";
-import { COMPOSER_AI_IMPORT_DRAFT_KEY, COMPOSER_FLASH_NOTICE_KEY } from "@/features/moderator/services/moderator-ai-import-tracker";
+import {
+  COMPOSER_AI_IMPORT_DRAFT_KEY,
+  COMPOSER_FLASH_NOTICE_KEY,
+  removePendingModeratorAiImportJob,
+} from "@/features/moderator/services/moderator-ai-import-tracker";
 import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 type QuestionType =
@@ -808,6 +813,15 @@ export default function ModeratorComposerFormPage() {
     const parsed = Number(rawExamId);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }, [searchParams]);
+  const aiImportJobIdFromQuery = useMemo(() => {
+    const rawJobId = searchParams.get("aiImportJobId");
+    if (!rawJobId) {
+      return null;
+    }
+
+    const parsed = Number(rawJobId);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }, [searchParams]);
 
   const [examTitle, setExamTitle] = useState(DEFAULT_EXAM_TITLE);
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
@@ -919,6 +933,18 @@ export default function ModeratorComposerFormPage() {
       );
 
       if (!editingExamIdFromQuery) {
+        if (aiImportJobIdFromQuery) {
+          const aiImportJob = await getModeratorAiImport(aiImportJobIdFromQuery);
+          const draftFromJob = parseModeratorAiDraft(aiImportJob.draftJson);
+          if (!draftFromJob) {
+            throw new Error(aiImportJob.errorMessage?.trim() || "Bản nháp AI import chưa sẵn sàng hoặc không hợp lệ.");
+          }
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem(COMPOSER_AI_IMPORT_DRAFT_KEY, JSON.stringify(draftFromJob));
+          }
+          removePendingModeratorAiImportJob(aiImportJobIdFromQuery);
+        }
+
         const storedAiDraft = parseStoredAiDraft();
         if (storedAiDraft) {
           const subjectFromDraft = resolveAiDraftSubjectName(storedAiDraft, fetchedSubjects, fallbackSubject);
@@ -1055,7 +1081,7 @@ export default function ModeratorComposerFormPage() {
     } finally {
       setIsLoadingForm(false);
     }
-  }, [editingExamIdFromQuery, isViewOnlyFromQuery, revokeObjectPreviewUrl, toast]);
+  }, [aiImportJobIdFromQuery, editingExamIdFromQuery, isViewOnlyFromQuery, revokeObjectPreviewUrl, toast]);
 
   useEffect(() => {
     void loadInitialData();

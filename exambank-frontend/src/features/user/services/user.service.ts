@@ -1,4 +1,4 @@
-import { apiClient, getStoredAuthToken } from "@/lib/api-client";
+﻿import { apiClient, getStoredAuthToken } from "@/lib/api-client";
 import { isAxiosError } from "axios";
 import type {
   AccountStatus,
@@ -43,22 +43,22 @@ const buildAuthConfig = () => {
 };
 
 const DEFAULT_EDUCATION_LEVELS: EducationLevel[] = [
-  { id: "10", name: "Lớp 10", group: "THPT" },
-  { id: "11", name: "Lớp 11", group: "THPT" },
-  { id: "12", name: "Lớp 12", group: "THPT" },
-  { id: "uni", name: "Sinh viên Đại học", group: "Đại học" },
+  { id: "10", name: "Lá»›p 10", group: "THPT" },
+  { id: "11", name: "Lá»›p 11", group: "THPT" },
+  { id: "12", name: "Lá»›p 12", group: "THPT" },
+  { id: "uni", name: "Sinh viÃªn Äáº¡i há»c", group: "Äáº¡i há»c" },
 ];
 
 const DEFAULT_SUBJECTS: Subject[] = [
-  "Toán học",
-  "Vật lý",
-  "Hóa học",
-  "Sinh học",
-  "Ngữ văn",
-  "Tiếng Anh",
-  "Lịch sử",
-  "Địa lý",
-  "Tin học",
+  "ToÃ¡n há»c",
+  "Váº­t lÃ½",
+  "HÃ³a há»c",
+  "Sinh há»c",
+  "Ngá»¯ vÄƒn",
+  "Tiáº¿ng Anh",
+  "Lá»‹ch sá»­",
+  "Äá»‹a lÃ½",
+  "Tin há»c",
 ];
 const SUBMISSION_STORAGE_KEY_PREFIX = "exambank_user_submissions";
 const STORAGE_PUBLIC_ENDPOINT = (
@@ -196,7 +196,8 @@ type BackendReviewRecommendation = {
 };
 
 type BackendExam = {
-  id: number;
+  id?: number;
+  examId?: number;
   title: string;
   subjectId?: number | null;
   subjectName?: string | null;
@@ -222,9 +223,14 @@ type BackendExam = {
   createdAt?: string;
   source?: string | null;
   vip?: boolean | null;
+  accessTier?: string | null;
   fullAccess?: boolean | null;
   requiresUnlock?: boolean | null;
   unlockCoinCost?: number | null;
+  previewQuestionCount?: number | null;
+  lockedQuestionCount?: number | null;
+  totalQuestionCount?: number | null;
+  questions?: BackendExamQuestion[] | null;
 };
 
 type BackendExamQuestion = {
@@ -233,6 +239,7 @@ type BackendExamQuestion = {
   imageUrl?: string | null;
   options?: string | null;
   answer?: string | null;
+  type?: string | null;
   topicTag?: BackendTopicTag[] | null;
   score?: number | string | null;
   maxScore?: number | string | null;
@@ -652,7 +659,7 @@ const mapStoredAuthUserToProfile = (): UserProfile | null => {
 
   return {
     id: resolvedId,
-    name: storedUser.fullName?.trim() || storedUser.email || "Người dùng",
+    name: storedUser.fullName?.trim() || storedUser.email || "NgÆ°á»i dÃ¹ng",
     email: storedUser.email || "",
     username: storedUser.email ? deriveUsername(storedUser.email, resolvedId) : `user_${resolvedId}`,
     avatarUrl: storedUser.avatarUrl,
@@ -672,7 +679,7 @@ const mapBackendSelfUserToProfile = (selfUser: BackendSelfUser): UserProfile => 
   const storedFallback = mapStoredAuthUserToProfile();
   const id = selfUser.id ?? storedFallback?.id ?? 0;
   const email = toNonEmptyString(selfUser.email) ?? storedFallback?.email ?? "";
-  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "Người dùng");
+  const name = toNonEmptyString(selfUser.name) ?? storedFallback?.name ?? (email || "NgÆ°á»i dÃ¹ng");
   const roles = storedFallback?.roles?.length ? storedFallback.roles : ["USER"];
 
   return {
@@ -711,7 +718,7 @@ const isLegacyMeFallbackStatus = (status?: number): boolean => status === 404 ||
 
 const toRelativeTime = (isoDate?: string): string => {
   if (!isoDate) {
-    return "Vừa xong";
+    return "Vá»«a xong";
   }
 
   const date = new Date(isoDate);
@@ -719,17 +726,17 @@ const toRelativeTime = (isoDate?: string): string => {
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (Number.isNaN(diffMins) || diffMins < 1) {
-    return "Vừa xong";
+    return "Vá»«a xong";
   }
   if (diffMins < 60) {
-    return `${diffMins} phút trước`;
+    return `${diffMins} phÃºt trÆ°á»›c`;
   }
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) {
-    return `${diffHours} giờ trước`;
+    return `${diffHours} giá» trÆ°á»›c`;
   }
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} ngày trước`;
+  return `${diffDays} ngÃ y trÆ°á»›c`;
 };
 
 const toDisplayDate = (isoDate?: string): string => {
@@ -875,7 +882,7 @@ const looksLikeTrueFalseOptions = (source: string[]): boolean => {
   }
 
   const normalized = source.map((item) => item.trim().toLowerCase());
-  const hasTrue = normalized.some((item) => item === "đúng" || item === "dung" || item === "true");
+  const hasTrue = normalized.some((item) => item === "Ä‘Ãºng" || item === "dung" || item === "true");
   const hasFalse = normalized.some((item) => item === "sai" || item === "false");
   return hasTrue && hasFalse;
 };
@@ -1133,10 +1140,10 @@ const mapDocumentToSubmission = (doc: DocumentSummary): Submission => {
   return {
     id: doc.id,
     title: doc.title,
-    university: doc.school ?? "Chưa cập nhật",
+    university: doc.school ?? "ChÆ°a cáº­p nháº­t",
     year: doc.semesterYear ?? "N/A",
-    subject: doc.subject ?? "Chưa phân loại",
-    type: doc.type ?? "Tài liệu",
+    subject: doc.subject ?? "ChÆ°a phÃ¢n loáº¡i",
+    type: doc.type ?? "TÃ i liá»‡u",
     status,
     submittedAt: toDisplayDateTime(doc.submittedAt ?? doc.createdAt),
     note: doc.moderatorNote,
@@ -1169,7 +1176,7 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
       id: String(item.questionId),
       type: "true_false",
       question: questionContent,
-      correctAnswer: answerText.toLowerCase() === "đúng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
+      correctAnswer: answerText.toLowerCase() === "Ä‘Ãºng" || answerText.toLowerCase() === "dung" || answerText.toLowerCase() === "true" || answerText.toLowerCase() === "a",
       score,
       topicTags,
     };
@@ -1207,6 +1214,23 @@ const mapQuestion = (item: BackendExamQuestion): Question => {
     topicTags,
   };
 };
+
+const mapBackendExamToExam = (examData: BackendExam, questionData: BackendExamQuestion[]): Exam => ({
+  id: String(examData.id ?? examData.examId ?? 0),
+  title: examData.title,
+  description: `Đề thi số #${examData.id ?? examData.examId ?? 0}`,
+  duration: examData.durationMinutes ?? 30,
+  createdAt: examData.createdAt ?? new Date().toISOString(),
+  vip: Boolean(examData.vip ?? (examData.source === "AI_IMPORT" || examData.accessTier === "VIP")),
+  accessTier: examData.accessTier ?? (examData.source === "AI_IMPORT" ? "VIP" : "NORMAL"),
+  fullAccess: Boolean(examData.fullAccess),
+  requiresUnlock: Boolean(examData.requiresUnlock),
+  unlockCoinCost: examData.unlockCoinCost ?? undefined,
+  previewQuestionCount: examData.previewQuestionCount ?? undefined,
+  lockedQuestionCount: examData.lockedQuestionCount ?? undefined,
+  totalQuestionCount: examData.totalQuestionCount ?? questionData.length,
+  questions: questionData.map(mapQuestion),
+});
 
 export const userService = {
   getComments: async (documentId: number): Promise<UserComment[]> => {
@@ -1314,7 +1338,7 @@ export const userService = {
       "Khoa h\u1ecdc t\u1ef1 nhi\u00ean",
       "Khoa h\u1ecdc x\u00e3 h\u1ed9i",
     ];
-    const allSubjectsOption = "Tất cả môn học";
+    const allSubjectsOption = "Táº¥t cáº£ mÃ´n há»c";
     const normalizeSubjectKey = (value: string): string => value.trim().toLowerCase();
     const mergeSubjects = (dynamicSubjects: string[]): Subject[] => {
       const merged = [...DEFAULT_SUBJECTS, ...supplementalSubjects, ...dynamicSubjects]
@@ -1341,7 +1365,7 @@ export const userService = {
       const { data } = await api.get<BackendSubject[]>("/api/subjects");
       return data
         .map((item) => ({
-          id: item.id,
+          id: item.id ?? 0,
           name: item.name.trim(),
         }))
         .filter((item) => item.name.length > 0);
@@ -1531,7 +1555,7 @@ export const userService = {
         }
       }
 
-      throw error instanceof Error ? error : new Error("Không thể tải thông tin hồ sơ.");
+      throw error instanceof Error ? error : new Error("KhÃ´ng thá»ƒ táº£i thÃ´ng tin há»“ sÆ¡.");
     }
   },
 
@@ -1770,24 +1794,28 @@ export const examService = {
         return null;
       }
 
-      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}`, buildAuthConfig());
-      if (!isUserVisibleExamStatus(examData.status)) {
+      const { data: examData } = await api.get<BackendExam>(`/api/exams/${examId}/take`, buildAuthConfig());
+      if (examData.status && !isUserVisibleExamStatus(examData.status)) {
         return null;
       }
 
-      const { data: questionData } = await api.get<BackendExamQuestion[]>(`/api/exams/${examId}/questions`, buildAuthConfig());
-      return {
-        id: String(examData.id),
-        title: examData.title,
-        description: `Đề thi số #${examData.id}`,
-        duration: examData.durationMinutes ?? 30,
-        createdAt: examData.createdAt ?? new Date().toISOString(),
-        vip: Boolean(examData.vip ?? examData.source === "AI_IMPORT"),
-        fullAccess: Boolean(examData.fullAccess),
-        requiresUnlock: Boolean(examData.requiresUnlock),
-        unlockCoinCost: examData.unlockCoinCost ?? undefined,
-        questions: questionData.map(mapQuestion),
-      };
+      return mapBackendExamToExam(examData, examData.questions ?? []);
+    } catch {
+      return null;
+    }
+  },
+
+  getExamPreview: async (id: number): Promise<Exam | null> => {
+    try {
+      const { data } = await api.get<BackendExam>(`/api/exams/${id}/preview`, buildAuthConfig());
+      return mapBackendExamToExam(
+        {
+          ...data,
+          id: data.id ?? id,
+          status: data.status ?? "PUBLISHED",
+        },
+        data.questions ?? [],
+      );
     } catch {
       return null;
     }
@@ -1812,7 +1840,7 @@ export const examService = {
       return exams
         .filter((item) => isUserVisibleExamStatus(item.status))
         .map((item) => ({
-          id: item.id,
+          id: item.id ?? item.examId ?? 0,
           title: item.title,
           subjectId: item.subjectId,
           subjectName:
@@ -1828,9 +1856,12 @@ export const examService = {
           status: item.status,
           createdAt: item.createdAt,
           vip: Boolean(item.vip ?? item.source === "AI_IMPORT"),
+          accessTier: item.accessTier ?? (item.source === "AI_IMPORT" ? "VIP" : "NORMAL"),
           fullAccess: Boolean(item.fullAccess),
           requiresUnlock: Boolean(item.requiresUnlock),
           unlockCoinCost: item.unlockCoinCost ?? undefined,
+          previewQuestionCount: item.previewQuestionCount ?? undefined,
+          lockedQuestionCount: item.lockedQuestionCount ?? undefined,
         }));
     } catch {
       return [];
@@ -1857,7 +1888,7 @@ export const examService = {
       }
 
       return {
-        id: data.id,
+        id: data.id ?? id,
         title: data.title,
         subjectId: data.subjectId,
         subjectName:
@@ -1873,9 +1904,12 @@ export const examService = {
         status: data.status,
         createdAt: data.createdAt,
         vip: Boolean(data.vip ?? data.source === "AI_IMPORT"),
+        accessTier: data.accessTier ?? (data.source === "AI_IMPORT" ? "VIP" : "NORMAL"),
         fullAccess: Boolean(data.fullAccess),
         requiresUnlock: Boolean(data.requiresUnlock),
         unlockCoinCost: data.unlockCoinCost ?? undefined,
+        previewQuestionCount: data.previewQuestionCount ?? undefined,
+        lockedQuestionCount: data.lockedQuestionCount ?? undefined,
       };
     } catch {
       return null;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Bell, Building2, ChevronLeft, ChevronRight, Crown, Headset, LogOut, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -52,7 +52,9 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
     normalized === 'DOC_APPROVED' ||
     normalized === 'DOC_REJECTED' ||
     normalized === 'DOC_SUBMITTED_FOR_REVIEW' ||
-    normalized === 'REPORT_HANDLED'
+    normalized === 'REPORT_HANDLED' ||
+    normalized === 'AI_IMPORT_COMPLETED' ||
+    normalized === 'AI_IMPORT_FAILED'
   ) {
     return 'moderation';
   }
@@ -72,28 +74,28 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
 
 const formatRelativeTime = (isoDate?: string | null): string => {
   if (!isoDate) {
-    return 'Vừa xong';
+    return 'Vá»«a xong';
   }
 
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) {
-    return 'Vừa xong';
+    return 'Vá»«a xong';
   }
 
   const diffMs = Date.now() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) {
-    return 'Vừa xong';
+    return 'Vá»«a xong';
   }
   if (diffMins < 60) {
-    return `${diffMins} phút trước`;
+    return `${diffMins} phÃºt trÆ°á»›c`;
   }
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) {
-    return `${diffHours} giờ trước`;
+    return `${diffHours} giá» trÆ°á»›c`;
   }
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} ngày trước`;
+  return `${diffDays} ngÃ y trÆ°á»›c`;
 };
 
 const localizeNotificationContent = (
@@ -107,29 +109,29 @@ const localizeNotificationContent = (
 
   if (type === 'DOC_APPROVED') {
     return {
-      title: 'Tài liệu được duyệt',
+      title: 'TÃ i liá»‡u Ä‘Æ°á»£c duyá»‡t',
       description: docTitle
-        ? `Tài liệu '${docTitle}' đã được duyệt.`
-        : 'Tài liệu của bạn đã được duyệt.',
+        ? `TÃ i liá»‡u '${docTitle}' Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t.`
+        : 'TÃ i liá»‡u cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t.',
     };
   }
 
   if (type === 'DOC_REJECTED') {
     const base = docTitle
-      ? `Tài liệu '${docTitle}' đã bị từ chối.`
-      : 'Tài liệu của bạn đã bị từ chối.';
+      ? `TÃ i liá»‡u '${docTitle}' Ä‘Ã£ bá»‹ tá»« chá»‘i.`
+      : 'TÃ i liá»‡u cá»§a báº¡n Ä‘Ã£ bá»‹ tá»« chá»‘i.';
     return {
-      title: 'Tài liệu bị từ chối',
-      description: note ? `${base} Ghi chú: ${note}` : base,
+      title: 'TÃ i liá»‡u bá»‹ tá»« chá»‘i',
+      description: note ? `${base} Ghi chÃº: ${note}` : base,
     };
   }
 
   if (type === 'DOC_SUBMITTED_FOR_REVIEW') {
     return {
-      title: 'Tài liệu chờ duyệt',
+      title: 'TÃ i liá»‡u chá» duyá»‡t',
       description: docTitle
-        ? `Tài liệu mới '${docTitle}' đang chờ duyệt.`
-        : 'Có tài liệu mới đang chờ duyệt.',
+        ? `TÃ i liá»‡u má»›i '${docTitle}' Ä‘ang chá» duyá»‡t.`
+        : 'CÃ³ tÃ i liá»‡u má»›i Ä‘ang chá» duyá»‡t.',
     };
   }
 
@@ -137,52 +139,65 @@ const localizeNotificationContent = (
     const normalized = rawMessage.toLowerCase();
     let description = rawMessage;
     if (!description) {
-      description = 'Có cập nhật mới trong thảo luận.';
+      description = 'CÃ³ cáº­p nháº­t má»›i trong tháº£o luáº­n.';
     } else if (normalized.includes('moderation visibility') || normalized.includes('discussion thread')) {
-      description = 'Có thảo luận mới cần theo dõi.';
+      description = 'CÃ³ tháº£o luáº­n má»›i cáº§n theo dÃµi.';
     } else if (normalized.includes('new reply') || normalized.includes('reply')) {
-      description = 'Thảo luận của bạn có phản hồi mới.';
+      description = 'Tháº£o luáº­n cá»§a báº¡n cÃ³ pháº£n há»“i má»›i.';
     }
 
     return {
-      title: 'Hoạt động thảo luận',
+      title: 'Hoáº¡t Ä‘á»™ng tháº£o luáº­n',
       description,
     };
   }
 
   if (type === 'COIN_EARNED') {
     return {
-      title: 'Xu thưởng',
-      description: rawMessage || 'Bạn vừa nhận được xu thưởng.',
+      title: 'Xu thÆ°á»Ÿng',
+      description: rawMessage || 'Báº¡n vá»«a nháº­n Ä‘Æ°á»£c xu thÆ°á»Ÿng.',
     };
   }
 
   if (type === 'SCORE_UPDATED') {
     return {
-      title: 'Cập nhật điểm',
-      description: rawMessage || 'Điểm của bạn đã được cập nhật.',
+      title: 'Cáº­p nháº­t Ä‘iá»ƒm',
+      description: rawMessage || 'Äiá»ƒm cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c cáº­p nháº­t.',
     };
   }
 
   if (type === 'REPORT_HANDLED') {
     return {
-      title: 'Báo cáo đã xử lý',
+      title: 'BÃ¡o cÃ¡o Ä‘Ã£ xá»­ lÃ½',
       description: docTitle
-        ? `Báo cáo về tài liệu '${docTitle}' đã được xử lý.`
-        : 'Báo cáo của bạn đã được xử lý.',
+        ? `BÃ¡o cÃ¡o vá» tÃ i liá»‡u '${docTitle}' Ä‘Ã£ Ä‘Æ°á»£c xá»­ lÃ½.`
+        : 'BÃ¡o cÃ¡o cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c xá»­ lÃ½.',
     };
   }
 
   if (type === 'SR_REMINDER') {
     return {
-      title: 'Nhắc nhở',
-      description: rawMessage || 'Bạn có một nhắc nhở mới.',
+      title: 'Nháº¯c nhá»Ÿ',
+      description: rawMessage || 'Báº¡n cÃ³ má»™t nháº¯c nhá»Ÿ má»›i.',
     };
   }
 
+  if (type === 'AI_IMPORT_COMPLETED') {
+    return {
+      title: 'AI import hoàn tất',
+      description: rawMessage || 'Đề AI đã trích xuất xong, hãy mở form để xác nhận.',
+    };
+  }
+
+  if (type === 'AI_IMPORT_FAILED') {
+    return {
+      title: 'AI import thất bại',
+      description: rawMessage || 'AI không thể trích xuất đề từ file đã gửi.',
+    };
+  }
   return {
-    title: rawTitle || 'Thông báo',
-    description: rawMessage || 'Bạn có một thông báo mới.',
+    title: rawTitle || 'ThÃ´ng bÃ¡o',
+    description: rawMessage || 'Báº¡n cÃ³ má»™t thÃ´ng bÃ¡o má»›i.',
   };
 };
 
@@ -210,6 +225,10 @@ const buildNotificationHref = (
       return `/user/comment/${notification.targetId}`;
     }
     return '/user/comment';
+  }
+
+  if (normalizedTarget === 'AI_IMPORT_JOB' && notification.targetId) {
+    return `/moderator/composer/form?aiImportJobId=${notification.targetId}`;
   }
 
   if (normalizedType === 'COIN_EARNED') {
@@ -285,7 +304,7 @@ export function AppSidebar({
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState(() => {
-    const fallbackName = 'Người dùng';
+    const fallbackName = 'NgÆ°á»i dÃ¹ng';
     const currentUser = getStoredAuthUser() as
       | {
           fullName?: string;
@@ -395,7 +414,7 @@ export function AppSidebar({
 
   useEffect(() => {
     function handleAuthUserUpdated() {
-      const fallbackName = 'Người dùng';
+      const fallbackName = 'NgÆ°á»i dÃ¹ng';
       const currentUser = getStoredAuthUser() as
         | {
             fullName?: string;
@@ -519,7 +538,7 @@ export function AppSidebar({
     >
       <button
         onClick={toggleSidebar}
-        aria-label={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
+        aria-label={isCollapsed ? 'Má»Ÿ rá»™ng sidebar' : 'Thu gá»n sidebar'}
         className="sidebar-toggle-fab absolute top-20 -right-3 w-7 h-7 rounded-full bg-white border border-[rgba(0,0,0,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center transition-all duration-200 ease-in-out hover:scale-110 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] hover:text-[var(--brand-700)] hover:border-[var(--brand-200)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] z-10"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -598,8 +617,8 @@ export function AppSidebar({
                 setIsNotificationOpen((prev) => !prev);
                 setIsAvatarMenuOpen(false);
               }}
-              title={!isExpanded ? 'Thông báo' : undefined}
-              aria-label="Mở thông báo"
+              title={!isExpanded ? 'ThÃ´ng bÃ¡o' : undefined}
+              aria-label="Má»Ÿ thÃ´ng bÃ¡o"
               aria-haspopup="dialog"
               aria-expanded={isNotificationOpen}
               className={`
@@ -644,7 +663,7 @@ export function AppSidebar({
                   ${isExpanded ? 'opacity-100' : 'hidden'}
                 `}
               >
-                Thông báo
+                ThÃ´ng bÃ¡o
               </span>
             </button>
 
@@ -699,10 +718,10 @@ export function AppSidebar({
                 type="button"
                 onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
                 className={`${isExpanded ? 'h-10 w-10' : 'h-11 w-11'} overflow-hidden rounded-full border-2 bg-[var(--brand-700)] text-center text-sm font-semibold leading-9 text-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2 ${isAvatarMenuOpen ? 'border-[#D6B76A] shadow-[0_0_0_4px_rgba(214,183,106,0.2),0_10px_24px_rgba(11,59,120,0.28)] scale-105' : isPremiumUser ? 'border-[#D6B76A] shadow-[0_0_0_3px_rgba(214,183,106,0.18)]' : 'border-[var(--brand-100)] hover:brightness-110'}`}
-                aria-label="Mở menu tài khoản"
+                aria-label="Má»Ÿ menu tÃ i khoáº£n"
                 aria-haspopup="menu"
                 aria-expanded={isAvatarMenuOpen}
-                title={!isExpanded ? 'Tài khoản' : undefined}
+                title={!isExpanded ? 'TÃ i khoáº£n' : undefined}
               >
                 {currentUserAvatarUrl ? (
                   <img src={currentUserAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
@@ -722,7 +741,7 @@ export function AppSidebar({
                     onClick={handleOpenProfile}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--ink-700)] transition hover:bg-[var(--bg-page)]"
                   >
-                    <User size={14} /> Xem hồ sơ
+                    <User size={14} /> Xem há»“ sÆ¡
                   </button>
                   <button
                     type="button"
@@ -730,7 +749,7 @@ export function AppSidebar({
                     onClick={handleLogout}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-50"
                   >
-                    <LogOut size={14} /> Đăng xuất
+                    <LogOut size={14} /> ÄÄƒng xuáº¥t
                   </button>
                 </div>
               ) : null}
@@ -751,7 +770,7 @@ export function AppSidebar({
                     onClick={() => navigate('/user/premium/upgrade')}
                     className="mt-1 inline-flex items-center rounded-full border border-[#a855f7] bg-white px-3 py-1 text-[10px] font-semibold text-[#7c3aed] transition hover:bg-[#f3e8ff]"
                   >
-                    Nâng cấp
+                    NÃ¢ng cáº¥p
                   </button>
                 )}
               </div>
@@ -762,3 +781,4 @@ export function AppSidebar({
     </aside>
   );
 }
+

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Calendar, Crown } from "lucide-react";
+import { Search, Timer, PlayCircle, ChevronDown, Check, BookMarked, School, Calendar, Crown, Lock } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import { examService, userService } from "../services/user.service";
 import type { ExamListItem, Subject } from "../types/user.type";
@@ -406,6 +406,12 @@ export default function OnlineExamPage() {
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950 shadow-sm">
                             <Crown size={11} className="fill-current" />
                             VIP
+                          </span>
+                        ) : null}
+                        {exam.requiresUnlock ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">
+                            <Lock size={11} />
+                            {exam.unlockCoinCost ?? (exam.vip ? 50 : 10)} coin
                           </span>
                         ) : null}
                       </div>
