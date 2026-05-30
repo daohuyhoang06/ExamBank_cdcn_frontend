@@ -19,7 +19,6 @@ export function ModeratorLayout({
       headerSubtitle={headerSubtitle}
       sidebarItems={moderatorSidebarItems}
       sidebarSubtitle="Moderator Suite"
-      showAdminExtras
     >
       {children}
     </AppShell>

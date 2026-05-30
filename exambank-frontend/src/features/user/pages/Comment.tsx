@@ -11,7 +11,8 @@ import {
   MoreHorizontal,
   ThumbsUp,
   Reply,
-  Award
+  Award,
+  Lock
 } from 'lucide-react';
 import { Pagination } from '@/components/ui/Pagination/pagination';
 import type { Comment } from '../types/user.type';
@@ -153,6 +154,11 @@ export default function DiscussionDetailPage() {
   const [ratingAverage, setRatingAverage] = useState(0);
   const [documentViewCount, setDocumentViewCount] = useState(0);
   const [documentDownloadCount, setDocumentDownloadCount] = useState(0);
+  const [documentFullAccess, setDocumentFullAccess] = useState(true);
+  const [documentRequiresUnlock, setDocumentRequiresUnlock] = useState(false);
+  const [documentUnlockCoinCost, setDocumentUnlockCoinCost] = useState(5);
+  const [isUnlockingDocument, setIsUnlockingDocument] = useState(false);
+  const [documentUnlockError, setDocumentUnlockError] = useState('');
   const [activeDocumentId, setActiveDocumentId] = useState<number | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewLoadError, setPreviewLoadError] = useState(false);
@@ -315,6 +321,9 @@ export default function DiscussionDetailPage() {
           setSubmitMessage('');
           setDocumentViewCount(0);
           setDocumentDownloadCount(0);
+          setDocumentFullAccess(true);
+          setDocumentRequiresUnlock(false);
+          setDocumentUnlockError('');
           setIsLoading(false);
           return;
         }
@@ -358,12 +367,19 @@ export default function DiscussionDetailPage() {
           const viewCount = Number(document.viewCount ?? 0);
           setDocumentViewCount(Number.isFinite(viewCount) ? Math.max(0, Math.floor(viewCount)) : 0);
           setDocumentDownloadCount(Math.max(0, Math.floor(document.downloadCount ?? 0)));
+          setDocumentFullAccess(document.fullAccess !== false);
+          setDocumentRequiresUnlock(Boolean(document.requiresUnlock));
+          setDocumentUnlockCoinCost(document.unlockCoinCost ?? 10);
+          setDocumentUnlockError('');
         } else {
           setDocumentTitle('Chi tiết đề thi');
           setDocumentSubject(undefined);
           setDocumentSemesterYear(undefined);
           setDocumentViewCount(0);
           setDocumentDownloadCount(0);
+          setDocumentFullAccess(true);
+          setDocumentRequiresUnlock(false);
+          setDocumentUnlockError('');
         }
         setDocumentFileUrl(resolveDocumentPreviewUrl(resolvedDocumentId));
         setComments(mergeDiscussionIntoComments(commentList, discussions));
@@ -444,6 +460,10 @@ export default function DiscussionDetailPage() {
   }, [activeDocumentId, inlinePreviewUrl]);
 
   const handleOpenDocumentInNewTab = () => {
+    if (documentRequiresUnlock && !documentFullAccess) {
+      void handleUnlockDocument();
+      return;
+    }
     if (inlinePreviewUrl) {
       window.open(inlinePreviewUrl, '_blank', 'noopener,noreferrer');
       return;
@@ -458,6 +478,11 @@ export default function DiscussionDetailPage() {
 
   const handleDownloadDocument = async () => {
     if (!activeDocumentId) {
+      return;
+    }
+
+    if (documentRequiresUnlock && !documentFullAccess) {
+      await handleUnlockDocument();
       return;
     }
 
@@ -481,6 +506,33 @@ export default function DiscussionDetailPage() {
       if (documentFileUrl) {
         window.open(documentFileUrl, '_blank', 'noopener,noreferrer');
       }
+    }
+  };
+
+  const handleUnlockDocument = async () => {
+    if (!activeDocumentId || isUnlockingDocument) {
+      return;
+    }
+
+    setIsUnlockingDocument(true);
+    setDocumentUnlockError('');
+    try {
+      await userService.unlockDocument(activeDocumentId);
+      const document = await userService.getDocumentById(activeDocumentId);
+      setDocumentFullAccess(document.fullAccess !== false);
+      setDocumentRequiresUnlock(Boolean(document.requiresUnlock));
+      setDocumentUnlockCoinCost(document.unlockCoinCost ?? documentUnlockCoinCost);
+      setPreviewLoadError(false);
+      setInlinePreviewUrl((current) => {
+        if (current && current.startsWith('blob:')) {
+          URL.revokeObjectURL(current);
+        }
+        return null;
+      });
+    } catch {
+      setDocumentUnlockError('Không thể mở khóa tài liệu. Vui lòng kiểm tra coin hoặc nâng cấp premium.');
+    } finally {
+      setIsUnlockingDocument(false);
     }
   };
 
@@ -770,7 +822,7 @@ export default function DiscussionDetailPage() {
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-[#003466]">Xem nội dung đề thi</h2>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="relative bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           {isPreviewLoading ? (
             <div className="p-8 text-center">
               <p className="text-slate-600 font-semibold">Đang tải nội dung đề...</p>
@@ -793,10 +845,31 @@ export default function DiscussionDetailPage() {
             <iframe
               src={inlinePreviewUrl}
               title={`Noi dung de ${documentTitle}`}
-              className="w-full h-[70vh]"
+              className={`w-full ${documentRequiresUnlock && !documentFullAccess ? 'h-[42vh] blur-[1.5px]' : 'h-[70vh]'}`}
               onError={() => setPreviewLoadError(true)}
             />
           )}
+          {documentRequiresUnlock && !documentFullAccess ? (
+            <div className="absolute inset-x-0 bottom-0 flex min-h-[46%] flex-col items-center justify-end bg-gradient-to-t from-white via-white/95 to-white/20 p-6 text-center">
+              <div className="max-w-md rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-lg">
+                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-200 text-amber-900">
+                  <Lock size={18} />
+                </div>
+                <p className="text-sm font-black text-amber-950">Mở khóa để xem toàn bộ nội dung</p>
+                <p className="mt-1 text-xs font-semibold text-amber-800">
+                  Tài khoản premium xem tự do. User thường sẽ bị trừ {documentUnlockCoinCost} coin.
+                </p>
+                {documentUnlockError ? <p className="mt-2 text-xs text-red-700">{documentUnlockError}</p> : null}
+                <button
+                  onClick={() => void handleUnlockDocument()}
+                  disabled={isUnlockingDocument}
+                  className="mt-3 rounded-full bg-[#003466] px-5 py-2 text-xs font-black text-white hover:bg-[#0b457e] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isUnlockingDocument ? 'Đang mở khóa...' : `Mở khóa (${documentUnlockCoinCost} coin)`}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

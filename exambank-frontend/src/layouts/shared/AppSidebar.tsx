@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, Building2, ChevronLeft, ChevronRight, Crown, Headset, LogOut, User } from 'lucide-react';
+import { Bell, Building2, ChevronLeft, ChevronRight, Crown, LogOut, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { NotificationPopover } from './notification-popover';
@@ -52,7 +52,9 @@ const mapNotificationCategory = (type?: string | null): NotificationType => {
     normalized === 'DOC_APPROVED' ||
     normalized === 'DOC_REJECTED' ||
     normalized === 'DOC_SUBMITTED_FOR_REVIEW' ||
-    normalized === 'REPORT_HANDLED'
+    normalized === 'REPORT_HANDLED' ||
+    normalized === 'AI_IMPORT_COMPLETED' ||
+    normalized === 'AI_IMPORT_FAILED'
   ) {
     return 'moderation';
   }
@@ -180,6 +182,19 @@ const localizeNotificationContent = (
     };
   }
 
+  if (type === 'AI_IMPORT_COMPLETED') {
+    return {
+      title: 'AI import hoàn tất',
+      description: rawMessage || 'Đề AI đã trích xuất xong, hãy mở form để xác nhận.',
+    };
+  }
+
+  if (type === 'AI_IMPORT_FAILED') {
+    return {
+      title: 'AI import thất bại',
+      description: rawMessage || 'AI không thể trích xuất đề từ file đã gửi.',
+    };
+  }
   return {
     title: rawTitle || 'Thông báo',
     description: rawMessage || 'Bạn có một thông báo mới.',
@@ -210,6 +225,10 @@ const buildNotificationHref = (
       return `/user/comment/${notification.targetId}`;
     }
     return '/user/comment';
+  }
+
+  if (normalizedTarget === 'AI_IMPORT_JOB' && notification.targetId) {
+    return `/moderator/composer/form?aiImportJobId=${notification.targetId}`;
   }
 
   if (normalizedType === 'COIN_EARNED') {
@@ -259,14 +278,12 @@ export type SidebarNavItem = {
 type Props = {
   items: SidebarNavItem[];
   subtitle: string;
-  showAdminExtras?: boolean;
   notificationItems?: NotificationItem[];
 };
 
 export function AppSidebar({
   items,
   subtitle,
-  showAdminExtras = false,
   notificationItems: notificationItemsProp,
 }: Props) {
   const location = useLocation();
@@ -305,11 +322,18 @@ export function AppSidebar({
 
     return currentUser?.avatarUrl ?? '';
   });
+  const [currentUserRoles, setCurrentUserRoles] = useState(() =>
+    normalizeRoles(getStoredAuthUser() as { role?: string; roles?: string[] } | null)
+  );
 
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   const avatarInitial = (currentUserDisplayName.trim().charAt(0) || 'A').toUpperCase();
+  const isStandardUserRole =
+    currentUserRoles.includes('USER') &&
+    !currentUserRoles.includes('ADMIN') &&
+    !currentUserRoles.includes('MODERATOR');
 
   const refreshNotifications = useCallback(async () => {
     if (isNotificationOverride) {
@@ -347,13 +371,18 @@ export function AppSidebar({
       return;
     }
 
+    if (!isStandardUserRole) {
+      setIsPremiumUser(false);
+      return;
+    }
+
     try {
       const status = await premiumUpgradeService.getStatus();
       setIsPremiumUser(Boolean(status.premium && status.confirmed));
     } catch {
       setIsPremiumUser(false);
     }
-  }, []);
+  }, [isStandardUserRole]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -409,6 +438,7 @@ export function AppSidebar({
 
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
       setCurrentUserAvatarUrl(currentUser?.avatarUrl ?? '');
+      setCurrentUserRoles(normalizeRoles(currentUser));
       void refreshNotifications();
       void refreshPremiumStatus();
     }
@@ -490,6 +520,7 @@ export function AppSidebar({
   };
 
   const currentPath = normalizePath(location.pathname);
+  const isExamReviewPath = currentPath.startsWith('/user/exambank/examreview');
   const matchedItemPaths = items
     .map((item) => {
       const targetPath = normalizePath(item.path);
@@ -497,7 +528,9 @@ export function AppSidebar({
       const isTopLevelRoot = depth === 1;
       const matches = isTopLevelRoot
         ? currentPath === targetPath
-        : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
+        : (targetPath === '/user/exambank' && isExamReviewPath)
+          ? false
+          : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 
       return { path: item.path, targetPath, matches };
     })
@@ -623,7 +656,7 @@ export function AppSidebar({
                 {unreadCount > 0 ? (
                   <span
                     className={`
-                      absolute -top-1 -right-1.5
+                      absolute -top-2 -right-2
                       inline-flex items-center justify-center
                       ${unreadCount > 9 ? 'h-4 min-w-5 px-1.5' : 'h-4 w-4'}
                       rounded-full
@@ -656,36 +689,6 @@ export function AppSidebar({
               />
             ) : null}
           </div>
-
-          {showAdminExtras && (
-            <button
-              type="button"
-              title={!isExpanded ? 'Support Portal' : undefined}
-              aria-label="Support Portal"
-              className={`
-                group inline-flex items-center text-sm font-medium
-                transition-all duration-200 ease-out
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)]
-                ${isExpanded ? 'gap-3 py-3 px-4 mr-3' : 'h-11 w-11 justify-center self-center'}
-                ${isExpanded ? 'hover:translate-x-1 hover:-translate-y-0.5' : ''}
-                rounded-xl text-[var(--brand-700)] hover:bg-[var(--brand-100)]/55 hover:text-[var(--brand-700)] hover:shadow-[0_10px_18px_rgba(11,59,120,0.10)]
-              `}
-            >
-              <Headset
-                size={isExpanded ? 16 : 20}
-                className="transition-transform duration-200 group-hover:scale-105"
-              />
-
-              <span
-                className={`
-                  transition-opacity duration-200
-                  ${isExpanded ? 'opacity-100' : 'hidden'}
-                `}
-              >
-                Support Portal
-              </span>
-            </button>
-          )}
 
           <div className={`flex ${isExpanded ? 'gap-3 items-center' : 'flex-col gap-2 items-center'}`}>
             <div className="relative" ref={avatarMenuRef}>
@@ -741,11 +744,11 @@ export function AppSidebar({
                 <p className="truncate font-[var(--font-label)] text-xs font-semibold text-[var(--ink-900)]">
                   {currentUserDisplayName}
                 </p>
-                {isPremiumUser ? (
+                {isStandardUserRole && isPremiumUser ? (
                   <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#D6B76A] bg-[#FFFCF3] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#B88A20]">
                     <Crown size={10} /> VIP
                   </span>
-                ) : (
+                ) : isStandardUserRole ? (
                   <button
                     type="button"
                     onClick={() => navigate('/user/premium/upgrade')}
@@ -753,7 +756,7 @@ export function AppSidebar({
                   >
                     Nâng cấp
                   </button>
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -762,3 +765,4 @@ export function AppSidebar({
     </aside>
   );
 }
+

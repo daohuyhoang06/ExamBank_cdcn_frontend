@@ -4,6 +4,7 @@ review.json
 tmp-upload.txt
 *.tmp
 *.local
+mvn-settings.xml
 
 # Local reverse-engineering/runtime artifacts
 *.from.container.class

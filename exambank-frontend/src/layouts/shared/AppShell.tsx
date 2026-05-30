@@ -8,14 +8,12 @@ type Props = {
   headerSubtitle?: string;
   sidebarItems: SidebarNavItem[];
   sidebarSubtitle: string;
-  showAdminExtras?: boolean;
 };
 
 export function AppShell({
   children,
   sidebarItems,
   sidebarSubtitle,
-  showAdminExtras = false,
 }: Props) {
   return (
     <SidebarProvider>
@@ -26,7 +24,6 @@ export function AppShell({
           <AppSidebar
             items={sidebarItems}
             subtitle={sidebarSubtitle}
-            showAdminExtras={showAdminExtras}
           />
 
           {/* Main Content Layer - Khối trắng nổi trên Base Layer */}

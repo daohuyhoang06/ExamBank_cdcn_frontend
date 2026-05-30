@@ -408,7 +408,7 @@ export const useExam = (examId?: string) => {
 
       return submitted;
     } catch (error) {
-      if (getHttpStatus(error) === 409) {
+      if (getHttpStatus(error) === 409 || getHttpStatus(error) === 403) {
         try {
           const latestStatus = await examService.getExamSessionStatus(sessionId);
           if (latestStatus.status !== 'IN_PROGRESS') {

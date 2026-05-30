@@ -147,6 +147,14 @@ export interface Exam {
   duration: number;
   questions: Question[];
   createdAt: string;
+  vip?: boolean;
+  accessTier?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
+  totalQuestionCount?: number;
 }
 
 export interface ExamListItem {
@@ -161,6 +169,13 @@ export interface ExamListItem {
   endAt?: string | null;
   status?: string;
   createdAt?: string;
+  vip?: boolean;
+  accessTier?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
 }
 
 export type SubmitReason = "MANUAL" | "TIMEOUT" | "AUTO";
@@ -222,6 +237,9 @@ export interface DocumentSummary {
   submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
 }
 
 export interface DocumentRatingStats {
@@ -253,8 +271,24 @@ export interface UserProfile {
   xp: number;
   coinBalance: number;
   streak: number;
+  lastStreakRewardDate?: string;
+  streakRestoreAvailable?: boolean;
+  streakRestoreCost?: number;
+  streakRestoreStreak?: number;
   premiumConfirmed?: boolean;
   createdAt?: string;
+}
+
+export interface StreakStatus {
+  currentStreak: number;
+  coinBalance: number;
+  lastRewardDate?: string;
+  rewardedToday: boolean;
+  rewardToday?: number;
+  nextDailyReward: number;
+  restoreAvailable: boolean;
+  restoreStreak?: number;
+  restoreCost?: number;
 }
 
 export interface UpdateUserProfilePayload {

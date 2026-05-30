@@ -4,6 +4,20 @@ import type { LeaderboardUser, ExamSessionResult } from '../../../types/user.typ
 
 const RESULT_POLL_INTERVAL_MS = 5000;
 
+const getHttpStatus = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+
+  const objectError = error as { response?: { status?: unknown }; status?: unknown };
+  const responseStatus = objectError.response?.status;
+  if (typeof responseStatus === 'number') {
+    return responseStatus;
+  }
+
+  return typeof objectError.status === 'number' ? objectError.status : undefined;
+};
+
 export const useExamreview = (sessionId?: number) => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [examResult, setExamResult] = useState<ExamSessionResult | null>(null);
@@ -116,7 +130,17 @@ export const useExamreview = (sessionId?: number) => {
               setIsLoadingResult(false);
             }
           }
-        } catch {
+        } catch (error) {
+          if (getHttpStatus(error) === 403) {
+            if (!isActive) {
+              return;
+            }
+
+            setResultError('Phiên thi không còn khả dụng hoặc bạn không còn quyền truy cập.');
+            setIsLoadingResult(false);
+            return;
+          }
+
           if (!isActive) {
             return;
           }
