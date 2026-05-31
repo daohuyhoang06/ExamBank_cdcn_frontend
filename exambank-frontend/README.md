@@ -44,5 +44,13 @@ Default values in `.env.example`:
 
 - `VITE_API_BASE_URL=/`
 - `VITE_API_PROXY_TARGET=http://localhost:8080`
+- `VITE_STORAGE_PUBLIC_ENDPOINT=http://localhost:8080`
+- `VITE_MINIO_PUBLIC_ENDPOINT=http://localhost:9000`
+
+When backend runs with MinIO in Docker:
+
+- API: `http://localhost:8080`
+- MinIO S3 endpoint: `http://localhost:9000`
+- MinIO Console: `http://localhost:9001`
 
 Do not commit `.env`.

@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react';
 import { examService, userService } from '../../../services/user.service';
-import type { TopicData, LeaderboardUser, ExamSessionResult } from '../../../types/user.type';
+import type { LeaderboardUser, ExamSessionResult } from '../../../types/user.type';
 
 const RESULT_POLL_INTERVAL_MS = 5000;
 
+const getHttpStatus = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+
+  const objectError = error as { response?: { status?: unknown }; status?: unknown };
+  const responseStatus = objectError.response?.status;
+  if (typeof responseStatus === 'number') {
+    return responseStatus;
+  }
+
+  return typeof objectError.status === 'number' ? objectError.status : undefined;
+};
+
 export const useExamreview = (sessionId?: number) => {
-  const [topics, setTopics] = useState<TopicData[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [examResult, setExamResult] = useState<ExamSessionResult | null>(null);
   const [isLoadingResult, setIsLoadingResult] = useState(false);
@@ -17,12 +30,6 @@ export const useExamreview = (sessionId?: number) => {
     let pollTimer: number | undefined;
 
     const fetchData = async () => {
-      const t = await userService.getTopics();
-      if (!isActive) {
-        return;
-      }
-      setTopics(t);
-
       if (!sessionId) {
         setExamResult(null);
         setResultError(null);
@@ -92,7 +99,7 @@ export const useExamreview = (sessionId?: number) => {
                   isUser: true,
                 },
               ]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             }
           } catch {
             try {
@@ -109,26 +116,36 @@ export const useExamreview = (sessionId?: number) => {
                   isUser: true,
                 },
               ]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             } catch {
               if (!isActive) {
                 return;
               }
 
               setLeaderboard([]);
-              setLeaderboardError('Bang xep hang bai thi chua san sang. Dang hien thi tam diem cua ban.');
+              setLeaderboardError('Bảng xếp hạng bài thi chưa sẵn sàng. Đang hiển thị tạm điểm của bạn.');
             }
           } finally {
             if (isActive) {
               setIsLoadingResult(false);
             }
           }
-        } catch {
+        } catch (error) {
+          if (getHttpStatus(error) === 403) {
+            if (!isActive) {
+              return;
+            }
+
+            setResultError('Phiên thi không còn khả dụng hoặc bạn không còn quyền truy cập.');
+            setIsLoadingResult(false);
+            return;
+          }
+
           if (!isActive) {
             return;
           }
 
-          setResultError('Chua lay duoc trang thai cham diem. Vui long thu lai sau.');
+          setResultError('Chưa lấy được trạng thái chấm điểm. Vui lòng thử lại sau.');
           setIsLoadingResult(false);
         }
       };
@@ -145,5 +162,5 @@ export const useExamreview = (sessionId?: number) => {
     };
   }, [sessionId]);
 
-  return { topics, leaderboard, examResult, isLoadingResult, resultError, leaderboardError };
+  return { leaderboard, examResult, isLoadingResult, resultError, leaderboardError };
 };

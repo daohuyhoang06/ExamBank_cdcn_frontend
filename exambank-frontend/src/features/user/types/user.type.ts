@@ -2,12 +2,16 @@ import type { ReactNode } from "react";
 
 export interface UserComment {
   id: number;
+  userId?: number;
   author: string;
   avatar: string;
   rating: number;
   time: string;
   content: string;
   likes: number;
+  discussionId?: number;
+  viewerUpvoted?: boolean;
+  replyCount?: number;
   image?: string;
   canDelete?: boolean;
 }
@@ -30,6 +34,36 @@ export interface Recommendation {
   color: "error" | "primary" | "secondary";
   stats: string;
   documentId?: number;
+}
+
+export interface WeakTopicInsight {
+  topicTag: string;
+  totalAttempts: number;
+  correctCount: number;
+  accuracyRate: number;
+  lastUpdatedAt?: string;
+}
+
+export type ReviewMemoryLevel = "FORGOTTEN" | "HARD" | "REMEMBERED" | "EASY" | string;
+
+export interface ReviewRecommendation {
+  questionId: number;
+  subjectId?: number;
+  content: string;
+  type?: string;
+  options?: string;
+  answer?: string;
+  imageUrl?: string;
+  difficulty?: number;
+  maxScore?: number;
+  topicTags: string[];
+  source?: string;
+  due?: boolean;
+  memoryLevel?: ReviewMemoryLevel;
+  intervalDays?: number;
+  easeFactor?: number;
+  repetitionCount?: number;
+  nextReviewDate?: string;
 }
 
 export interface Ranking {
@@ -85,6 +119,7 @@ export interface BaseQuestion {
   type: QuestionType;
   question: string;
   score: number;
+  topicTags?: string[];
 }
 
 export interface MultipleChoiceQuestion extends BaseQuestion {
@@ -112,6 +147,14 @@ export interface Exam {
   duration: number;
   questions: Question[];
   createdAt: string;
+  vip?: boolean;
+  accessTier?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
+  totalQuestionCount?: number;
 }
 
 export interface ExamListItem {
@@ -119,9 +162,20 @@ export interface ExamListItem {
   title: string;
   subjectId?: number | null;
   subjectName?: string;
+  className?: string;
+  educationLevelName?: string;
   durationMinutes?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
   status?: string;
   createdAt?: string;
+  vip?: boolean;
+  accessTier?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
+  previewQuestionCount?: number;
+  lockedQuestionCount?: number;
 }
 
 export type SubmitReason = "MANUAL" | "TIMEOUT" | "AUTO";
@@ -153,6 +207,7 @@ export interface QuestionResult {
   questionId: number;
   isCorrect?: boolean;
   scoreEarned?: number;
+  maxScore?: number;
 }
 
 export interface ExamSessionResult {
@@ -162,6 +217,7 @@ export interface ExamSessionResult {
   startTime?: string;
   submittedAt?: string;
   timeLimitMinutes?: number;
+  durationMinutes?: number;
   questionResults: QuestionResult[];
 }
 
@@ -176,10 +232,14 @@ export interface DocumentSummary {
   fileUrl?: string;
   averageRating?: number;
   downloadCount?: number;
+  viewCount?: number;
   status?: string;
   submittedAt?: string;
   createdAt?: string;
   moderatorNote?: string;
+  fullAccess?: boolean;
+  requiresUnlock?: boolean;
+  unlockCoinCost?: number;
 }
 
 export interface DocumentRatingStats {
@@ -206,16 +266,37 @@ export interface UserProfile {
   avatarUrl?: string;
   roles: string[];
   status: AccountStatus;
+  phone?: string;
+  birthDate?: string;
   xp: number;
   coinBalance: number;
   streak: number;
+  lastStreakRewardDate?: string;
+  streakRestoreAvailable?: boolean;
+  streakRestoreCost?: number;
+  streakRestoreStreak?: number;
+  premiumConfirmed?: boolean;
   createdAt?: string;
+}
+
+export interface StreakStatus {
+  currentStreak: number;
+  coinBalance: number;
+  lastRewardDate?: string;
+  rewardedToday: boolean;
+  rewardToday?: number;
+  nextDailyReward: number;
+  restoreAvailable: boolean;
+  restoreStreak?: number;
+  restoreCost?: number;
 }
 
 export interface UpdateUserProfilePayload {
   name: string;
   email: string;
   status?: AccountStatus;
+  phone?: string;
+  birthDate?: string;
 }
 
 export interface ChangePasswordPayload {

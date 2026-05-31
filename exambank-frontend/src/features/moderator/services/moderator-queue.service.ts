@@ -71,6 +71,11 @@ export type ModeratorDocumentPreview = {
   fileType: string | null;
 };
 
+export type ModeratorDocumentPreviewBlob = {
+  blob: Blob;
+  fileType: string | null;
+};
+
 export type ModeratorQueueMetrics = {
   totalDocuments: number;
   pendingDocuments: number;
@@ -547,25 +552,55 @@ export async function rejectModeratorQueueItem(record: ModeratorQueueRecord, rej
 }
 
 export async function getModeratorDocumentPreview(documentId: number): Promise<ModeratorDocumentPreview> {
-  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
+  try {
+    // Use dedicated preview endpoint that returns proper public/presigned URL
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/${documentId}/preview`, buildAuthConfig());
+
+    const payload = toObject(unwrapPayload(response.data)) ?? toObject(response.data);
+
+    if (!payload) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(payload.previewUrl ?? payload.fileUrl),
+      fileType: toStringOrNull(payload.fileType),
+    };
+  } catch {
+    // Fallback: use compare endpoint for backward compatibility
+    const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/compare`, {
+      ...buildAuthConfig(),
+      params: {
+        docId1: documentId,
+        docId2: documentId,
+      },
+    });
+
+    const payload = toObject(unwrapPayload(response.data));
+    const left = payload ? toObject(payload.left) : null;
+    const target = left ?? payload;
+
+    if (!target) {
+      return { fileUrl: null, fileType: null };
+    }
+
+    return {
+      fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
+      fileType: toStringOrNull(target.fileType),
+    };
+  }
+}
+
+export async function getModeratorDocumentPreviewBlob(documentId: number): Promise<ModeratorDocumentPreviewBlob> {
+  const response = await apiClient.get(`${MODERATOR_DOCUMENTS_PATH}/${documentId}/preview/content`, {
     ...buildAuthConfig(),
-    params: {
-      docId1: documentId,
-      docId2: documentId,
-    },
+    responseType: "blob",
   });
 
-  const payload = toObject(unwrapPayload(response.data));
-  const left = payload ? toObject(payload.left) : null;
-  const target = left ?? payload;
-
-  if (!target) {
-    return { fileUrl: null, fileType: null };
-  }
-
+  const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
   return {
-    fileUrl: toStringOrNull(target.previewUrl ?? target.fileUrl),
-    fileType: toStringOrNull(target.fileType),
+    blob,
+    fileType: toStringOrNull(response.headers?.["content-type"]) ?? (blob.type || null),
   };
 }
 

@@ -1,14 +1,71 @@
-import axios, { AxiosHeaders } from "axios";
+import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 
 const TOKEN_KEY = "exambank_access_token";
 const SESSION_TOKEN_KEY = `${TOKEN_KEY}_session`;
 const PERSISTENT_TOKEN_KEY = `${TOKEN_KEY}_persistent`;
+const AUTH_BYPASS_PATHS = new Set([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/auth/login",
+  "/auth/register",
+]);
+const PUBLIC_GET_WITHOUT_AUTH_PATTERNS = [
+  /^\/api\/exams$/,
+  /^\/api\/exams\/\d+$/,
+  /^\/api\/subjects(?:\/.*)?$/,
+  /^\/api\/topics(?:\/.*)?$/,
+  /^\/api\/questions(?:\/.*)?$/,
+];
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080",
 });
 
+function shouldBypassAuthHeader(url?: string, method?: string) {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url, "http://localhost");
+    if ((method ?? "GET").toUpperCase() === "GET") {
+      if (PUBLIC_GET_WITHOUT_AUTH_PATTERNS.some((pattern) => pattern.test(parsedUrl.pathname))) {
+        return true;
+      }
+    }
+    return AUTH_BYPASS_PATHS.has(parsedUrl.pathname);
+  } catch {
+    if ((method ?? "GET").toUpperCase() === "GET") {
+      const guessedPath = url.split("?")[0];
+      if (PUBLIC_GET_WITHOUT_AUTH_PATTERNS.some((pattern) => pattern.test(guessedPath))) {
+        return true;
+      }
+    }
+    return Array.from(AUTH_BYPASS_PATHS).some((path) => url.includes(path));
+  }
+}
+
+function removeAuthorizationHeader(config: InternalAxiosRequestConfig) {
+  if (config.headers instanceof AxiosHeaders) {
+    config.headers.delete("Authorization");
+    return;
+  }
+
+  const headers = (config.headers ?? {}) as Record<string, string>;
+  delete headers.Authorization;
+  delete headers.authorization;
+  config.headers = AxiosHeaders.from(headers);
+}
+
 apiClient.interceptors.request.use((config) => {
+  if (shouldBypassAuthHeader(config.url, config.method)) {
+    // Public auth endpoints must never carry stale bearer tokens.
+    removeAuthorizationHeader(config);
+    return config;
+  }
+
   const token = getStoredAuthToken();
 
   if (token) {
@@ -129,31 +186,6 @@ export function initializeAuthToken() {
     apiClient.defaults.headers.common.Authorization = bearerHeader;
   }
 }
-
-apiClient.interceptors.request.use((config) => {
-  const bearerHeader = toBearerHeader(getStoredAuthToken());
-  if (!bearerHeader) {
-    return config;
-  }
-
-  if (config.headers instanceof AxiosHeaders) {
-    if (!config.headers.has("Authorization")) {
-      config.headers.set("Authorization", bearerHeader);
-    }
-    return config;
-  }
-
-  const headers = (config.headers ?? {}) as Record<string, unknown>;
-  const hasAuthorizationHeader = typeof headers.Authorization === "string" || typeof headers.authorization === "string";
-  if (!hasAuthorizationHeader) {
-    config.headers = new AxiosHeaders({
-      ...headers,
-      Authorization: bearerHeader,
-    });
-  }
-
-  return config;
-});
 
 initializeAuthToken();
 

@@ -12,6 +12,7 @@ import AdminFinancialPage from "@/features/admin/pages/admin-financial-page";
 import AdminSystemPage from "@/features/admin/pages/admin-system-page";
 import UserHomePage from "@/features/user/pages/UserHomePage";
 import OnlineExamPage from "@/features/user/pages/OnlineExamPage";
+import OnlineExamIntroPage from "@/features/user/pages/OnlineExamIntroPage";
 import { StudentLayout } from "@/layouts/student/StudentLayout";
 import ExamBankPage from "@/features/user/pages/ExamBankPage";
 import SubmitExamPage from "@/features/user/pages/submit-exam/SubmitExamPage";
@@ -21,13 +22,14 @@ import Comment from "@/features/user/pages/Comment";
 import Exampage from "@/features/user/pages/makeexam/page/Exampage";
 import AdminProfileDetailPage from "@/features/system/pages/admin-profile-detail-page";
 import UserProfileSettingsPage from "@/features/user/pages/UserProfileSettingsPage";
+import PremiumUpgradePage from "@/features/user/pages/PremiumUpgradePage";
 import ModeratorShell from "@/features/moderator/pages/moderator-shell";
 import ModeratorQueuePage from "@/features/moderator/pages/moderator-queue-page";
-import ModeratorGradingPage from "@/features/moderator/pages/moderator-grading-page";
 import ModeratorComposerPage from "@/features/moderator/pages/moderator-composer-page";
 import ModeratorComposerFormPage from "@/features/moderator/pages/moderator-composer-form-page";
-import ModeratorEditorialPage from "@/features/moderator/pages/moderator-editorial-page";
 import ModeratorSubmitReviewPage from "@/features/moderator/pages/moderator-submit-review-page";
+import ModeratorExamSessionManagementPage from "@/features/moderator/pages/moderator-exam-session-management-page";
+import ReviewPage from "@/features/user/pages/ReviewPage";
 
 
 
@@ -73,11 +75,10 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/moderator/queue" replace /> },
       { path: "profile", element: <AdminProfileDetailPage /> },
       { path: "queue", element: <ModeratorQueuePage /> },
-      { path: "grading", element: <ModeratorGradingPage /> },
       { path: "composer", element: <ModeratorComposerPage /> },
       { path: "composer/form", element: <ModeratorComposerFormPage /> },
-      { path: "editorial", element: <ModeratorEditorialPage /> },
       { path: "submit-review", element: <ModeratorSubmitReviewPage /> },
+      { path: "exam-sessions", element: <ModeratorExamSessionManagementPage /> },
     ],
   },
 
@@ -100,9 +101,13 @@ export const router = createBrowserRouter([
         
         ],
       },
-        {
+    {
       path: "exam/:examId",
       element: <Exampage />,
+    },
+    {
+      path: "exam/:examId/overview",
+      element: <OnlineExamIntroPage />,
     },
       {
         path: "comment", // URL: /user/comment
@@ -119,6 +124,14 @@ export const router = createBrowserRouter([
       {
         path: "online-exam",
         element: <OnlineExamPage />,
+      },
+      {
+        path: "review",
+        element: <ReviewPage />,
+      },
+      {
+        path: "premium/upgrade",
+        element: <PremiumUpgradePage />,
       },
     ],
   },

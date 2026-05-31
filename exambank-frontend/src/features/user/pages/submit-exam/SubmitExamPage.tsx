@@ -4,7 +4,6 @@ import {
   FileText, 
   UploadCloud, 
   Search, 
-  CheckCircle2, 
   Trash2,
   Sparkles,
   Info,
@@ -13,9 +12,56 @@ import {
 import type { SelectedFile } from '../../types/user.type';
 import { userService } from '../../services/user.service';
 import { extractApiErrorMessage } from '@/lib/error-utils';
+import { useToast } from '@/components/ui/Toast/toast-system';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
+const SEMESTER_YEAR_OPTIONS = Array.from({ length: 9 }, (_, index) => String(2026 - index));
+
+const normalizeText = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const SUBJECT_DISPLAY_MAP: Record<string, string> = {
+  'toan hoc': 'To\u00e1n h\u1ecdc',
+  toan: 'To\u00e1n h\u1ecdc',
+  'vat ly': 'V\u1eadt l\u00fd',
+  ly: 'V\u1eadt l\u00fd',
+  'hoa hoc': 'H\u00f3a h\u1ecdc',
+  hoa: 'H\u00f3a h\u1ecdc',
+  'sinh hoc': 'Sinh h\u1ecdc',
+  sinh: 'Sinh h\u1ecdc',
+  'ngu van': 'Ng\u1eef v\u0103n',
+  van: 'Ng\u1eef v\u0103n',
+  'tieng anh': 'Ti\u1ebfng Anh',
+  anh: 'Ti\u1ebfng Anh',
+  'lich su': 'L\u1ecbch s\u1eed',
+  'dia ly': '\u0110\u1ecba l\u00fd',
+  'tin hoc': 'Tin h\u1ecdc',
+  gdcd: 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'giao duc cong dan': 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'cong nghe': 'C\u00f4ng ngh\u1ec7',
+  'quoc phong an ninh': 'Qu\u1ed1c ph\u00f2ng an ninh',
+  'khoa hoc tu nhien': 'Khoa h\u1ecdc t\u1ef1 nhi\u00ean',
+  'khoa hoc xa hoi': 'Khoa h\u1ecdc x\u00e3 h\u1ed9i',
+};
+
+const toTitleCase = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const formatSubjectLabel = (subject: string): string => {
+  const raw = subject.replace(/\s+/g, ' ').trim();
+  const key = normalizeText(raw);
+  return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
+};
 
 const extractUploadErrorMessage = (error: unknown): string => {
   return extractApiErrorMessage(error, 'Không thể gửi đề thi lên hệ thống. Vui lòng thử lại.');
@@ -31,20 +77,18 @@ const Tip: React.FC<{ text: string }> = ({ text }) => (
 
 export default function SubmitExamPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const classOptions = Array.from({ length: 12 }, (_, index) => `L\u1edbp ${index + 1}`);
 
   // Quản lý State với Type cụ thể
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
-  const [difficulty, setDifficulty] = useState<'Dễ' | 'Vừa' | 'Khó'>('Vừa');
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState('');
-  const [uploadError, setUploadError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
-    semesterYear: '2024',
+    semesterYear: SEMESTER_YEAR_OPTIONS[0],
     type: 'final',
     school: '',
     subject: '',
@@ -54,7 +98,14 @@ export default function SubmitExamPage() {
   useEffect(() => {
     const fetchSubjects = async () => {
       const data = await userService.getSubjects();
-      const normalized = data.filter((item) => item !== 'Tất cả môn học');
+      const normalized = Array.from(
+        new Map(
+          data
+            .filter((item) => normalizeText(item) !== normalizeText('Tất cả môn học'))
+            .map((item) => formatSubjectLabel(item))
+            .map((item) => [normalizeText(item), item]),
+        ).values(),
+      );
       setSubjects(normalized);
 
       setFormData((prev) => {
@@ -67,22 +118,18 @@ export default function SubmitExamPage() {
     void fetchSubjects();
   }, []);
 
-  useEffect(() => {
-    if (!uploadSuccess) {
+  const handleChooseFile = () => {
+    if (!fileInputRef.current) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setUploadSuccess('');
-    }, 1000);
+    fileInputRef.current.value = '';
+    if (typeof fileInputRef.current.showPicker === 'function') {
+      fileInputRef.current.showPicker();
+      return;
+    }
 
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [uploadSuccess]);
-
-  const handleChooseFile = () => {
-    fileInputRef.current?.click();
+    fileInputRef.current.click();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,12 +140,22 @@ export default function SubmitExamPage() {
 
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_FILE_EXTENSIONS.includes(extension)) {
-      setUploadError('Định dạng file không hợp lệ. Chỉ hỗ trợ PDF, DOC, DOCX, PNG, JPG, JPEG.');
+      toast.warning({
+        title: 'Định dạng chưa hỗ trợ',
+        message: 'Chỉ hỗ trợ PDF, DOC, DOCX, PNG, JPG, JPEG.',
+        duration: 4200,
+        showProgress: true,
+      });
       return;
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError('File vượt quá 50MB. Vui lòng chọn file nhỏ hơn.');
+      toast.warning({
+        title: 'Kích thước quá lớn',
+        message: 'File vượt quá 50MB. Vui lòng chọn file nhỏ hơn.',
+        duration: 4200,
+        showProgress: true,
+      });
       return;
     }
 
@@ -107,29 +164,42 @@ export default function SubmitExamPage() {
       name: file.name,
       size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
     });
-    setUploadError('');
+    event.target.value = '';
   };
 
   const handleUpload = async () => {
     if (!formData.title.trim()) {
-      setUploadError('Vui lòng nhập tên đề thi.');
+      toast.warning({
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng nhập tên đề thi.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     if (!formData.subject.trim()) {
-      setUploadError('Vui lòng chọn môn học trước khi gửi đề.');
+      toast.warning({
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng chọn môn học trước khi gửi đề.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     if (!fileToUpload) {
-      setUploadError('Vui lòng chọn file trước khi gửi đề.');
+      toast.warning({
+        title: 'Thiếu tệp đính kèm',
+        message: 'Vui lòng chọn file trước khi gửi đề.',
+        duration: 3600,
+        showProgress: true,
+      });
       return;
     }
 
     try {
       setUploading(true);
-      setUploadError('');
-      setUploadSuccess('');
 
       await userService.uploadDocument(
         {
@@ -143,13 +213,27 @@ export default function SubmitExamPage() {
         fileToUpload,
       );
 
-      setUploadSuccess('Bạn đã up đề thành công và chờ duyệt.');
+      toast.success({
+        title: 'Hệ thống',
+        message: 'Đã lưu đề thành công và đang chờ duyệt.',
+        duration: 3800,
+        showProgress: true,
+      });
       setSelectedFile(null);
       setFileToUpload(null);
       setFormData((prev) => ({ ...prev, title: '' }));
     } catch (error) {
       console.error(error);
-      setUploadError(extractUploadErrorMessage(error));
+      toast.error({
+        title: 'Cảnh báo hệ thống',
+        message: extractUploadErrorMessage(error),
+        duration: 6200,
+        showProgress: false,
+        actionText: 'Thử lại',
+        onAction: () => {
+          void handleUpload();
+        },
+      });
     } finally {
       setUploading(false);
     }
@@ -157,24 +241,6 @@ export default function SubmitExamPage() {
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
-      {/* Success Notification Banner */}
-      {uploadSuccess && (
-        <div className="mb-8 flex items-center gap-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl shadow-sm">
-          <div className="flex-shrink-0 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <CheckCircle2 size={22} />
-          </div>
-          <div>
-            <p className="text-emerald-900 font-bold text-sm">{uploadSuccess}</p>
-          </div>
-        </div>
-      )}
-
-      {uploadError && (
-        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-sm font-semibold text-red-700">
-          {uploadError}
-        </div>
-      )}
-
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -211,9 +277,11 @@ export default function SubmitExamPage() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, semesterYear: e.target.value }))}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3.5 focus:bg-white appearance-none outline-none text-sm cursor-pointer transition-all"
                     >
-                      <option value="2024">2024</option>
-                      <option value="2023">2023</option>
-                      <option value="2022">2022</option>
+                      {SEMESTER_YEAR_OPTIONS.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
@@ -271,7 +339,10 @@ export default function SubmitExamPage() {
               <p className="text-xs text-slate-400 mt-2 z-10">Hỗ trợ PDF, DOCX, ảnh (Tối đa 50MB)</p>
               <button
                 type="button"
-                onClick={handleChooseFile}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleChooseFile();
+                }}
                 className="mt-6 px-6 py-2 bg-white text-blue-600 font-bold text-xs rounded-full shadow-sm border border-slate-200 hover:shadow-md transition-all z-10"
               >
                 Chọn từ máy tính
@@ -353,25 +424,6 @@ export default function SubmitExamPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-50">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 block ml-1">Độ khó ước tính</label>
-                <div className="flex gap-2">
-                  {(['Dễ', 'Vừa', 'Khó'] as const).map((lv) => (
-                    <button
-                      key={lv}
-                      onClick={() => setDifficulty(lv)}
-                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all border ${
-                        difficulty === lv 
-                        ? 'bg-[#1a4b84] border-[#1a4b84] text-white shadow-lg shadow-blue-900/20' 
-                        : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
-                      }`}
-                    >
-                      {lv}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100/50 flex gap-3">
                 <Sparkles className="text-amber-500 shrink-0" size={18} />
                 <div>
@@ -413,3 +465,4 @@ export default function SubmitExamPage() {
     </div>
   );
 }
+

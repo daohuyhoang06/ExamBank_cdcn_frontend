@@ -1,40 +1,64 @@
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirm, alert as showAlert } from "@/lib/dialog";
+import { useToast } from "@/components/ui/Toast/toast-system";
 import { useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import {
-  ArrowLeft,
-  ArrowRight,
   BookOpen,
   CheckCircle2,
   Eye,
   FilePenLine,
   HelpCircle,
+  Loader2,
   Plus,
   RefreshCcw,
+  Sparkles,
   Star,
   Trash2,
   Upload,
+  X,
   Zap,
 } from "lucide-react";
 import { ComposerJsonImportModal } from "@/features/moderator/components/composer-json-import-modal";
 import { StatCard } from "@/components/ui/StatCard/stat-card";
+import { Pagination } from "@/components/ui/Pagination/pagination";
 import {
   createComposerExam,
   createComposerQuestion,
   createComposerSubject,
   deleteComposerExam,
-  listComposerExams,
+  getModeratorAiImport,
+  listComposerOwnedExams,
   listComposerQuestions,
   listComposerSubjects,
+  parseModeratorAiDraft,
+  uploadModeratorAiImport,
   updateComposerExam,
 } from "@/features/moderator/services/moderator-composer.service";
+import {
+  COMPOSER_AI_IMPORT_DRAFT_KEY,
+  readPendingModeratorAiImportJobs,
+  removePendingModeratorAiImportJob,
+  upsertPendingModeratorAiImportJob,
+  type PendingModeratorAiImportJob,
+} from "@/features/moderator/services/moderator-ai-import-tracker";
 import type {
+  ComposerAiImportJob,
   ComposerExamPayload,
   ComposerExamRecord,
+  ComposerQuestionRecord,
   ComposerQuestionPayload,
+  ComposerSubjectRecord,
 } from "@/features/moderator/types/moderator-composer.type";
 
-type OverviewExamStatus = "DRAFT" | "PUBLISHED";
+type OverviewExamStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "PUBLISHED"
+  | "ONGOING"
+  | "CLOSED"
+  | "LOCKED"
+  | "REJECTED";
 
 type OverviewFilterStatus = "ALL" | OverviewExamStatus;
 type OverviewFilterSubject = string;
@@ -46,6 +70,8 @@ type OverviewExamRow = {
   subject: string;
   level: string;
   questionCount: number;
+  startAt: string;
+  endAt: string;
   updatedAt: string;
   updatedEpoch: number;
   status: OverviewExamStatus;
@@ -69,7 +95,6 @@ type JsonImportSummary = {
   failedExamMessages: string[];
 };
 
-const COMPOSER_FLASH_NOTICE_KEY = "moderator-composer-flash-notice";
 const OVERVIEW_PAGE_SIZE = 10;
 const JSON_IMPORT_API_EXAMPLE = {
   exams: [
@@ -109,44 +134,101 @@ const JSON_IMPORT_API_EXAMPLE = {
 };
 const JSON_IMPORT_API_EXAMPLE_TEXT = JSON.stringify(JSON_IMPORT_API_EXAMPLE, null, 2);
 
+const AI_IMPORT_POLL_INTERVAL_MS = 3000;
+
 type JsonImportObject = Record<string, unknown>;
 
-function buildPaginationItems(currentPage: number, totalPages: number) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
+const AI_IMPORT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
+const SUBJECT_DISPLAY_NAME_BY_CANONICAL: Record<string, string> = {
+  "toan hoc": "Toán học",
+  toan: "Toán học",
+  "vat ly": "Vật lý",
+  ly: "Vật lý",
+  "hoa hoc": "Hóa học",
+  hoa: "Hóa học",
+  "sinh hoc": "Sinh học",
+  sinh: "Sinh học",
+  "ngu van": "Ngữ văn",
+  van: "Ngữ văn",
+  "tieng anh": "Tiếng Anh",
+  anh: "Tiếng Anh",
+  "lich su": "Lịch sử",
+  su: "Lịch sử",
+  "dia ly": "Địa lý",
+  dia: "Địa lý",
+  "tin hoc": "Tin học",
+  gdcd: "Giáo dục công dân",
+  "giao duc cong dan": "Giáo dục công dân",
+  "cong nghe": "Công nghệ",
+  "quoc phong an ninh": "Quốc phòng an ninh",
+  "khoa hoc tu nhien": "Khoa học tự nhiên",
+  "khoa hoc xa hoi": "Khoa học xã hội",
+};
 
-  const items: Array<number | "ellipsis-left" | "ellipsis-right"> = [1];
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) {
-    items.push("ellipsis-left");
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page);
-  }
-
-  if (end < totalPages - 1) {
-    items.push("ellipsis-right");
-  }
-
-  items.push(totalPages);
-  return items;
+function normalizeSubjectName(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("vi-VN");
 }
 
+function toDisplaySubjectName(value: string) {
+  const normalized = normalizeSubjectName(value);
+  return SUBJECT_DISPLAY_NAME_BY_CANONICAL[normalized] ?? value;
+}
+
+
 function statusBadgeClassName(status: OverviewExamStatus) {
+  if (status === "ONGOING") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+
   if (status === "PUBLISHED") {
     return "bg-blue-100 text-blue-700";
+  }
+
+  if (status === "CLOSED") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  if (status === "LOCKED") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (status === "PENDING_REVIEW") {
+    return "bg-violet-100 text-violet-700";
+  }
+
+  if (status === "REJECTED") {
+    return "bg-rose-100 text-rose-700";
   }
 
   return "bg-slate-100 text-slate-600";
 }
 
 function statusDotClassName(status: OverviewExamStatus) {
+  if (status === "ONGOING") {
+    return "bg-emerald-500";
+  }
+
   if (status === "PUBLISHED") {
     return "bg-blue-500";
+  }
+
+  if (status === "CLOSED") {
+    return "bg-amber-500";
+  }
+
+  if (status === "LOCKED" || status === "REJECTED") {
+    return "bg-rose-500";
+  }
+
+  if (status === "PENDING_REVIEW") {
+    return "bg-violet-500";
   }
 
   return "bg-slate-400";
@@ -209,18 +291,69 @@ function formatCompactNumber(value: number) {
 }
 
 function formatOverviewStatus(status: OverviewExamStatus) {
-  return status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp";
+  if (status === "PUBLISHED") return "Published";
+  if (status === "ONGOING") return "Ongoing";
+  if (status === "CLOSED") return "Closed";
+  if (status === "LOCKED") return "Locked";
+  if (status === "PENDING_REVIEW") return "Pending Review";
+  if (status === "REJECTED") return "Rejected";
+  return "Draft";
+}
+
+function normalizeOverviewExamStatus(status?: string): OverviewExamStatus {
+  const normalized = (status ?? "").trim().toUpperCase();
+  if (
+    normalized === "DRAFT" ||
+    normalized === "PENDING_REVIEW" ||
+    normalized === "PUBLISHED" ||
+    normalized === "ONGOING" ||
+    normalized === "CLOSED" ||
+    normalized === "LOCKED" ||
+    normalized === "REJECTED"
+  ) {
+    return normalized;
+  }
+  return "DRAFT";
+}
+
+function isEditableOverviewStatus(status: OverviewExamStatus): boolean {
+  return status === "DRAFT" || status === "PENDING_REVIEW" || status === "REJECTED";
+}
+
+function isPublishableOverviewStatus(status: OverviewExamStatus): boolean {
+  return status === "DRAFT" || status === "PENDING_REVIEW" || status === "REJECTED";
 }
 
 function mapExamStatusToOverview(exam: ComposerExamRecord): OverviewExamStatus {
-  const normalized = (exam.status ?? "").toUpperCase();
+  return normalizeOverviewExamStatus(exam.status);
+}
 
-  if (normalized === "PUBLISHED") {
-    return "PUBLISHED";
+function formatPreviewQuestionType(type: string | null | undefined) {
+  const normalized = (type ?? "").trim().toUpperCase();
+  if (normalized === "MCQ") return "Multiple choice";
+  if (normalized === "FILL_IN_BLANK") return "Fill in blank";
+  if (normalized === "ESSAY") return "Essay";
+  return normalized || "Question";
+}
+
+function parsePreviewQuestionOptions(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
   }
 
-  // Any non-published status is still editable by moderator.
-  return "DRAFT";
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item));
+    }
+  } catch {
+    // fallback plain text split
+  }
+
+  return raw
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
 function collectApiErrorMessagesFromData(value: unknown, depth = 0): string[] {
@@ -361,6 +494,9 @@ function normalizeImportedExamStatus(value: unknown): ComposerExamPayload["statu
     normalized === "DRAFT" ||
     normalized === "PENDING_REVIEW" ||
     normalized === "PUBLISHED" ||
+    normalized === "ONGOING" ||
+    normalized === "CLOSED" ||
+    normalized === "LOCKED" ||
     normalized === "REJECTED"
   ) {
     return normalized;
@@ -475,6 +611,8 @@ function buildExamUpdatePayload(
     durationMinutes: exam.durationMinutes,
     status: exam.status,
     moderatorNote: exam.moderatorNote,
+    startAt: exam.startAt,
+    endAt: exam.endAt,
     publishedAt: exam.publishedAt,
     createdAt: exam.createdAt,
     ...patch,
@@ -483,21 +621,10 @@ function buildExamUpdatePayload(
 
 export default function ModeratorComposerPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [overviewStatus, setOverviewStatus] = useState<OverviewFilterStatus>("ALL");
   const [overviewSubject, setOverviewSubject] = useState<OverviewFilterSubject>("Tất cả môn học");
   const [overviewExamRows, setOverviewExamRows] = useState<OverviewExamRow[]>([]);
-  const [flashNotice, setFlashNotice] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    const noticeMessage = window.sessionStorage.getItem(COMPOSER_FLASH_NOTICE_KEY) ?? "";
-    if (noticeMessage) {
-      window.sessionStorage.removeItem(COMPOSER_FLASH_NOTICE_KEY);
-    }
-
-    return noticeMessage;
-  });
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [busyExamId, setBusyExamId] = useState<number | null>(null);
@@ -505,8 +632,26 @@ export default function ModeratorComposerPage() {
   const [isJsonImportModalOpen, setIsJsonImportModalOpen] = useState(false);
   const [jsonImportText, setJsonImportText] = useState(JSON_IMPORT_API_EXAMPLE_TEXT);
   const [jsonImportUiError, setJsonImportUiError] = useState("");
+  const [isAiImportModalOpen, setIsAiImportModalOpen] = useState(false);
+  const [isSubmittingAiImport, setIsSubmittingAiImport] = useState(false);
+  const [aiImportError, setAiImportError] = useState("");
+  const [aiImportTitle, setAiImportTitle] = useState("Đề thi AI import");
+  const [aiImportFile, setAiImportFile] = useState<File | null>(null);
+  const [aiImportClassName, setAiImportClassName] = useState("Lớp 12");
+  const [aiImportDurationMinutes, setAiImportDurationMinutes] = useState("45");
+  const [availableComposerSubjects, setAvailableComposerSubjects] = useState<ComposerSubjectRecord[]>([]);
+  const [aiImportSubjectId, setAiImportSubjectId] = useState<number | "">("");
+  const [allOverviewQuestions, setAllOverviewQuestions] = useState<ComposerQuestionRecord[]>([]);
+  const [previewExamRow, setPreviewExamRow] = useState<OverviewExamRow | null>(null);
+  const [previewQuestions, setPreviewQuestions] = useState<ComposerQuestionRecord[]>([]);
+  const [pendingAiImportJobs, setPendingAiImportJobs] = useState<PendingModeratorAiImportJob[]>(() =>
+    readPendingModeratorAiImportJobs()
+  );
+  const [liveAiImportJobs, setLiveAiImportJobs] = useState<ComposerAiImportJob[]>([]);
+  const [completedAiImportJobs, setCompletedAiImportJobs] = useState<ComposerAiImportJob[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const jsonImportInputRef = useRef<HTMLInputElement | null>(null);
+  const aiImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const subjectFilterOptions = useMemo(() => {
     const values = Array.from(new Set(overviewExamRows.map((item) => item.subject))).sort((a, b) =>
@@ -523,18 +668,87 @@ export default function ModeratorComposerPage() {
   }, [overviewSubject, subjectFilterOptions]);
 
   useEffect(() => {
-    if (!flashNotice) {
+    setPendingAiImportJobs(readPendingModeratorAiImportJobs());
+  }, []);
+
+  useEffect(() => {
+    if (pendingAiImportJobs.length === 0) {
+      setLiveAiImportJobs([]);
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setFlashNotice("");
-    }, 2400);
+    let cancelled = false;
+
+    async function syncPendingJobs() {
+      const nextLiveJobs: ComposerAiImportJob[] = [];
+
+      for (const pendingJob of pendingAiImportJobs) {
+        try {
+          const job = await getModeratorAiImport(pendingJob.jobId);
+          if (cancelled) {
+            return;
+          }
+
+          const normalizedStatus = String(job.status ?? "").toUpperCase();
+          if (job.draftJson || normalizedStatus === "NORMALIZED" || normalizedStatus === "COMPLETED") {
+            removePendingModeratorAiImportJob(job.id);
+            setPendingAiImportJobs(readPendingModeratorAiImportJobs());
+            setCompletedAiImportJobs((currentJobs) => {
+              if (currentJobs.some((item) => item.id === job.id)) {
+                return currentJobs;
+              }
+              return [job, ...currentJobs];
+            });
+            toast.success({
+              title: "AI import",
+              message: `Đã trích xuất xong \"${job.title?.trim() || pendingJob.title}\".`,
+              actionText: "Mở bản nháp",
+              onAction: () => openAiImportDraft(job),
+              duration: 9000,
+              showProgress: true,
+            });
+            continue;
+          }
+
+          if (normalizedStatus === "FAILED") {
+            removePendingModeratorAiImportJob(job.id);
+            setPendingAiImportJobs(readPendingModeratorAiImportJobs());
+            toast.error({
+              title: "AI import thất bại",
+              message: job.errorMessage?.trim() || `Không thể trích xuất \"${pendingJob.title}\".`,
+            });
+            continue;
+          }
+
+          nextLiveJobs.push(job);
+        } catch (error) {
+          if (!cancelled) {
+            nextLiveJobs.push({
+              id: pendingJob.jobId,
+              status: "PENDING",
+              originalFileName: pendingJob.title,
+              title: pendingJob.title,
+              createdAt: pendingJob.createdAt,
+            });
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setLiveAiImportJobs(nextLiveJobs);
+      }
+    }
+
+    void syncPendingJobs();
+    const intervalId = window.setInterval(() => {
+      void syncPendingJobs();
+    }, AI_IMPORT_POLL_INTERVAL_MS);
 
     return () => {
-      window.clearTimeout(timer);
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
-  }, [flashNotice]);
+  }, [pendingAiImportJobs, toast]);
 
   const filteredOverviewRows = useMemo(() => {
     return overviewExamRows.filter((item) => {
@@ -554,9 +768,32 @@ export default function ModeratorComposerPage() {
     return filteredOverviewRows.slice(startIndex, startIndex + OVERVIEW_PAGE_SIZE);
   }, [currentPage, filteredOverviewRows]);
 
-  const paginationItems = useMemo(() => {
-    return buildPaginationItems(currentPage, totalPages);
-  }, [currentPage, totalPages]);
+  const trackedAiImportJobs = useMemo(() => {
+    const liveById = new Map(liveAiImportJobs.map((job) => [job.id, job]));
+    const pendingRows = pendingAiImportJobs.map((pendingJob) => {
+      const liveJob = liveById.get(pendingJob.jobId);
+      return {
+        id: pendingJob.jobId,
+        title: liveJob?.title?.trim() || pendingJob.title,
+        status: liveJob?.status ?? "PENDING",
+        progressPercent: liveJob?.progressPercent ?? 0,
+        progressMessage: liveJob?.progressMessage ?? "AI đang trích xuất đề...",
+        completed: false,
+        job: liveJob,
+      };
+    });
+    const completedRows = completedAiImportJobs.map((job) => ({
+      id: job.id,
+      title: job.title?.trim() || `AI import #${job.id}`,
+      status: job.status,
+      progressPercent: 100,
+      progressMessage: "Đã trích xuất xong, chờ moderator xác nhận.",
+      completed: true,
+      job,
+    }));
+
+    return [...completedRows, ...pendingRows];
+  }, [completedAiImportJobs, liveAiImportJobs, pendingAiImportJobs]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -567,25 +804,32 @@ export default function ModeratorComposerPage() {
   }, [totalPages]);
 
   const overviewStatItems = useMemo<OverviewStatItem[]>(() => {
-    const draftCount = overviewExamRows.filter((item) => item.status === "DRAFT").length;
-    const publishedCount = overviewExamRows.filter((item) => item.status === "PUBLISHED").length;
+    const editableCount = overviewExamRows.filter((item) => isEditableOverviewStatus(item.status)).length;
+    const publicCount = overviewExamRows.filter((item) => item.status === "PUBLISHED" || item.status === "ONGOING").length;
+    const closedOrLockedCount = overviewExamRows.filter((item) => item.status === "CLOSED" || item.status === "LOCKED").length;
     const totalExams = overviewExamRows.length;
-    const totalQuestions = overviewExamRows.reduce((sum, item) => sum + item.questionCount, 0);
 
     return [
       {
-        title: "Bản nháp",
-        value: formatCompactNumber(draftCount),
-        badge: "Có thể chỉnh sửa",
+        title: "Có thể chỉnh sửa",
+        value: formatCompactNumber(editableCount),
+        badge: "Draft / chờ duyệt / từ chối",
         tone: "warning",
         icon: FilePenLine,
       },
       {
-        title: "Đã xuất bản",
-        value: formatCompactNumber(publishedCount),
-        badge: "Đang hiển thị cho user",
+        title: "Đang hiển thị",
+        value: formatCompactNumber(publicCount),
+        badge: "Published / Ongoing",
         tone: "success",
         icon: CheckCircle2,
+      },
+      {
+        title: "Đã đóng / khóa",
+        value: formatCompactNumber(closedOrLockedCount),
+        badge: "Closed / Locked",
+        tone: "danger",
+        icon: Zap,
       },
       {
         title: "Tổng đề thi",
@@ -593,13 +837,6 @@ export default function ModeratorComposerPage() {
         badge: "",
         tone: "primary",
         icon: BookOpen,
-      },
-      {
-        title: "Tổng câu hỏi",
-        value: formatCompactNumber(totalQuestions),
-        badge: "",
-        tone: "primary",
-        icon: Plus,
       },
     ];
   }, [overviewExamRows]);
@@ -610,12 +847,13 @@ export default function ModeratorComposerPage() {
 
     try {
       const [exams, questions, subjects] = await Promise.all([
-        listComposerExams(),
+        listComposerOwnedExams(),
         listComposerQuestions(),
         listComposerSubjects(),
       ]);
+      setAvailableComposerSubjects(subjects);
 
-      const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]));
+      const subjectNameById = new Map(subjects.map((subject) => [subject.id, toDisplaySubjectName(subject.name)]));
       const questionCountByExam = new Map<number, number>();
 
       questions.forEach((question) => {
@@ -642,6 +880,8 @@ export default function ModeratorComposerPage() {
             subject: subjectNameById.get(exam.subjectId ?? -1) ?? "Chưa gán môn",
             level: exam.durationMinutes ? `${exam.durationMinutes} phút` : "Chưa đặt thời lượng",
             questionCount: questionCountByExam.get(exam.id) ?? 0,
+            startAt: formatOverviewUpdatedAt(exam.startAt ?? null),
+            endAt: formatOverviewUpdatedAt(exam.endAt ?? null),
             updatedAt: formatOverviewUpdatedAt(updatedSource),
             updatedEpoch,
             status: mapExamStatusToOverview(exam),
@@ -650,6 +890,7 @@ export default function ModeratorComposerPage() {
         })
         .sort((a, b) => b.updatedEpoch - a.updatedEpoch);
 
+      setAllOverviewQuestions(questions);
       setOverviewExamRows(mappedRows);
     } catch (error) {
       setLoadError(extractApiErrorMessage(error, "Không thể tải danh sách đề thi từ backend."));
@@ -662,17 +903,145 @@ export default function ModeratorComposerPage() {
     void refreshOverviewData();
   }, [refreshOverviewData]);
 
+  useEffect(() => {
+    if (availableComposerSubjects.length === 0) {
+      return;
+    }
+
+    setAiImportSubjectId((currentSubjectId) => {
+      if (
+        typeof currentSubjectId === "number" &&
+        availableComposerSubjects.some((item) => item.id === currentSubjectId)
+      ) {
+        return currentSubjectId;
+      }
+
+      return availableComposerSubjects[0]?.id ?? "";
+    });
+  }, [availableComposerSubjects]);
+
   const iconActionClassName =
     "inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ink-500)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-45";
 
-  function openComposerForm(examId?: number, viewOnly = false) {
+  function openComposerForm(examId?: number) {
     if (!examId) {
       navigate("/moderator/composer/form");
       return;
     }
 
-    const viewQuery = viewOnly ? "&view=1" : "";
-    navigate(`/moderator/composer/form?examId=${examId}${viewQuery}`);
+    navigate(`/moderator/composer/form?examId=${examId}`);
+  }
+
+  function resetAiImportModalState() {
+    setIsSubmittingAiImport(false);
+    setAiImportError("");
+    setAiImportFile(null);
+    if (aiImportInputRef.current) {
+      aiImportInputRef.current.value = "";
+    }
+    setAiImportTitle("Đề thi AI import");
+    setAiImportClassName("Lớp 12");
+    setAiImportDurationMinutes("45");
+    setAiImportSubjectId(availableComposerSubjects[0]?.id ?? "");
+  }
+
+  function openAiImportModal() {
+    resetAiImportModalState();
+    setIsAiImportModalOpen(true);
+  }
+
+  function closeAiImportModal() {
+    if (isSubmittingAiImport) {
+      return;
+    }
+
+    setIsAiImportModalOpen(false);
+  }
+
+  function openAiImportDraft(job: ComposerAiImportJob) {
+    const parsedDraft = parseModeratorAiDraft(job.draftJson);
+    if (!parsedDraft) {
+      toast.error({
+        title: "AI import",
+        message: job.errorMessage?.trim() || "Bản nháp AI import không hợp lệ.",
+      });
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(COMPOSER_AI_IMPORT_DRAFT_KEY, JSON.stringify(parsedDraft));
+    }
+    removePendingModeratorAiImportJob(job.id);
+    setPendingAiImportJobs(readPendingModeratorAiImportJobs());
+    setCompletedAiImportJobs((currentJobs) => currentJobs.filter((item) => item.id !== job.id));
+    navigate(`/moderator/composer/form?aiImportJobId=${job.id}`);
+  }
+
+  async function submitAiImport() {
+    if (!aiImportFile) {
+      setAiImportError("Vui lòng chọn file PDF hoặc ảnh để AI xử lý.");
+      return;
+    }
+
+    if (!aiImportTitle.trim()) {
+      setAiImportError("Vui lòng nhập tiêu đề đề thi.");
+      return;
+    }
+
+    const resolvedDuration = Number(aiImportDurationMinutes);
+    if (!Number.isFinite(resolvedDuration) || resolvedDuration <= 0) {
+      setAiImportError("Thời lượng làm bài phải lớn hơn 0.");
+      return;
+    }
+
+    setIsSubmittingAiImport(true);
+    setAiImportError("");
+
+    try {
+      const selectedSubject = availableComposerSubjects.find((item) => item.id === aiImportSubjectId);
+      const job = await uploadModeratorAiImport({
+        file: aiImportFile,
+        title: aiImportTitle.trim(),
+        subjectId: typeof aiImportSubjectId === "number" ? aiImportSubjectId : undefined,
+        subjectName: selectedSubject?.name,
+        className: aiImportClassName,
+        durationMinutes: resolvedDuration,
+      });
+
+      upsertPendingModeratorAiImportJob({
+        jobId: job.id,
+        title: job.title?.trim() || aiImportTitle.trim() || `AI import #${job.id}`,
+        createdAt: job.createdAt ?? new Date().toISOString(),
+      });
+      setPendingAiImportJobs(readPendingModeratorAiImportJobs());
+      setLiveAiImportJobs((currentJobs) => [job, ...currentJobs.filter((item) => item.id !== job.id)]);
+      setIsAiImportModalOpen(false);
+      toast.info({
+        title: "AI import",
+        message: "AI đang trích xuất đề trong nền. Bạn có thể chuyển sang việc khác và quay lại sau.",
+        duration: 5200,
+        showProgress: true,
+      });
+    } catch (error) {
+      setAiImportError(
+        extractApiErrorMessage(error, "Không thể khởi tạo tác vụ AI import từ file đã chọn.")
+      );
+    } finally {
+      setIsSubmittingAiImport(false);
+    }
+  }
+
+  function openExamPreview(row: OverviewExamRow) {
+    setPreviewExamRow(row);
+    const orderedQuestions = allOverviewQuestions
+      .filter((question) => question.examId === row.examId)
+      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    setPreviewQuestions(orderedQuestions);
+  }
+
+  function closeExamPreview() {
+    setPreviewExamRow(null);
+    setPreviewQuestions([]);
   }
 
   async function updateExamWithPatch(
@@ -682,17 +1051,22 @@ export default function ModeratorComposerPage() {
   ) {
     const requestPayload = buildExamUpdatePayload(row.source, patch);
     if (!requestPayload) {
-      window.alert("Đề thi này chưa có môn học hợp lệ nên chưa thể cập nhật.");
+      await showAlert("Đề thi này chưa có môn học hợp lệ nên chưa thể cập nhật.");
       return;
     }
 
     setBusyExamId(row.examId);
     try {
       await updateComposerExam(row.examId, requestPayload);
-      setFlashNotice(successMessage);
+      toast.success({
+        title: "Hệ thống",
+        message: successMessage,
+        duration: 3600,
+        showProgress: true,
+      });
       await refreshOverviewData();
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Cập nhật trạng thái đề thi thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Cập nhật trạng thái đề thi thất bại."));
     } finally {
       setBusyExamId(null);
     }
@@ -700,19 +1074,25 @@ export default function ModeratorComposerPage() {
 
   async function publishOverviewExam(examId: number) {
     const targetExam = overviewExamRows.find((item) => item.examId === examId);
-    if (!targetExam || targetExam.status !== "DRAFT") {
+    if (!targetExam || !isPublishableOverviewStatus(targetExam.status)) {
       return;
     }
 
     if (targetExam.questionCount <= 0) {
-      window.alert(
+      await showAlert(
         `Đề "${targetExam.title}" chưa có câu hỏi trên hệ thống. Vui lòng mở form tạo đề, thêm câu hỏi và bấm "Lưu bản nháp" trước khi xuất bản.`
       );
       return;
     }
 
-    const shouldPublish = window.confirm(
-      `Xuất bản đề "${targetExam.title}" để người dùng có thể truy cập ngay bây giờ?`
+    const shouldPublish = await confirm(
+      `Xuất bản đề "${targetExam.title}" để người dùng có thể truy cập ngay bây giờ?`,
+      {
+        title: "Xuất bản đề thi",
+        type: "info",
+        confirmText: "Xuất bản",
+        cancelText: "Hủy",
+      }
     );
     if (!shouldPublish) {
       return;
@@ -734,8 +1114,14 @@ export default function ModeratorComposerPage() {
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `Xóa đề "${targetExam.title}"? Hành động này không thể hoàn tác.`
+    const shouldDelete = await confirm(
+      `Xóa đề "${targetExam.title}"? Hành động này không thể hoàn tác.`,
+      {
+        title: "Xóa đề thi",
+        type: "danger",
+        confirmText: "Xóa",
+        cancelText: "Hủy",
+      }
     );
     if (!shouldDelete) {
       return;
@@ -744,22 +1130,18 @@ export default function ModeratorComposerPage() {
     setBusyExamId(examId);
     try {
       await deleteComposerExam(examId);
-      setFlashNotice("Đã xóa đề thi.");
+      toast.success({
+        title: "Hệ thống",
+        message: "Đã xóa đề thi.",
+        duration: 3600,
+        showProgress: true,
+      });
       await refreshOverviewData();
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Xóa đề thi thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Xóa đề thi thất bại."));
     } finally {
       setBusyExamId(null);
     }
-  }
-
-  function openJsonImportModal() {
-    if (isImportingJson) {
-      return;
-    }
-
-    setJsonImportUiError("");
-    setIsJsonImportModalOpen(true);
   }
 
   function closeJsonImportModal() {
@@ -775,7 +1157,21 @@ export default function ModeratorComposerPage() {
       return;
     }
 
-    jsonImportInputRef.current?.click();
+    if (jsonImportInputRef.current) {
+      jsonImportInputRef.current.value = "";
+      jsonImportInputRef.current.click();
+    }
+  }
+
+  function openAiImportPicker() {
+    if (isSubmittingAiImport) {
+      return;
+    }
+
+    if (aiImportInputRef.current) {
+      aiImportInputRef.current.value = "";
+      aiImportInputRef.current.click();
+    }
   }
 
   async function handleJsonImportFileSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -951,15 +1347,21 @@ export default function ModeratorComposerPage() {
         setJsonImportUiError(
           `Có ${summary.failedExamCount} đề import lỗi. Chi tiết từ backend:\n${detailLines}${moreLine}`
         );
-        setFlashNotice(
-          `Đã nhập ${summary.importedExamCount} đề (${summary.importedQuestionCount} câu hỏi), ${summary.failedExamCount} đề lỗi.`
-        );
+        toast.warning({
+          title: "Nhập JSON",
+          message: `Đã nhập ${summary.importedExamCount} đề (${summary.importedQuestionCount} câu hỏi), ${summary.failedExamCount} đề lỗi.`,
+          duration: 5200,
+          showProgress: true,
+        });
         return;
       }
 
-      setFlashNotice(
-        `Đã nhập thành công ${summary.importedExamCount} đề và ${summary.importedQuestionCount} câu hỏi từ JSON.`
-      );
+      toast.success({
+        title: "Nhập JSON",
+        message: `Đã nhập thành công ${summary.importedExamCount} đề và ${summary.importedQuestionCount} câu hỏi từ JSON.`,
+        duration: 3800,
+        showProgress: true,
+      });
 
       setIsJsonImportModalOpen(false);
     } catch (error) {
@@ -981,12 +1383,6 @@ export default function ModeratorComposerPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7 px-1 pb-20">
-      {flashNotice ? (
-        <div className="fixed right-6 top-24 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-700 shadow-[0_8px_24px_rgba(16,21,38,0.12)]">
-          {flashNotice}
-        </div>
-      ) : null}
-
       <ComposerJsonImportModal
         open={isJsonImportModalOpen}
         isImporting={isImportingJson}
@@ -1003,9 +1399,194 @@ export default function ModeratorComposerPage() {
         }}
       />
 
+      {isAiImportModalOpen ? (
+        <div className="fixed inset-0 z-[1260] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <button type="button" className="absolute inset-0" onClick={closeAiImportModal} aria-label="Đóng" />
+          <section className="relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border border-[var(--line-soft)] bg-white shadow-[0_28px_64px_rgba(15,23,42,0.22)]">
+            <div className="border-b border-[var(--line-soft)] bg-[linear-gradient(135deg,#f5f9ff_0%,#eef6ff_100%)] px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--brand-100)] text-[var(--brand-700)]">
+                    <Sparkles size={18} />
+                  </div>
+                  <h2 className="text-lg font-black leading-none text-[var(--ink-900)]">Tạo đề bằng AI từ PDF hoặc ảnh</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAiImportModal}
+                  disabled={isSubmittingAiImport}
+                  className="rounded-xl p-2 text-[var(--ink-500)] transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-5 py-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1.5 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Tiêu đề đề thi</span>
+                  <input
+                    value={aiImportTitle}
+                    onChange={(event) => setAiImportTitle(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Môn học</span>
+                  <select
+                    value={aiImportSubjectId}
+                    onChange={(event) => setAiImportSubjectId(event.target.value ? Number(event.target.value) : "")}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport || availableComposerSubjects.length === 0}
+                  >
+                    {availableComposerSubjects.length === 0 ? (
+                      <option value="">Chưa có môn học</option>
+                    ) : null}
+                    {availableComposerSubjects.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {toDisplaySubjectName(item.name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Lớp học</span>
+                  <select
+                    value={aiImportClassName}
+                    onChange={(event) => setAiImportClassName(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  >
+                    {AI_IMPORT_CLASS_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5 text-sm font-semibold text-[var(--ink-700)]">
+                  <span>Thời lượng (phút)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={aiImportDurationMinutes}
+                    onChange={(event) => setAiImportDurationMinutes(event.target.value)}
+                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 outline-none transition focus:border-[var(--brand-500)]"
+                    disabled={isSubmittingAiImport}
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-[0_8px_20px_rgb(0,0,0,0.02)] transition-all hover:shadow-[0_8px_20px_rgb(0,0,0,0.04)]">
+                <div className="flex items-center gap-2 border-b border-slate-50 pb-2.5">
+                  <div className="rounded-md bg-indigo-50 p-1.5 text-indigo-600">
+                    <Upload size={15} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-800">Tải lên tài liệu</p>
+                    <p className="text-[9px] text-slate-400">PDF, PNG, JPG, JPEG, WEBP, BMP, TIF, TIFF</p>
+                  </div>
+                </div>
+
+                <div
+                  onClick={openAiImportPicker}
+                  className="group relative mt-3 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 py-5 text-center transition-all hover:border-[var(--brand-400)] hover:bg-white"
+                >
+                  <div className="relative z-10 mb-2 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-100 bg-white text-[var(--brand-600)] shadow-sm transition-transform duration-500 group-hover:scale-110">
+                    <Upload size={20} />
+                  </div>
+                  <h3 className="relative z-10 text-[10px] font-bold text-slate-700">Kéo thả file vào đây</h3>
+                  <p className="relative z-10 mt-1 text-[9px] text-slate-400">Hoặc chọn file từ máy tính để AI xử lý</p>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openAiImportPicker();
+                    }}
+                    disabled={isSubmittingAiImport}
+                    className="relative z-10 mt-3 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-0.5 text-[9px] font-bold text-[var(--brand-700)] shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Chọn từ máy tính
+                  </button>
+                  <input
+                    ref={aiImportInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                    className="hidden"
+                    onChange={(event) => {
+                      const selectedFile = event.currentTarget.files?.[0] ?? null;
+                      setAiImportFile(selectedFile);
+                      setAiImportError("");
+                    }}
+                  />
+                </div>
+
+                {aiImportFile ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-100/70 bg-blue-50/50 p-2">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white font-bold text-[7px] text-[var(--brand-700)] shadow-sm">
+                      FILE
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[10px] font-bold text-slate-700">{aiImportFile.name}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-full w-full rounded-full bg-[var(--brand-500)] shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                        </div>
+                        <p className="text-[7px] font-medium text-slate-400">
+                          {(aiImportFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiImportFile(null);
+                        setAiImportError("");
+                      }}
+                      className="p-0.5 text-slate-300 transition-colors hover:text-rose-500"
+                      aria-label="Xóa file"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {aiImportError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{aiImportError}</div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeAiImportModal}
+                  disabled={isSubmittingAiImport}
+                  className="inline-flex h-11 items-center rounded-xl border border-[var(--line-soft)] bg-white px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void submitAiImport();
+                  }}
+                  disabled={isSubmittingAiImport}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-600)_0%,var(--brand-700)_100%)] px-5 text-sm font-bold text-white shadow-[var(--shadow-brand)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSubmittingAiImport ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {isSubmittingAiImport ? "Đang xử lý AI..." : "Tạo bản nháp AI"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <section className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
-          <h1 className="font-[var(--font-display)] text-4xl font-black tracking-tight text-[var(--ink-900)]">Quản lý Đề thi</h1>
+          <h1 className="font-[var(--font-display)] text-4xl font-black tracking-tight text-[var(--ink-900)]">Quản lý đề thi</h1>
           <p className="text-sm font-medium text-[var(--ink-600)] md:text-base">
             Theo dõi, xuất bản và quản lý hệ thống đề thi toàn quốc.
           </p>
@@ -1014,11 +1595,10 @@ export default function ModeratorComposerPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={openJsonImportModal}
-            disabled={isImportingJson}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--line-soft)] bg-white px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:bg-[var(--bg-soft)]"
+            onClick={openAiImportModal}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 text-sm font-semibold text-[var(--brand-700)] transition hover:border-[var(--brand-300)] hover:bg-[var(--brand-100)]"
           >
-            <Upload size={14} /> Nhập từ JSON
+            <Sparkles size={14} /> Tạo đề bằng AI
           </button>
           <button
             type="button"
@@ -1051,6 +1631,52 @@ export default function ModeratorComposerPage() {
         })}
       </section>
 
+      {trackedAiImportJobs.length > 0 ? (
+        <section className="rounded-2xl border border-sky-100 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,21,38,0.05)]">
+          <div className="space-y-2">
+            {trackedAiImportJobs.map((item) => {
+              const clampedProgress = Math.max(0, Math.min(100, item.progressPercent ?? 0));
+              const completedJob = item.completed ? item.job : undefined;
+              return (
+                <div
+                  key={item.id}
+                  className="grid gap-2 rounded-xl border border-[var(--line-soft)] bg-[var(--bg-soft)]/40 px-3 py-2.5 md:grid-cols-[1fr_auto] md:items-center"
+                >
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-xs font-bold text-[var(--ink-900)]">{item.title}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--ink-500)]">
+                        {item.completed ? "DONE" : item.status}
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white">
+                      <div
+                        className="h-full rounded-full bg-sky-500 transition-all"
+                        style={{ width: `${item.completed ? 100 : clampedProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] font-medium text-[var(--ink-500)]">{item.progressMessage}</p>
+                  </div>
+                  {completedJob ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 text-xs font-bold text-white transition hover:bg-sky-700"
+                      onClick={() => openAiImportDraft(completedJob)}
+                    >
+                      <CheckCircle2 size={13} /> Mở bản nháp
+                    </button>
+                  ) : (
+                    <span className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-sky-100 bg-white px-3 text-xs font-semibold text-sky-700">
+                      <Loader2 size={13} className="animate-spin" /> Đang chạy
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <section className="overflow-hidden rounded-2xl border border-[var(--line-soft)] bg-white shadow-[0_8px_28px_rgba(16,21,38,0.06)]">
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line-soft)] bg-[var(--bg-soft)]/45 px-5 py-4 md:px-6">
           <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-[var(--ink-500)]">Bộ lọc:</span>
@@ -1060,9 +1686,14 @@ export default function ModeratorComposerPage() {
             onChange={(event) => setOverviewStatus(event.target.value as OverviewFilterStatus)}
             className="h-9 rounded-lg border border-transparent bg-white px-3 text-sm font-medium text-[var(--ink-700)] outline-none transition focus:border-[var(--brand-500)]"
           >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="DRAFT">Bản nháp</option>
-            <option value="PUBLISHED">Đã xuất bản</option>
+            <option value="ALL">All statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PENDING_REVIEW">Pending Review</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="ONGOING">Ongoing</option>
+            <option value="CLOSED">Closed</option>
+            <option value="LOCKED">Locked</option>
+            <option value="REJECTED">Rejected</option>
           </select>
 
           <select
@@ -1124,25 +1755,31 @@ export default function ModeratorComposerPage() {
         ) : null}
 
         {!loadError && !isLoadingRows && filteredOverviewRows.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto px-4 md:px-6">
             <table className="min-w-full text-left">
               <thead>
                 <tr className="bg-[var(--bg-soft)]/35">
-                  <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Đề thi / Thông tin</th>
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Trạng thái</th>
-                  <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Số câu</th>
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Ngày cập nhật</th>
-                  <th className="px-6 py-3 text-right text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Thao tác</th>
+                  <th className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Đề thi / Thông tin</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Trạng thái</th>
+                  <th className="px-5 py-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Số câu</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Bắt đầu</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Kết thúc</th>
+                  <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Ngày cập nhật</th>
+                  <th className="px-8 py-3 text-right text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--ink-500)]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-soft)]">
                 {paginatedOverviewRows.map((item) => {
+                  const [startDate, startTime = ""] = item.startAt.split(" - ");
+                  const [endDate, endTime = ""] = item.endAt.split(" - ");
                   const [updatedDate, updatedTime = ""] = item.updatedAt.split(" - ");
                   const isBusy = busyExamId === item.examId;
+                  const canEdit = isEditableOverviewStatus(item.status);
+                  const canPublish = isPublishableOverviewStatus(item.status);
 
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-[var(--bg-soft)]/45">
-                      <td className="px-6 py-4 align-top">
+                      <td className="px-8 py-4 align-top">
                         <p className="max-w-[30rem] text-[1.05rem] font-bold leading-snug text-[var(--ink-900)]">{item.title}</p>
                         <div className="mt-1.5 flex items-center gap-3 text-xs font-medium text-[var(--ink-500)]">
                           <span className="inline-flex items-center gap-1">
@@ -1152,23 +1789,33 @@ export default function ModeratorComposerPage() {
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-5 py-4 align-top">
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadgeClassName(item.status)}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusDotClassName(item.status)}`} />
                           {formatOverviewStatus(item.status)}
                         </span>
                       </td>
 
-                      <td className="px-4 py-4 text-center align-top text-sm font-bold text-[var(--ink-900)]">{item.questionCount}</td>
+                      <td className="px-5 py-4 text-center align-top text-sm font-bold text-[var(--ink-900)]">{item.questionCount}</td>
 
-                      <td className="px-4 py-4 align-top text-xs">
+                      <td className="px-5 py-4 align-top text-xs">
+                        <p className="font-semibold text-[var(--ink-700)]">{startDate}</p>
+                        <p className="text-[var(--ink-500)]">{startTime}</p>
+                      </td>
+
+                      <td className="px-5 py-4 align-top text-xs">
+                        <p className="font-semibold text-[var(--ink-700)]">{endDate}</p>
+                        <p className="text-[var(--ink-500)]">{endTime}</p>
+                      </td>
+
+                      <td className="px-5 py-4 align-top text-xs">
                         <p className="font-semibold text-[var(--ink-700)]">{updatedDate}</p>
                         <p className="text-[var(--ink-500)]">{updatedTime}</p>
                       </td>
 
-                      <td className="px-6 py-4 align-top">
+                      <td className="px-8 py-4 align-top">
                         <div className="flex items-center justify-end gap-1">
-                          {item.status === "DRAFT" ? (
+                          {canEdit ? (
                             <>
                               <button
                                 type="button"
@@ -1183,7 +1830,7 @@ export default function ModeratorComposerPage() {
                                 type="button"
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                                 title="Xuất bản cho người dùng"
-                                disabled={isBusy}
+                                disabled={isBusy || !canPublish}
                                 onClick={() => {
                                   void publishOverviewExam(item.examId);
                                 }}
@@ -1202,16 +1849,14 @@ export default function ModeratorComposerPage() {
                                 <Trash2 size={14} />
                               </button>
                             </>
-                          ) : null}
-
-                          {item.status === "PUBLISHED" ? (
+                          ) : (
                             <>
                               <button
                                 type="button"
                                 className={iconActionClassName}
                                 title="Xem"
                                 disabled={isBusy}
-                                onClick={() => openComposerForm(item.examId, true)}
+                                onClick={() => openExamPreview(item)}
                               >
                                 <Eye size={14} />
                               </button>
@@ -1227,7 +1872,7 @@ export default function ModeratorComposerPage() {
                                 <Trash2 size={14} />
                               </button>
                             </>
-                          ) : null}
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1238,62 +1883,17 @@ export default function ModeratorComposerPage() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between border-t border-[var(--line-soft)] bg-[var(--bg-soft)]/25 px-6 py-4">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-              currentPage <= 1
-                ? "cursor-not-allowed text-slate-400"
-                : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-            }`}
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage <= 1 || filteredOverviewRows.length === 0}
-          >
-            <ArrowLeft size={14} /> Trước
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            {paginationItems.map((item) => {
-              if (typeof item !== "number") {
-                return (
-                  <span key={item} className="px-1 text-sm text-[var(--ink-500)]">
-                    ...
-                  </span>
-                );
-              }
-
-              const isCurrent = item === currentPage;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-semibold transition ${
-                    isCurrent
-                      ? "bg-[var(--brand-700)] font-bold text-white"
-                      : "text-[var(--ink-700)] hover:bg-[var(--bg-soft)]"
-                  }`}
-                  onClick={() => setCurrentPage(item)}
-                  disabled={isCurrent}
-                >
-                  {item}
-                </button>
-              );
-            })}
+        {filteredOverviewRows.length > 0 && totalPages > 1 ? (
+          <div className="border-t border-[var(--line-soft)] bg-[var(--bg-soft)]/25 px-6 py-4">
+            <div className="flex justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
           </div>
-
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 text-sm font-semibold transition ${
-              currentPage >= totalPages || filteredOverviewRows.length === 0
-                ? "cursor-not-allowed text-slate-400"
-                : "text-[var(--brand-700)] hover:text-[var(--brand-600)]"
-            }`}
-            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-            disabled={currentPage >= totalPages || filteredOverviewRows.length === 0}
-          >
-            Tiếp theo <ArrowRight size={14} />
-          </button>
-        </div>
+        ) : null}
       </section>
 
       <section className="grid gap-6 pt-2 lg:grid-cols-[1.15fr_0.85fr]">
@@ -1336,6 +1936,99 @@ export default function ModeratorComposerPage() {
           </ul>
         </article>
       </section>
+
+      {previewExamRow ? (
+        <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm">
+          <button type="button" className="absolute inset-0" onClick={closeExamPreview} aria-label="Đóng" />
+          <section className="relative z-10 flex h-[min(88vh,920px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#d6d9df] bg-white shadow-[0_28px_64px_rgba(15,23,42,0.28)]">
+            <div className="flex items-center justify-between bg-[linear-gradient(90deg,#eef5ff_0%,#fff6ea_55%,#eef7ff_100%)] px-3 py-1.5">
+              <h3 className="truncate text-[1.1rem] font-bold tracking-tight text-[#111827]">Nội dung đề thi</h3>
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-[#6b7280] hover:bg-white/70"
+                onClick={closeExamPreview}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <section className="mb-3 rounded-lg border border-[#dde5f3] bg-[#fbfdff] px-4 py-3">
+                <p className="text-xs text-[var(--ink-600)]">Tiêu đề đề thi</p>
+                <p className="mt-1 text-[1rem] font-semibold text-[var(--ink-900)]">{previewExamRow.title}</p>
+              </section>
+
+              {previewQuestions.length === 0 ? (
+                <div className="rounded-lg border border-[var(--line-soft)] px-3 py-8 text-center text-sm text-[var(--ink-600)]">
+                  Đề thi chưa có câu hỏi.
+                </div>
+              ) : null}
+
+              {previewQuestions.length > 0 ? (
+                <div className="space-y-3">
+                  {previewQuestions.map((question, index) => {
+                    const options = parsePreviewQuestionOptions(question.options);
+                    const normalizedAnswer = (question.answer ?? "").trim().toLowerCase();
+
+                    return (
+                      <article key={question.id} className="rounded-lg border border-[#dce4f3] bg-white p-3">
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Q{index + 1}</span>
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+                            {formatPreviewQuestionType(question.type)}
+                          </span>
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
+                            {question.maxScore ?? 0} point{question.maxScore === 1 ? "" : "s"}
+                          </span>
+                        </div>
+
+                        <div className="prose prose-sm max-w-none text-[var(--ink-900)]" dangerouslySetInnerHTML={{ __html: question.content ?? "" }} />
+
+                        {question.imageUrl ? (
+                          <img
+                            src={question.imageUrl}
+                            alt={`question-${question.id}`}
+                            className="mt-2 max-h-36 w-auto max-w-full rounded border border-[var(--line-soft)] object-contain"
+                          />
+                        ) : null}
+
+                        {options.length > 0 ? (
+                          <ul className="mt-3 space-y-1.5 text-[12px]">
+                            {options.map((option, optionIndex) => {
+                              const letter = String.fromCharCode(65 + optionIndex);
+                              const isCorrect =
+                                normalizedAnswer === letter.toLowerCase()
+                                || normalizedAnswer === option.trim().toLowerCase();
+
+                              return (
+                                <li
+                                  key={`${question.id}-option-${optionIndex}`}
+                                  className={`flex items-center justify-between rounded-md px-2.5 py-1.5 ${
+                                    isCorrect
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-slate-50 text-slate-700"
+                                  }`}
+                                >
+                                  <span>
+                                    <span className="mr-1 font-bold">{letter}.</span>
+                                    {option}
+                                  </span>
+                                  {isCorrect ? <CheckCircle2 size={14} className="text-emerald-600" /> : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
+

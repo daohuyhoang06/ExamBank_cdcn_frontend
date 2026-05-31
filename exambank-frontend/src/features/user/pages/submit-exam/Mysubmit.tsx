@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Trophy,
@@ -10,8 +10,12 @@ import {
 } from 'lucide-react';
 import type { Submission } from '../../types/user.type';
 import { userService } from '../../services/user.service';
+import { Pagination } from '@/components/ui/Pagination/pagination';
+
+const SUBMISSIONS_PER_PAGE = 10;
 
 const cn = (...classes: (string | boolean | undefined | null)[]) => classes.filter(Boolean).join(' ');
+
 const toDisplayText = (value: unknown): string | null => {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -34,55 +38,70 @@ export default function MySubmissionsPage() {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [openNoteId, setOpenNoteId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(submissions.length / SUBMISSIONS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pagedSubmissions = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * SUBMISSIONS_PER_PAGE;
+    return submissions.slice(startIndex, startIndex + SUBMISSIONS_PER_PAGE);
+  }, [submissions, safeCurrentPage]);
 
   useEffect(() => {
     const fetchSubmissions = async () => {
       const data = await userService.getSubmissions();
       setSubmissions(data);
+      setCurrentPage(1);
     };
 
     void fetchSubmissions();
   }, []);
 
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   return (
     <div className="w-full animate-in fade-in duration-500">
       <section className="mb-10 flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-end">
         <div className="max-w-2xl">
-          <h1 className="mb-3 text-3xl font-black tracking-tight text-[#003466] md:text-4xl">My Submissions</h1>
+          <h1 className="mb-3 text-3xl font-black tracking-tight text-[#003466] md:text-4xl">Đề của bạn</h1>
           <p className="text-base leading-relaxed text-slate-500">
-            Review your academic contributions and monitor their approval status in real-time.
+            Theo dõi các đề thi bạn đã đóng góp và trạng thái duyệt theo thời gian thực.
           </p>
         </div>
 
         <div className="flex gap-6 rounded-2xl border border-slate-100 bg-white px-6 py-4 shadow-sm">
-          <StatItem value={String(submissions.length)} label="Shared" color="text-[#003466]" />
+          <StatItem value={String(submissions.length)} label="Đã gửi" color="text-[#003466]" />
           <div className="h-8 w-px self-center bg-slate-100" />
           <StatItem
             value={String(submissions.filter((item) => item.status === 'Approved').length)}
-            label="Approved"
+            label="Đã duyệt"
             color="text-[#006e2f]"
           />
         </div>
       </section>
 
       <div className="mb-8 overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-4 md:px-6">
           <table className="w-full min-w-[1100px] text-left">
             <thead className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-widest text-slate-400">
               <tr>
-                <th className="px-8 py-5">Exam Title</th>
-                <th className="px-6 py-5">Details</th>
-                <th className="px-6 py-5">Type</th>
-                <th className="px-6 py-5">Thời Gian</th>
-                <th className="px-6 py-5">Status</th>
-                <th className="px-6 py-5">Ghi Chú</th>
-                <th className="px-8 py-5 text-right">Actions</th>
+                <th className="px-10 py-5">Tiêu đề đề thi</th>
+                <th className="px-6 py-5">Chi tiết</th>
+                <th className="px-6 py-5">Loại</th>
+                <th className="px-6 py-5">Thời gian</th>
+                <th className="px-6 py-5">Trạng thái</th>
+                <th className="px-6 py-5">Ghi chú</th>
+                <th className="px-10 py-5 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {submissions.map((item) => (
+              {pagedSubmissions.map((item) => (
                 <tr key={item.id} className="group hover:bg-blue-50/30 transition-colors">
-                  <td className="px-8 py-5">
+                  <td className="px-10 py-5">
                     <div className="font-bold text-[#003466]">{item.title}</div>
                     <div className="text-xs font-medium text-slate-400">{item.university}</div>
                   </td>
@@ -129,7 +148,7 @@ export default function MySubmissionsPage() {
                       <span className="text-sm text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-8 py-5 text-right">
+                  <td className="px-10 py-5 text-right">
                     <div className="flex justify-end gap-1 opacity-0 transition-all group-hover:opacity-100">
                       <RowAction icon={<Eye size={18} />} onClick={() => navigate(`/user/comment/${item.id}`)} />
                       <RowAction icon={<Trash2 size={18} />} isDelete />
@@ -142,6 +161,16 @@ export default function MySubmissionsPage() {
         </div>
       </div>
 
+      {submissions.length > 0 && totalPages > 1 && (
+        <div className="mb-8 flex justify-center">
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
+
       {submissions.length === 0 && (
         <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-8 text-center text-slate-500">
           Bạn chưa có bài nộp nào. Hãy tải đề đầu tiên của bạn.
@@ -153,14 +182,12 @@ export default function MySubmissionsPage() {
           <div className="max-w-md">
             <div className="mb-3 flex items-center gap-2">
               <Trophy className="text-yellow-400" size={18} />
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Milestone Path</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Cột mốc đóng góp</span>
             </div>
-            <h3 className="mb-2 text-2xl font-bold">Vault Keeper Progress</h3>
+            <h3 className="mb-2 text-2xl font-bold">Tiến độ đóng góp</h3>
             <p className="text-sm leading-relaxed text-blue-100/70">
               Bạn chỉ cần thêm{' '}
-              <span className="font-bold text-white underline decoration-green-400 underline-offset-4">
-                5 tài liệu duyệt
-              </span>{' '}
+              <span className="font-bold text-white underline decoration-green-400 underline-offset-4">5 tài liệu duyệt</span>{' '}
               nữa để lên hạng.
             </p>
           </div>
@@ -185,10 +212,9 @@ export default function MySubmissionsPage() {
 
         <div className="flex flex-col justify-center rounded-3xl border border-slate-200/50 bg-slate-100/50 p-8">
           <Sparkles className="mb-4 text-[#003466]" size={24} />
-          <h4 className="mb-2 font-bold text-[#003466]">Pro Quality Tip</h4>
+          <h4 className="mb-2 font-bold text-[#003466]">Mẹo nâng chất lượng</h4>
           <p className="text-xs leading-relaxed text-slate-500">
-            Các bản scan có kèm <span className="font-bold text-slate-800">lời giải chi tiết</span> luôn có tỷ lệ duyệt
-            cao hơn 90%.
+            Các bản scan có kèm <span className="font-bold text-slate-800">lời giải chi tiết</span> luôn có tỷ lệ duyệt cao hơn 90%.
           </p>
         </div>
       </div>
@@ -198,7 +224,7 @@ export default function MySubmissionsPage() {
         className="fixed bottom-8 right-8 z-40 flex items-center gap-2 rounded-full bg-[#003466] px-6 py-4 text-white shadow-2xl ring-4 ring-white/50 transition-all hover:scale-105 active:scale-95"
       >
         <PlusCircle size={20} />
-        <span className="text-sm font-bold">New Submission</span>
+        <span className="text-sm font-bold">Tải đề mới</span>
       </button>
     </div>
   );

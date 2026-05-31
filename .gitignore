@@ -4,3 +4,14 @@ review.json
 tmp-upload.txt
 *.tmp
 *.local
+mvn-settings.xml
+
+# Local reverse-engineering/runtime artifacts
+*.from.container.class
+*.from.container.javap.txt
+*.from.container.verbose.txt
+*.javap.txt
+*.verbose.txt
+app-from-container.jar
+boot-*.out.log
+boot-*.err.log

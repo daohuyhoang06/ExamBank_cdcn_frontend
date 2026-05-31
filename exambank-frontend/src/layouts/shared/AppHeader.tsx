@@ -1,4 +1,4 @@
-import { Settings } from "lucide-react";
+import { Flame, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { getStoredAuthUser } from "@/features/auth/services/auth.service";
@@ -23,6 +23,8 @@ export function AppHeader({
           fullName?: string;
           name?: string;
           email?: string;
+          coinBalance?: number;
+          streak?: number;
         }
       | null;
 
@@ -31,6 +33,22 @@ export function AppHeader({
 
   const headerMetaTitle = isStudentArea ? "Tài khoản" : title;
   const headerMetaSubtitle = currentUserDisplayName || subtitle;
+  const [coinBalance, setCoinBalance] = useState(() => {
+    const currentUser = getStoredAuthUser() as
+      | {
+          coinBalance?: number;
+        }
+      | null;
+    return typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0;
+  });
+  const [streak, setStreak] = useState(() => {
+    const currentUser = getStoredAuthUser() as
+      | {
+          streak?: number;
+        }
+      | null;
+    return typeof currentUser?.streak === "number" ? currentUser.streak : 0;
+  });
 
   useEffect(() => {
     function handleAuthUserUpdated() {
@@ -40,10 +58,14 @@ export function AppHeader({
             fullName?: string;
             name?: string;
             email?: string;
+            coinBalance?: number;
+            streak?: number;
           }
         | null;
 
       setCurrentUserDisplayName(currentUser?.fullName ?? currentUser?.name ?? currentUser?.email ?? fallbackName);
+      setCoinBalance(typeof currentUser?.coinBalance === "number" ? currentUser.coinBalance : 0);
+      setStreak(typeof currentUser?.streak === "number" ? currentUser.streak : 0);
     }
 
     window.addEventListener(AUTH_USER_UPDATED_EVENT, handleAuthUserUpdated);
@@ -62,6 +84,17 @@ export function AppHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        {isStudentArea ? (
+          <>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+              <Flame size={14} fill="currentColor" />
+              {streak.toLocaleString("vi-VN")} ngày
+            </div>
+            <div className="rounded-full border border-[var(--line-soft)] bg-[var(--bg-panel)] px-3 py-1 text-xs font-semibold text-[var(--ink-700)]">
+              Coin: {coinBalance.toLocaleString("vi-VN")}
+            </div>
+          </>
+        ) : null}
         <button
           type="button"
           className="rounded-full border border-transparent p-2 text-[var(--ink-600)] transition duration-200 hover:border-[var(--line-soft)] hover:bg-[var(--bg-page)]"

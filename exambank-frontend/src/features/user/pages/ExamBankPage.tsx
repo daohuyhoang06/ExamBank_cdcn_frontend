@@ -1,31 +1,160 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Search,
-  ChevronDown,
-  Star,
-  Check,
-  Eye,
-  School,
-  BookMarked
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, Star, Calendar, School, ChevronDown, Check, BookMarked } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { Pagination } from '@/components/ui/Pagination/pagination';
 
 import type { DocumentSummary, EducationLevel, Subject } from '../types/user.type';
 import { userService } from '../services/user.service';
 
+const DOCUMENTS_PER_PAGE = 9;
+const ALL_SUBJECTS = 'T\u1ea5t c\u1ea3 m\u00f4n h\u1ecdc';
+const ALL_LEVELS: EducationLevel = { id: 'all', name: 'T\u1ea5t c\u1ea3 l\u1edbp', group: 'TH' };
+
+const CLASS_LEVELS: EducationLevel[] = Array.from({ length: 12 }, (_, i) => {
+  const level = i + 1;
+  return {
+    id: String(level),
+    name: `L\u1edbp ${level}`,
+    group: level <= 5 ? 'TH' : level <= 9 ? 'THCS' : 'THPT',
+  };
+});
+
+const normalizeText = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const looksLikeMojibake = (value: string): boolean => /(Ã.|Â.|Æ.|Ð.|áº|á»|Ä.)/.test(value);
+
+const repairMojibakeText = (value?: string): string => {
+  const raw = (value ?? '').trim();
+  if (!raw || !looksLikeMojibake(raw)) {
+    return raw;
+  }
+
+  let repaired = raw;
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const bytes = Uint8Array.from(repaired, (char) => char.charCodeAt(0) & 0xff);
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) {
+        break;
+      }
+      repaired = decoded;
+      if (!looksLikeMojibake(repaired)) {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return repaired;
+};
+
+const SUBJECT_DISPLAY_MAP: Record<string, string> = {
+  'toan hoc': 'To\u00e1n h\u1ecdc',
+  toan: 'To\u00e1n h\u1ecdc',
+  'vat ly': 'V\u1eadt l\u00fd',
+  ly: 'V\u1eadt l\u00fd',
+  'hoa hoc': 'H\u00f3a h\u1ecdc',
+  hoa: 'H\u00f3a h\u1ecdc',
+  'sinh hoc': 'Sinh h\u1ecdc',
+  sinh: 'Sinh h\u1ecdc',
+  'ngu van': 'Ng\u1eef v\u0103n',
+  van: 'Ng\u1eef v\u0103n',
+  'tieng anh': 'Ti\u1ebfng Anh',
+  anh: 'Ti\u1ebfng Anh',
+  'lich su': 'L\u1ecbch s\u1eed',
+  'dia ly': '\u0110\u1ecba l\u00fd',
+  'tin hoc': 'Tin h\u1ecdc',
+  gdcd: 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'giao duc cong dan': 'Gi\u00e1o d\u1ee5c c\u00f4ng d\u00e2n',
+  'cong nghe': 'C\u00f4ng ngh\u1ec7',
+  'quoc phong an ninh': 'Qu\u1ed1c ph\u00f2ng an ninh',
+  'khoa hoc tu nhien': 'Khoa h\u1ecdc t\u1ef1 nhi\u00ean',
+  'khoa hoc xa hoi': 'Khoa h\u1ecdc x\u00e3 h\u1ed9i',
+};
+
+const toTitleCase = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const formatSubjectLabel = (subject: string): string => {
+  const raw = repairMojibakeText(subject).replace(/\s+/g, ' ').trim();
+  const key = normalizeText(raw);
+  return SUBJECT_DISPLAY_MAP[key] ?? toTitleCase(raw);
+};
+
+const buildCardAccent = (subject?: string): string => {
+  const normalized = normalizeText(repairMojibakeText(subject));
+  if (normalized.includes('toan')) return 'from-[#003466] via-[#1a4b84] to-[#2c6fbe]';
+  if (normalized.includes('hoa')) return 'from-[#5b2a00] via-[#8a3f00] to-[#c35f00]';
+  if (normalized.includes('ly')) return 'from-[#213a7a] via-[#2b4e9b] to-[#3f66c7]';
+  if (normalized.includes('anh')) return 'from-[#0f5f52] via-[#14816f] to-[#21ab93]';
+  if (normalized.includes('sinh')) return 'from-[#245500] via-[#2f7600] to-[#409d00]';
+  return 'from-[#2f3a46] via-[#3f4d5c] to-[#56677a]';
+};
+
+const resolveCardImage = (document: DocumentSummary): string => {
+  const fileUrl = document.fileUrl?.trim();
+  if (fileUrl && /\.(png|jpe?g|webp|gif)$/i.test(fileUrl)) {
+    return fileUrl;
+  }
+
+  return 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80';
+};
+
+const matchesSelectedLevel = (document: DocumentSummary, selectedLevelId: string): boolean => {
+  if (selectedLevelId === ALL_LEVELS.id) {
+    return true;
+  }
+
+  const text = normalizeText(
+    `${repairMojibakeText(document.className)} ${repairMojibakeText(document.title)} ${repairMojibakeText(document.type)}`,
+  );
+  const levelRegex = new RegExp(`\\b(lop\\s*)?${selectedLevelId}\\b`);
+  return levelRegex.test(text);
+};
+
 export default function ExamBankPage() {
   const navigate = useNavigate();
-  // State
-  const [selectedLevel, setSelectedLevel] = useState<EducationLevel | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [searchParams] = useSearchParams();
+
+  const [selectedLevel, setSelectedLevel] = useState<EducationLevel | null>(ALL_LEVELS);
+  const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [isLevelOpen, setIsLevelOpen] = useState(false);
   const [isSubjectOpen, setIsSubjectOpen] = useState(false);
-  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([]);
+  const [educationLevels, setEducationLevels] = useState<EducationLevel[]>([ALL_LEVELS, ...CLASS_LEVELS]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [keyword, setKeyword] = useState('');
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [documentRatingStatsById, setDocumentRatingStatsById] = useState<Record<number, { average: number; count: number }>>(
+    {},
+  );
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
+
+  const filteredDocuments = useMemo(() => {
+    const selectedLevelId = selectedLevel?.id ?? ALL_LEVELS.id;
+    return documents.filter((doc) => matchesSelectedLevel(doc, selectedLevelId));
+  }, [documents, selectedLevel?.id]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / DOCUMENTS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const pagedDocuments = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * DOCUMENTS_PER_PAGE;
+    return filteredDocuments.slice(startIndex, startIndex + DOCUMENTS_PER_PAGE);
+  }, [filteredDocuments, safeCurrentPage]);
 
   const loadApprovedDocuments = async (nextKeyword = '', nextSubject = '') => {
     setIsLoadingDocuments(true);
@@ -34,35 +163,62 @@ export default function ExamBankPage() {
     try {
       const result = await userService.getDocuments({
         keyword: nextKeyword.trim() || undefined,
-        subject: nextSubject && nextSubject !== 'Tất cả môn học' ? nextSubject : undefined,
+        subject: nextSubject && nextSubject !== ALL_SUBJECTS ? nextSubject : undefined,
         sortBy: 'NEWEST',
         size: 200,
       });
-      setDocuments(result);
+
+      const mapped = result.map((item) => ({
+        ...item,
+        title: repairMojibakeText(item.title),
+        className: repairMojibakeText(item.className),
+        school: repairMojibakeText(item.school),
+        semesterYear: repairMojibakeText(item.semesterYear),
+        subject: item.subject ? formatSubjectLabel(item.subject) : item.subject,
+      }));
+
+      setDocuments(mapped);
+      setDocumentRatingStatsById({});
+      setCurrentPage(1);
     } catch (error) {
+      if (isAxiosError(error)) {
+        const status = error.response?.status ?? error.status;
+        if (status === 401 || status === 403) {
+          setDocuments([]);
+          setDocumentsError('');
+          return;
+        }
+      }
       console.error('Fetch documents error:', error);
       setDocuments([]);
-      setDocumentsError('Không thể tải đề thi từ hệ thống. Vui lòng thử lại.');
+      setDocumentsError('Kh\u00f4ng th\u1ec3 t\u1ea3i \u0111\u1ec1 thi t\u1eeb h\u1ec7 th\u1ed1ng. Vui l\u00f2ng th\u1eed l\u1ea1i.');
     } finally {
       setIsLoadingDocuments(false);
     }
   };
 
-  // Fetch data từ service
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const levels = await userService.getEducationLevels();
         const subs = await userService.getSubjects();
 
-        setEducationLevels(levels);
-        setSubjects(subs);
+        const dedupedSubjects = Array.from(
+          new Map(
+            subs
+              .map((subject) => formatSubjectLabel(subject))
+              .filter((subject) => normalizeText(subject) !== normalizeText(ALL_SUBJECTS))
+              .map((subject) => [normalizeText(subject), subject]),
+          ).values(),
+        );
 
-        // set default
-        if (levels.length > 0) setSelectedLevel(levels[0]);
-        if (subs.length > 0) setSelectedSubject(subs[0]);
+        setEducationLevels([ALL_LEVELS, ...CLASS_LEVELS]);
+        setSelectedLevel(ALL_LEVELS);
+        setSubjects(dedupedSubjects);
+        setSelectedSubject(ALL_SUBJECTS);
 
-        await loadApprovedDocuments('', '');
+        const initialQ = searchParams.get('q') ?? '';
+        if (initialQ) setKeyword(initialQ);
+        await loadApprovedDocuments(initialQ, ALL_SUBJECTS);
       } catch (error) {
         console.error('Fetch error:', error);
       }
@@ -75,33 +231,77 @@ export default function ExamBankPage() {
     await loadApprovedDocuments(nextKeyword, nextSubject);
   };
 
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    const missingDocumentIds = pagedDocuments
+      .map((item) => item.id)
+      .filter((id) => documentRatingStatsById[id] === undefined);
+
+    if (missingDocumentIds.length === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadLatestRatings = async () => {
+      const entries = await Promise.all(
+        missingDocumentIds.map(async (id) => {
+          try {
+            const stats = await userService.getDocumentRatingStats(id);
+            return [id, stats] as const;
+          } catch {
+            return [id, { average: 0, count: 0 }] as const;
+          }
+        }),
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      setDocumentRatingStatsById((prev) => {
+        const next = { ...prev };
+        entries.forEach(([id, stats]) => {
+          next[id] = {
+            average: stats.average ?? 0,
+            count: stats.count ?? 0,
+          };
+        });
+        return next;
+      });
+    };
+
+    void loadLatestRatings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pagedDocuments, documentRatingStatsById]);
+
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20">
-
-      {/* Hero */}
       <div className="bg-[#003466] rounded-[2rem] p-8 text-white relative overflow-hidden">
         <h1 className="text-3xl font-black mb-2">Thư viện đề thi</h1>
-        <p className="text-blue-200/70 text-sm font-medium">
-          Tìm kiếm trong 50,000+ đề thi chất lượng cao
-        </p>
+        <p className="text-blue-200/70 text-sm font-medium">Tìm kiếm trong 50,000+ đề thi chất lượng cao</p>
       </div>
 
-      {/* Filter */}
       <div className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 relative z-50">
-
-        {/* Search */}
         <div className="relative flex-1 w-full group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
             placeholder="Tên đề thi..."
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(event) => setKeyword(event.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold"
           />
         </div>
 
-        {/* Level */}
         <div className="relative w-full md:w-64">
           <button
             onClick={() => {
@@ -112,9 +312,7 @@ export default function ExamBankPage() {
           >
             <div className="flex items-center gap-3">
               <School className="w-4 h-4 text-blue-600" />
-              <span className="font-bold text-sm">
-                {selectedLevel?.name || 'Chọn lớp'}
-              </span>
+              <span className="font-bold text-sm">{repairMojibakeText(selectedLevel?.name) || 'Chọn lớp'}</span>
             </div>
             <ChevronDown className={`w-4 h-4 ${isLevelOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -126,11 +324,12 @@ export default function ExamBankPage() {
                   key={level.id}
                   onClick={() => {
                     setSelectedLevel(level);
+                    setCurrentPage(1);
                     setIsLevelOpen(false);
                   }}
                   className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex justify-between"
                 >
-                  <span>{level.name}</span>
+                  <span>{repairMojibakeText(level.name)}</span>
                   {selectedLevel?.id === level.id && <Check />}
                 </div>
               ))}
@@ -138,7 +337,6 @@ export default function ExamBankPage() {
           )}
         </div>
 
-        {/* Subject */}
         <div className="relative w-full md:w-64">
           <button
             onClick={() => {
@@ -149,27 +347,24 @@ export default function ExamBankPage() {
           >
             <div className="flex items-center gap-3">
               <BookMarked className="w-4 h-4 text-indigo-600" />
-              <span className="font-bold text-sm">
-                {selectedSubject || 'Chọn môn'}
-              </span>
+              <span className="font-bold text-sm">{repairMojibakeText(selectedSubject) || 'Chọn môn'}</span>
             </div>
             <ChevronDown className={`w-4 h-4 ${isSubjectOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isSubjectOpen && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg z-50">
-              {subjects.map((sub) => (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg max-h-80 overflow-y-auto z-50">
+              {[ALL_SUBJECTS, ...subjects].map((subject) => (
                 <div
-                  key={sub}
+                  key={subject}
                   onClick={() => {
-                    setSelectedSubject(sub);
+                    setSelectedSubject(subject);
                     setIsSubjectOpen(false);
-                    void applyFilters(keyword, sub);
                   }}
                   className="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex justify-between"
                 >
-                  <span>{sub}</span>
-                  {selectedSubject === sub && <Check />}
+                  <span>{repairMojibakeText(subject)}</span>
+                  {selectedSubject === subject && <Check />}
                 </div>
               ))}
             </div>
@@ -182,57 +377,98 @@ export default function ExamBankPage() {
       </div>
 
       {documentsError && (
-        <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-red-700 font-semibold text-sm">
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
           {documentsError}
         </div>
       )}
 
-      {/* List */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {documents.map((document) => (
-          <div key={document.id} className="bg-white p-3 rounded-2xl border">
-            <img
-              src="https://images.unsplash.com/photo-1606326666490-45757474e788"
-              alt={document.title}
-              className="rounded-xl mb-3"
-            />
+      <section className="space-y-5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-slate-500">Danh sách đề thi</p>
+          <p className="text-xs font-bold text-slate-400">{filteredDocuments.length} đề</p>
+        </div>
 
-            <h3 className="font-bold text-sm mb-2">
-              {document.title}
-            </h3>
-
-            <p className="text-xs text-slate-400 mb-3">
-              {document.subject ?? selectedSubject ?? 'Đa môn'} • {document.semesterYear ?? 'Chưa cập nhật kỳ/năm'}
-            </p>
-
-            <div className="flex justify-between">
-              <div className="flex items-center gap-1 text-yellow-500">
-                <Star className="w-4 h-4 fill-current" />
-                <span>{(document.averageRating ?? 0).toFixed(1)}</span>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {pagedDocuments.map((document) => (
+            <article
+              key={document.id}
+              className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className={`relative h-28 bg-gradient-to-br ${buildCardAccent(document.subject)} p-3 text-white`}>
+                <img
+                  src={resolveCardImage(document)}
+                  alt={document.title}
+                  className="absolute inset-0 h-full w-full object-cover opacity-70"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/25" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.25),transparent_50%)]" />
+                <div className="relative flex items-start justify-between gap-3">
+                  <span className="rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
+                    {repairMojibakeText(document.subject) || 'Đa môn'}
+                  </span>
+                  <span className="rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-bold backdrop-blur">
+                    {repairMojibakeText(document.className) || 'Tự do'}
+                  </span>
+                </div>
               </div>
 
-              <button
-                onClick={() => navigate(`/user/comment/${document.id}`)}
-                className="text-blue-600 flex items-center gap-1"
-              >
-                Xem đề <Eye className="w-4 h-4" />
-              </button>
-            </div>
+              <div className="space-y-3 p-4">
+                <h3 className="min-h-[2.5rem] overflow-hidden text-sm font-black leading-tight text-slate-900">
+                  {repairMojibakeText(document.title)}
+                </h3>
+
+                <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1.5">
+                    <School size={12} /> {repairMojibakeText(document.school) || 'Cộng đồng'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Calendar size={12} /> {repairMojibakeText(document.semesterYear) || 'Chưa cập nhật'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="inline-flex items-center gap-1 text-amber-500">
+                    <Star size={12} className="fill-current" />
+                    <span className="text-xs font-extrabold text-slate-800">
+                      {(documentRatingStatsById[document.id]?.average ?? document.averageRating ?? 0).toFixed(1)}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      ({documentRatingStatsById[document.id]?.count ?? 0})
+                    </span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/user/comment/${document.id}`)}
+                    className="rounded-lg bg-[#003466] px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#0b457e]"
+                  >
+                    Xem chi tiết
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {!isLoadingDocuments && filteredDocuments.length === 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500">
+            Không tìm thấy đề phù hợp với bộ lọc hiện tại.
           </div>
-        ))}
-      </div>
+        )}
 
-      {!isLoadingDocuments && documents.length === 0 && (
-        <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500">
-          Không tìm thấy đề phù hợp bộ lọc hiện tại.
-        </div>
-      )}
+        {isLoadingDocuments && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500">
+            Đang tải danh sách đề...
+          </div>
+        )}
 
-      {isLoadingDocuments && (
-        <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-slate-500">
-          Đang tải danh sách đề...
-        </div>
-      )}
+        {!isLoadingDocuments && filteredDocuments.length > 0 && totalPages > 1 && (
+          <div className="flex justify-center pt-2">
+            <Pagination currentPage={safeCurrentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+          </div>
+        )}
+      </section>
     </div>
   );
-} 
+}

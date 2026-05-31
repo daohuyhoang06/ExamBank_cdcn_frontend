@@ -1,9 +1,7 @@
 ﻿
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Eye,
   Maximize2,
@@ -14,14 +12,17 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button/button";
+import { alert as showAlert } from "@/lib/dialog";
 import { Input } from "@/components/ui/Input/input";
 import { Modal } from "@/components/ui/Modal/modal";
+import { Popup } from "@/components/ui/Popup/popup";
 import { Pagination } from "@/components/ui/Pagination/pagination";
 import {
   ModeratorQueueItemCard,
 } from "@/features/moderator/components/moderator-queue-item-card";
 import {
   approveModeratorQueueItem,
+  getModeratorDocumentPreviewBlob,
   getModeratorDocumentPreview,
   listModeratorQueueItems,
   rejectModeratorQueueItem,
@@ -31,7 +32,11 @@ import {
 import { extractApiErrorMessage as extractSharedApiErrorMessage } from "@/lib/error-utils";
 
 const PAGE_SIZE = 5;
-const MINIO_PUBLIC_ENDPOINT = (import.meta.env.VITE_MINIO_PUBLIC_ENDPOINT ?? "http://localhost:9000").replace(/\/+$/, "");
+const STORAGE_PUBLIC_ENDPOINT = (
+  import.meta.env.VITE_STORAGE_PUBLIC_ENDPOINT ??
+  import.meta.env.VITE_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "");
 
 const quickReasons = [
   {
@@ -66,7 +71,7 @@ const DEFAULT_METADATA_CATEGORY = METADATA_CATEGORY_OPTIONS[0];
 const METADATA_SEMESTER_YEAR_OPTIONS = Array.from({ length: 7 }, (_, index) => String(2020 + index));
 const METADATA_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => `Lớp ${index + 1}`);
 
-function toMinioPublicUrl(fileUrl: string | null | undefined) {
+function toPublicStorageUrl(fileUrl: string | null | undefined) {
   if (!fileUrl) {
     return null;
   }
@@ -80,29 +85,23 @@ function toMinioPublicUrl(fileUrl: string | null | undefined) {
     return normalized;
   }
 
+  if (normalized.startsWith("storage://")) {
+    const pathWithoutScheme = normalized.slice("storage://".length);
+    const firstSlash = pathWithoutScheme.indexOf("/");
+    if (firstSlash <= 0) {
+      return null;
+    }
+
+    const bucket = pathWithoutScheme.slice(0, firstSlash);
+    const objectKey = pathWithoutScheme.slice(firstSlash + 1);
+    return `${STORAGE_PUBLIC_ENDPOINT}/api/v1/storage/${encodeURIComponent(bucket)}?key=${encodeURIComponent(objectKey)}`;
+  }
+
   if (normalized.startsWith("/")) {
-    return `${MINIO_PUBLIC_ENDPOINT}${normalized}`;
+    return `${STORAGE_PUBLIC_ENDPOINT}${normalized}`;
   }
 
-  if (!normalized.startsWith("storage://")) {
-    return `${MINIO_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
-  }
-
-  const pathWithoutScheme = normalized.slice("storage://".length);
-  const firstSlash = pathWithoutScheme.indexOf("/");
-  if (firstSlash <= 0) {
-    return null;
-  }
-
-  const bucket = pathWithoutScheme.slice(0, firstSlash);
-  const objectKey = pathWithoutScheme.slice(firstSlash + 1);
-  const encodedObjectKey = objectKey
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  return `${MINIO_PUBLIC_ENDPOINT}/${encodeURIComponent(bucket)}/${encodedObjectKey}`;
+  return `${STORAGE_PUBLIC_ENDPOINT}/${normalized.replace(/^\/+/, "")}`;
 }
 
 function detectPreviewKind(fileType: string | null | undefined, previewUrl: string | null) {
@@ -244,6 +243,13 @@ export default function ModeratorQueuePage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [quickReason, setQuickReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmDescription, setConfirmDescription] = useState("");
+  const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
+  const [pendingRejectReason, setPendingRejectReason] = useState("");
 
   const [metadataTitle, setMetadataTitle] = useState("");
   const [metadataSchool, setMetadataSchool] = useState("");
@@ -256,6 +262,7 @@ export default function ModeratorQueuePage() {
   const [previewFileType, setPreviewFileType] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const previewObjectUrlRef = useRef<string | null>(null);
 
 
   const refreshQueue = useCallback(async (refreshingState = false) => {
@@ -389,6 +396,15 @@ export default function ModeratorQueuePage() {
   }, [selected]);
 
   useEffect(() => {
+    return () => {
+      if (previewObjectUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadPreview(documentId: number, fallbackFileUrl: string | null) {
@@ -396,20 +412,54 @@ export default function ModeratorQueuePage() {
       setPreviewError("");
 
       try {
-        const preview = await getModeratorDocumentPreview(documentId);
+        const preview = await getModeratorDocumentPreviewBlob(documentId);
         if (cancelled) {
           return;
         }
 
-        setPreviewUrl(toMinioPublicUrl(preview.fileUrl ?? fallbackFileUrl));
+        const nextPreviewUrl = URL.createObjectURL(preview.blob);
+        setPreviewUrl((current) => {
+          if (current?.startsWith("blob:")) {
+            URL.revokeObjectURL(current);
+          }
+          previewObjectUrlRef.current = nextPreviewUrl;
+          return nextPreviewUrl;
+        });
         setPreviewFileType(preview.fileType);
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        setPreviewUrl(toMinioPublicUrl(fallbackFileUrl));
-        setPreviewFileType(null);
+        try {
+          const preview = await getModeratorDocumentPreview(documentId);
+          if (cancelled) {
+            return;
+          }
+
+          const resolvedUrl = preview.fileUrl ?? fallbackFileUrl;
+          const finalUrl = resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))
+            ? resolvedUrl
+            : toPublicStorageUrl(resolvedUrl);
+
+          setPreviewUrl((current) => {
+            if (current?.startsWith("blob:")) {
+              URL.revokeObjectURL(current);
+            }
+            previewObjectUrlRef.current = null;
+            return finalUrl;
+          });
+          setPreviewFileType(preview.fileType);
+        } catch {
+          setPreviewUrl((current) => {
+            if (current?.startsWith("blob:")) {
+              URL.revokeObjectURL(current);
+            }
+            previewObjectUrlRef.current = null;
+            return toPublicStorageUrl(fallbackFileUrl);
+          });
+          setPreviewFileType(null);
+        }
         setPreviewError(extractApiErrorMessage(error, "Không thể tải preview tài liệu."));
       } finally {
         if (!cancelled) {
@@ -419,7 +469,13 @@ export default function ModeratorQueuePage() {
     }
 
     if (!selected) {
-      setPreviewUrl(null);
+      setPreviewUrl((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+        previewObjectUrlRef.current = null;
+        return null;
+      });
       setPreviewFileType(null);
       setPreviewError("");
       setIsPreviewLoading(false);
@@ -441,7 +497,7 @@ export default function ModeratorQueuePage() {
     }
 
     if (!metadataTitle.trim()) {
-      window.alert("Vui lòng nhập tiêu đề tài liệu.");
+      await showAlert("Vui lòng nhập tiêu đề tài liệu.");
       return;
     }
 
@@ -460,7 +516,7 @@ export default function ModeratorQueuePage() {
 
       await refreshQueue(true);
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Lưu metadata thất bại."));
+      await showAlert(extractApiErrorMessage(error, "Lưu metadata thất bại."));
     } finally {
       setIsMetadataSaving(false);
     }
@@ -473,7 +529,26 @@ export default function ModeratorQueuePage() {
 
     setQuickReason("");
     setRejectReason("");
+    setRejectError("");
     setRejectOpen(true);
+  }
+
+  function openConfirm(action: "approve" | "reject", title: string, description: string) {
+    setConfirmAction(action);
+    setConfirmTitle(title);
+    setConfirmDescription(description);
+    setConfirmOpen(true);
+  }
+
+  function closeConfirm() {
+    const shouldRestoreReject = confirmAction === "reject";
+    setConfirmOpen(false);
+    setConfirmAction(null);
+    setConfirmTitle("");
+    setConfirmDescription("");
+    if (shouldRestoreReject) {
+      setRejectOpen(true);
+    }
   }
 
   async function handleApprove() {
@@ -481,21 +556,7 @@ export default function ModeratorQueuePage() {
       return;
     }
 
-    const shouldApprove = window.confirm(`Duyệt tài liệu "${selected.title}"?`);
-    if (!shouldApprove) {
-      return;
-    }
-
-    setIsActionRunning(true);
-
-    try {
-      await approveModeratorQueueItem(selected, metadataModeratorNote);
-      await refreshQueue(true);
-    } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Duyệt tài liệu thất bại."));
-    } finally {
-      setIsActionRunning(false);
-    }
+    openConfirm("approve", "Duyệt tài liệu", `Bạn có chắc muốn duyệt **${selected.title}** không?`);
   }
 
   async function confirmReject() {
@@ -505,37 +566,61 @@ export default function ModeratorQueuePage() {
 
     const finalReason = rejectReason.trim() || quickReason.trim();
     if (!finalReason) {
-      window.alert("Vui lòng nhập lý do từ chối.");
+      setRejectError("Vui lòng nhập lý do từ chối.");
       return;
     }
 
-    const shouldReject = window.confirm(`Từ chối tài liệu "${selected.title}"?`);
-    if (!shouldReject) {
+    setRejectError("");
+    setPendingRejectReason(finalReason);
+    setRejectOpen(false);
+    openConfirm("reject", "Từ chối tài liệu", `Bạn có chắc muốn từ chối **${selected.title}** không?`);
+  }
+
+  async function handleConfirmAction() {
+    if (!selected || !confirmAction || isActionRunning) {
       return;
     }
 
     setIsActionRunning(true);
 
     try {
-      await rejectModeratorQueueItem(selected, finalReason);
+      if (confirmAction === "approve") {
+        await approveModeratorQueueItem(selected, metadataModeratorNote);
+      } else {
+        await rejectModeratorQueueItem(selected, pendingRejectReason);
+        setRejectOpen(false);
+        setQuickReason("");
+        setRejectReason("");
+        setPendingRejectReason("");
+      }
       await refreshQueue(true);
-      setRejectOpen(false);
-      setQuickReason("");
-      setRejectReason("");
+      setConfirmOpen(false);
+      setConfirmAction(null);
+      setConfirmTitle("");
+      setConfirmDescription("");
     } catch (error) {
-      window.alert(extractApiErrorMessage(error, "Từ chối tài liệu thất bại."));
+      const fallback =
+        confirmAction === "approve" ? "Duyệt tài liệu thất bại." : "Từ chối tài liệu thất bại.";
+      setErrorMessage(extractApiErrorMessage(error, fallback));
     } finally {
       setIsActionRunning(false);
     }
   }
 
   function downloadOriginalFile() {
-    const rawUrl = previewUrl ?? toMinioPublicUrl(selected?.fileUrl);
+    const rawUrl = previewUrl ?? toPublicStorageUrl(selected?.fileUrl);
     if (!rawUrl) {
       return;
     }
 
-    window.open(rawUrl, "_blank", "noopener,noreferrer");
+    const link = document.createElement("a");
+    link.href = rawUrl;
+    if (selected?.title?.trim()) {
+      link.download = selected.title.trim();
+    }
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   function openDocumentInNewTab() {
@@ -545,7 +630,6 @@ export default function ModeratorQueuePage() {
   const selectedStatus = selected?.status ?? "";
   const canRunActions = Boolean(selected) && !isActionRunning && !isRefreshing && canModerate(selectedStatus);
   const previewKind = useMemo(() => detectPreviewKind(previewFileType ?? selected?.fileType ?? null, previewUrl), [previewFileType, previewUrl, selected?.fileType]);
-  const hasPaginationData = filteredQueue.length > 0;
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(Math.max(1, Math.min(totalPages, page)));
@@ -653,33 +737,11 @@ export default function ModeratorQueuePage() {
               Trang {safeCurrentPage} / {totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={safeCurrentPage <= 1 || !hasPaginationData}
-                leftIcon={<ChevronLeft size={16} />}
-                className="rounded-lg px-3 py-2 text-[var(--ink-500)]"
-                onClick={() => handlePageChange(safeCurrentPage - 1)}
-              >
-                Trước
-              </Button>
               <Pagination
                 currentPage={safeCurrentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                rightIcon={<ChevronRight size={16} />}
-                disabled={safeCurrentPage >= totalPages || !hasPaginationData}
-                className="rounded-lg px-3 py-2 text-[var(--brand-700)] transition hover:bg-white"
-                onClick={() => handlePageChange(safeCurrentPage + 1)}
-              >
-                Tiếp
-              </Button>
             </div>
           </div>
         </section>
@@ -953,6 +1015,10 @@ export default function ModeratorQueuePage() {
         <div className="space-y-4">
           <p className="text-sm text-slate-500">Chọn nhanh lý do hoặc nhập lý do chi tiết.</p>
 
+          {rejectError ? (
+            <p className="text-xs font-semibold text-rose-600">{rejectError}</p>
+          ) : null}
+
           <div className="space-y-2">
             {quickReasons.map((item) => {
               const active = quickReason === item.title;
@@ -998,6 +1064,18 @@ export default function ModeratorQueuePage() {
           </div>
         </div>
       </Modal>
+
+      <Popup
+        open={confirmOpen}
+        onCancel={closeConfirm}
+        onConfirm={() => void handleConfirmAction()}
+        title={confirmTitle}
+        message={confirmDescription}
+        type={confirmAction === "approve" ? "success" : "danger"}
+        confirmText={confirmAction === "approve" ? "Duyệt" : "Từ chối"}
+        cancelText="Hủy"
+        confirmLoading={isActionRunning}
+      />
 
       {isRefreshing ? (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-white/50 backdrop-blur-[1px]">

@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button/button';
 import { Input } from '@/components/ui/Input/input';
 import { authService } from '@/features/auth/services/auth.service';
@@ -87,15 +88,31 @@ export default function LoginPage() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [invalidCredentials, setInvalidCredentials] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getApiErrorMessage = (error: unknown) => {
+  const getLoginErrorMessage = (error: unknown) => {
+    if (!isAxiosError(error)) {
+      return extractApiErrorMessage(error, 'Đăng nhập thất bại, vui lòng thử lại.');
+    }
+
+    const status = error.response?.status ?? error.status;
+
+    if (status === 400) {
+      return 'Vui lòng kiểm tra lại tài khoản hoặc mật khẩu của bạn.';
+    }
+
+    if (status === 401) {
+      return 'Tài khoản của bạn chưa được đăng ký, vui lòng đăng ký.';
+    }
+
     return extractApiErrorMessage(error, 'Đăng nhập thất bại, vui lòng thử lại.');
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitError('');
+    setInvalidCredentials(false);
 
     const normalizedEmail = email.trim();
     let isValid = true;
@@ -143,7 +160,16 @@ export default function LoginPage() {
 
       navigate('/user', { replace: true });
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error));
+      if (isAxiosError(error)) {
+        const status = error.response?.status ?? error.status;
+        if (status === 400 || status === 401) {
+          setInvalidCredentials(true);
+          setEmailError('');
+          setPasswordError('Email hoặc mật khẩu không đúng.');
+          return;
+        }
+      }
+      setSubmitError(getLoginErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -201,12 +227,16 @@ export default function LoginPage() {
               label="EMAIL"
               placeholder="name@gmail.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (invalidCredentials) setInvalidCredentials(false);
+                if (emailError) setEmailError('');
+              }}
               error={emailError}
               startAdornment={<MailIcon />}
               containerClassName="gap-2.5"
               labelClassName="font-extrabold tracking-[0.16em]"
-              inputWrapperClassName="h-[58px]"
+              inputWrapperClassName={`h-[58px] ${invalidCredentials ? 'border-rose-300 bg-rose-50/60 focus-within:shadow-[0_0_0_4px_rgba(244,63,94,0.16)]' : ''}`}
               inputClassName="h-[58px]"
             />
 
@@ -218,7 +248,11 @@ export default function LoginPage() {
               label="MẬT KHẨU"
               placeholder="••••••••"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (invalidCredentials) setInvalidCredentials(false);
+                if (passwordError) setPasswordError('');
+              }}
               error={passwordError}
               startAdornment={<LockIcon />}
               containerClassName="gap-2.5"
@@ -244,7 +278,7 @@ export default function LoginPage() {
             </div>
 
             {submitError ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                 {submitError}
               </p>
             ) : null}
