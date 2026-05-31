@@ -227,19 +227,33 @@ export default function OnlineExamIntroPage() {
     void load();
   }, [examId, navigate]);
 
-  const availability = useMemo(() => {
+  const windowAvailability = useMemo(() => {
     if (!exam) {
       return { canStart: false, message: "Không tìm thấy đề thi hoặc đề chưa được công khai." };
+    }
+    return getWindowState(exam, Date.now());
+  }, [exam]);
+
+  const availability = useMemo(() => {
+    if (!exam) {
+      return windowAvailability;
+    }
+    if (!windowAvailability.canStart) {
+      return windowAvailability;
     }
     if (exam.requiresUnlock && !isPremiumUser) {
       return { canStart: false, message: exam.vip ? "Đây là đề VIP. Mở khóa bằng coin hoặc dùng premium để làm bài." : "Mở khóa đề để xem và làm toàn bộ nội dung." };
     }
-    return getWindowState(exam, Date.now());
-  }, [exam, isPremiumUser]);
+    return windowAvailability;
+  }, [exam, isPremiumUser, windowAvailability]);
   const displayedUnlockCoinCost = exam?.vip ? 10 : 5;
 
   const handleUnlock = async () => {
     if (!exam || isUnlocking) return;
+    if (!windowAvailability.canStart) {
+      setUnlockError(windowAvailability.message);
+      return;
+    }
 
     setIsUnlocking(true);
     setUnlockError("");
@@ -338,7 +352,11 @@ export default function OnlineExamIntroPage() {
       <section className="grid gap-4 lg:grid-cols-[7fr_3fr]">
         <div className="space-y-4">
           <div className="rounded-2xl border border-[#c7e6e2] bg-white/90 p-4 md:p-5">
-            {resumableSession ? (
+            {!windowAvailability.canStart ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                <span className="inline-flex items-center gap-2"><AlertCircle size={16} /> {windowAvailability.message}</span>
+              </div>
+            ) : resumableSession ? (
               <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-semibold text-blue-900">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-900">
